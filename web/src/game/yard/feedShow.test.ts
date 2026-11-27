@@ -4,7 +4,7 @@ import { FEED_GIBLETS_MAX, FEED_GIBLETS_MIN, feedGiblets } from "./feedShow";
 
 describe("feedGiblets", () => {
   it("is Flash's int(_goo / 400) where that is a fair spurt", () => {
-    expect(feedGiblets(hatchCost("C6", 1)!)).toBe(12); // Eye-ra, 5,000 goo
+    expect(feedGiblets(hatchCost("C5", 1)!)).toBe(12); // Eye-ra, 5,000 goo
     expect(feedGiblets(10_000)).toBe(25);
   });
 

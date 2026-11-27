@@ -162,7 +162,7 @@ export const MONSTER_CATALOGUE: readonly MonsterEntry[] = [
     cTime: [100, 100, 100, 100, 90, 90],
     cStorage: [20],
   },
-  // C5 Eye-ra — CREATURELOCKER.as:200
+  // C5 Eye-ra — CREATURELOCKER.as:200; beta 10 sets cTime
   {
     id: "C5",
     name: "Eye-ra",
@@ -177,10 +177,10 @@ export const MONSTER_CATALOGUE: readonly MonsterEntry[] = [
     spawnedBy: null,
     trainingCosts: [[64000, 18000], [128000, 25200], [192000, 43200], [384000, 86400], [512000, 129600]],
     cResource: [5000, 15000, 30000, 45000, 60000, 80000],
-    cTime: [1500],
+    cTime: [900],
     cStorage: [60],
   },
-  // C6 Ichi — CREATURELOCKER.as:226
+  // C6 Ichi — CREATURELOCKER.as:226; beta 10 sets cResource, cTime
   {
     id: "C6",
     name: "Ichi",
@@ -194,11 +194,11 @@ export const MONSTER_CATALOGUE: readonly MonsterEntry[] = [
     blocked: false,
     spawnedBy: null,
     trainingCosts: [[128000, 43200], [256000, 64800], [409600, 86400], [640000, 172800], [820000, 259200]],
-    cResource: [5000, 5625, 8440, 11200, 16000, 24000],
-    cTime: [100, 100, 90],
+    cResource: [5500, 6188, 9284, 12320, 17600, 26400],
+    cTime: [120, 120, 108],
     cStorage: [20],
   },
-  // C7 Bandito — CREATURELOCKER.as:250
+  // C7 Bandito — CREATURELOCKER.as:250; beta 10 sets cResource, cTime
   {
     id: "C7",
     name: "Bandito",
@@ -212,11 +212,11 @@ export const MONSTER_CATALOGUE: readonly MonsterEntry[] = [
     blocked: false,
     spawnedBy: null,
     trainingCosts: [[256000, 43200], [512000, 57600], [756000, 86400], [1024000, 129600], [1440000, 172800]],
-    cResource: [2500, 4500, 6750, 8750, 11200, 14400],
-    cTime: [225, 225, 225, 225, 180, 180],
+    cResource: [2000, 3600, 5400, 7000, 8960, 11520],
+    cTime: [150, 150, 150, 150, 120, 120],
     cStorage: [20],
   },
-  // C8 Fang — CREATURELOCKER.as:275
+  // C8 Fang — CREATURELOCKER.as:275; beta 10 sets cResource
   {
     id: "C8",
     name: "Fang",
@@ -230,7 +230,7 @@ export const MONSTER_CATALOGUE: readonly MonsterEntry[] = [
     blocked: false,
     spawnedBy: null,
     trainingCosts: [[512000, 43200], [512000, 57600], [756000, 86400], [1024000, 129600], [1440000, 172800]],
-    cResource: [18000, 27000, 40500, 60500, 80000, 100000],
+    cResource: [10800, 16200, 24300, 36300, 48000, 60000],
     cTime: [450, 350, 250, 225, 195, 195],
     cStorage: [30],
   },
@@ -252,7 +252,7 @@ export const MONSTER_CATALOGUE: readonly MonsterEntry[] = [
     cTime: [342],
     cStorage: [30],
   },
-  // C10 Crabatron — CREATURELOCKER.as:325
+  // C10 Crabatron — CREATURELOCKER.as:325; beta 10 sets cResource, cTime
   {
     id: "C10",
     name: "Crabatron",
@@ -266,11 +266,11 @@ export const MONSTER_CATALOGUE: readonly MonsterEntry[] = [
     blocked: false,
     spawnedBy: null,
     trainingCosts: [[2048000, 43200], [3000000, 64800], [4400000, 86400], [6000000, 172800], [7500000, 259200]],
-    cResource: [30000, 45000, 67500, 75000, 90000, 120000],
-    cTime: [750],
+    cResource: [22500, 33750, 50625, 56250, 67500, 90000],
+    cTime: [450],
     cStorage: [40],
   },
-  // C11 Project X — CREATURELOCKER.as:349
+  // C11 Project X — CREATURELOCKER.as:349; beta 10 sets cTime
   {
     id: "C11",
     name: "Project X",
@@ -285,10 +285,10 @@ export const MONSTER_CATALOGUE: readonly MonsterEntry[] = [
     spawnedBy: null,
     trainingCosts: [[4096000, 86400], [7000000, 129600], [12000000, 172800], [18000000, 345600], [24000000, 460800]],
     cResource: [60000, 90000, 135000, 180000, 234000, 280000],
-    cTime: [1384],
+    cTime: [1000],
     cStorage: [70],
   },
-  // C12 D.A.V.E. — CREATURELOCKER.as:374
+  // C12 D.A.V.E. — CREATURELOCKER.as:374; beta 10 sets cResource, cTime
   {
     id: "C12",
     name: "D.A.V.E.",
@@ -302,11 +302,11 @@ export const MONSTER_CATALOGUE: readonly MonsterEntry[] = [
     blocked: false,
     spawnedBy: null,
     trainingCosts: [[8192000, 172800], [10000000, 259200], [12200000, 345600], [19200000, 518400], [28000000, 691200]],
-    cResource: [150000, 225000, 337500, 440000, 600000, 800000],
-    cTime: [3600],
+    cResource: [112500, 168750, 253125, 330000, 450000, 600000],
+    cTime: [2400],
     cStorage: [160],
   },
-  // C13 Wormzer — CREATURELOCKER.as:399
+  // C13 Wormzer — CREATURELOCKER.as:399; beta 10 sets cResource, cTime, cStorage
   {
     id: "C13",
     name: "Wormzer",
@@ -320,11 +320,11 @@ export const MONSTER_CATALOGUE: readonly MonsterEntry[] = [
     blocked: false,
     spawnedBy: null,
     trainingCosts: [[4096000, 86400], [8192000, 172800], [8192000, 259200], [8192000, 345600], [12800000, 460800]],
-    cResource: [20000, 25000, 30000, 35000, 40000, 47500],
-    cTime: [1384],
-    cStorage: [70],
+    cResource: [12000, 15000, 18000, 21000, 24000, 28500],
+    cTime: [800],
+    cStorage: [40],
   },
-  // C14 Teratorn — CREATURELOCKER.as:426
+  // C14 Teratorn — CREATURELOCKER.as:426; beta 10 sets cTime
   {
     id: "C14",
     name: "Teratorn",
@@ -339,10 +339,10 @@ export const MONSTER_CATALOGUE: readonly MonsterEntry[] = [
     spawnedBy: null,
     trainingCosts: [[4096000, 129600], [7000000, 194400], [10000000, 288000], [16000000, 489600], [24000000, 648000]],
     cResource: [70000, 95000, 145000, 200000, 300000, 400000],
-    cTime: [1800, 1920, 2040, 2160, 2280, 2400],
+    cTime: [1260, 1344, 1428, 1512, 1596, 1680],
     cStorage: [70],
   },
-  // C15 Zafreeti — CREATURELOCKER.as:455
+  // C15 Zafreeti — CREATURELOCKER.as:455; beta 10 sets resource, trainingCosts
   {
     id: "C15",
     name: "Zafreeti",
@@ -350,12 +350,12 @@ export const MONSTER_CATALOGUE: readonly MonsterEntry[] = [
     page: 3,
     order: 5,
     index: 13,
-    resource: 6192000,
+    resource: 4334400,
     time: 216000,
     level: 3,
     blocked: false,
     spawnedBy: null,
-    trainingCosts: [[6192000, 129600], [7800000, 194400], [12000000, 288000], [18000000, 489600]],
+    trainingCosts: [[4334400, 129600], [5460000, 194400], [8400000, 288000], [12600000, 489600]],
     cResource: [120000, 180000, 256000, 324000, 468000],
     cTime: [2400],
     cStorage: [200],
@@ -378,7 +378,7 @@ export const MONSTER_CATALOGUE: readonly MonsterEntry[] = [
     cTime: [1200],
     cStorage: [60],
   },
-  // C17 Slimeattikus — CREATURELOCKER.as:517; D7 sets blocked
+  // C17 Slimeattikus — CREATURELOCKER.as:517; D7 sets blocked; beta 10 sets cResource
   {
     id: "C17",
     name: "Slimeattikus",
@@ -392,11 +392,11 @@ export const MONSTER_CATALOGUE: readonly MonsterEntry[] = [
     blocked: false,
     spawnedBy: null,
     trainingCosts: [[2560000, 86400], [3840000, 129600], [4096000, 172800], [6250000, 216000], [8500000, 288000]],
-    cResource: [27000, 40500, 60750, 90000, 125000, 150000],
+    cResource: [18900, 28350, 42525, 63000, 87500, 105000],
     cTime: [500, 450, 400, 350, 300, 250],
     cStorage: [40],
   },
-  // C18 Slimeattikus (mini) — CREATURELOCKER.as:544
+  // C18 Slimeattikus (mini) — CREATURELOCKER.as:544; beta 10 sets cResource
   {
     id: "C18",
     name: "Slimeattikus (mini)",
@@ -410,11 +410,11 @@ export const MONSTER_CATALOGUE: readonly MonsterEntry[] = [
     blocked: true,
     spawnedBy: "C17",
     trainingCosts: [[2560000, 86400], [3840000, 129600], [4096000, 172800], [6250000, 216000], [8500000, 288000]],
-    cResource: [27000, 40500, 60750, 90000, 125000, 150000],
+    cResource: [18900, 28350, 42525, 63000, 87500, 105000],
     cTime: [500, 450, 400, 350, 300, 250],
     cStorage: [40],
   },
-  // C19 Rezghul — CREATURELOCKER.as:570; D7 sets blocked, page, order
+  // C19 Rezghul — CREATURELOCKER.as:570; D7 sets blocked, page, order; beta 10 sets cResource, cTime, resource, trainingCosts
   {
     id: "C19",
     name: "Rezghul",
@@ -427,9 +427,9 @@ export const MONSTER_CATALOGUE: readonly MonsterEntry[] = [
     level: 3,
     blocked: false,
     spawnedBy: null,
-    trainingCosts: [[16000000, 86400], [19000000, 129600], [22000000, 172800], [25000000, 216000], [28000000, 259200]],
-    cResource: [1000000],
-    cTime: [4500],
+    trainingCosts: [[9600000, 86400], [11400000, 129600], [13200000, 172800], [15000000, 216000], [16800000, 259200]],
+    cResource: [600000],
+    cTime: [3000],
     cStorage: [250],
   },
 ];
@@ -639,7 +639,7 @@ export const LAB_ABILITIES: readonly LabAbility[] = [
     description: "Ichi reflects part of the damage it takes back at whatever hit it.",
     upgradeDescription: "Ichi reflects more of the damage it takes.",
     costs: [[500000, 108000], [750000, 108000], [1125000, 108000]],
-    effect: [0.1, 0.15, 0.2],
+    effect: [0.07, 0.1, 0.13],
   },
   // C7 Bandito — MONSTERLAB.as:100
   {

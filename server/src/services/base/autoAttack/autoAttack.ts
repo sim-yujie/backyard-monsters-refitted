@@ -580,8 +580,10 @@ export const runAutoAttack = async (
       seed: fought.seed,
       events: fought.events,
       tick: landed.landed.tick,
-      levels: academyLevels(userSave.academy),
-      ranks: academyRanks(userSave.academy),
+      // The levels the attack was fought at, as the load froze them (an
+      // Inferno monster's are its Inferno Academy's, beta 10).
+      levels: session.attackerAcademy ?? academyLevels(userSave.academy),
+      ranks: session.attackerRanks ?? academyRanks(userSave.academy),
     });
 
     const result: AutoAttackResult = {

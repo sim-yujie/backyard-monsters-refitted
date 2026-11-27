@@ -730,10 +730,10 @@ describe("HatchTab: the grid", () => {
     const { element } = setup(twoHatcheries({ lockerdata } as Partial<BaseLoadResponse>), { monster: "C12" });
     const price = (id: string): string => spokenText(monster(element, id).querySelector(".hatch-monster__note")!);
     expect(price("C1")).toBe("Goo 250");
-    expect(price("C7")).toBe("Goo 2.5K");
-    expect(price("C12")).toBe("Goo 150K");
-    expect(monster(element, "C12").title).toBe("Choose D.A.V.E. · 150,000 each");
-    expect(spokenText(element.querySelector(".hatch-info__each")!)).toContain("Goo 150,000");
+    expect(price("C7")).toBe("Goo 2K");
+    expect(price("C12")).toBe("Goo 112.5K");
+    expect(monster(element, "C12").title).toBe("Choose D.A.V.E. · 112,500 each");
+    expect(spokenText(element.querySelector(".hatch-info__each")!)).toContain("Goo 112,500");
   });
 
   it("only chooses a monster on a tap, and adds nothing (#268, E)", async () => {

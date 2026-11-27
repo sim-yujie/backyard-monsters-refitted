@@ -236,12 +236,16 @@ describe("Wormzer's splash damage", () => {
 });
 
 describe("Project X's death blast", () => {
-  /** Cannons that kill it on the way in, and three blocks where it falls. */
+  /**
+   * Cannons that kill it on the way in, and blocks where it falls. The fourth
+   * block came with beta 10's 40% more health, which carries it further in.
+   */
   const field = () =>
     yardOf({
       "1": block(1, 30, -60),
       "2": block(2, -10, -80),
       "3": block(3, 40, -120),
+      "4": block(4, 70, -120),
       "5": { id: 5, t: 20, l: 6, X: 120, Y: 120 },
       "6": { id: 6, t: 20, l: 6, X: -120, Y: 120 },
       "7": { id: 7, t: 20, l: 6, X: 120, Y: -120 },
@@ -260,7 +264,7 @@ describe("Project X's death blast", () => {
   };
 
   it("leaves nothing behind at rank 0", () => {
-    expect(lossOf(fall(0).yard)).toEqual([0, 0, 0, 0, 0, 0]);
+    expect(lossOf(fall(0).yard)).toEqual([0, 0, 0, 0, 0, 0, 0]);
   });
 
   it.each([1, 2, 3])("blasts 60 round it for its damage times %i, falling off", (rank) => {

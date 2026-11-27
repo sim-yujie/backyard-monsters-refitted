@@ -999,6 +999,45 @@ export const SPURTZ_SCALE_MIN = 0.4;
 export const SPURTZ_SCALE_SPREAD = 0.6;
 /** `Math.random() > 0.5`: a landing hatches a Spurtz (`:35`, `:232`). */
 export const SPURTZ_HATCH_CHANCE = 0.5;
+
+/** How a Spurtz Cannon's landings hatch Spurtz on one kind of yard. */
+export interface SpurtzHatchRule {
+  /** The share of landings that hatch one; Flash's is {@link SPURTZ_HATCH_CHANCE}. */
+  readonly chance: number;
+  /**
+   * The most hatched Spurtz one cannon keeps on the field at once, waiting
+   * hatchlings counted; a landing past it hatches none. Flash has no limit.
+   */
+  readonly most: number;
+  /** A hatchling's health and damage, as a share of a Spurtz's at its level; Flash's is 1. */
+  readonly strength: number;
+}
+
+/** Flash's hatching (`SpurtzCannon.as:226-235`): every yard but a player's main yard. */
+export const FLASH_SPURTZ_HATCH: SpurtzHatchRule = {
+  chance: SPURTZ_HATCH_CHANCE,
+  most: Infinity,
+  strength: 1,
+};
+
+/**
+ * Hatching on a player's main yard (beta 10, owner's pick B for the Brukkarg
+ * War prize cannons, desk b10-numbers, 27 Nov 2026). Two Black Diamond Spurtz
+ * Cannons made a main yard all but unbeatable for a ground army, and most of
+ * that was the Spurtz they hatch, not their shells
+ * (`agent-handoffs/reports/beta10-numbers.md` §6). Each cannon keeps at
+ * most 2 hatched Spurtz on the field at once (option B', numbers-apply's
+ * runs, 20 seeds: a D.A.V.E. army on two Black Diamond L5 cannons goes from
+ * 27% to 86% on a camp yard). This is the one place the
+ * owner's pick lives; a battle may override it with
+ * `BattleOptions.spurtzHatch`. Tribe, event, Inferno and outpost yards keep
+ * {@link FLASH_SPURTZ_HATCH}.
+ */
+export const MAIN_YARD_SPURTZ_HATCH: SpurtzHatchRule = {
+  chance: SPURTZ_HATCH_CHANCE,
+  most: 2,
+  strength: 1,
+};
 export const SPURTZ_ID = "IC1";
 /** How far a hatched Spurtz looks for an attacker (`CreepBase.as:663`). */
 export const SPURTZ_LOOK = 200;
