@@ -17,8 +17,8 @@ export const waveCounter = (wave: number, firstBonusWave: number): string =>
 export const totemName = (level: number): string =>
   level >= 6 ? "Black Diamond Totem" : level === 5 ? "Gold Totem" : `Victory Totem level ${Math.max(1, level)}`;
 
-export const WAVE_LOST_LINE = "Your yard fell. Buildings are repairing. Retry when you're ready.";
-export const WAVE_SURRENDERED_LINE = "You surrendered. Buildings are repairing. Retry when you're ready.";
+export const WAVE_LOST_LINE = "Your yard fell this time.";
+export const WAVE_SURRENDERED_LINE = "You surrendered this wave.";
 export const WAVE_ALL_BEATEN = "Every wave beaten!";
 
 /** The lost pop-up's chip: true, as repairs start on their own and nothing is taken. */

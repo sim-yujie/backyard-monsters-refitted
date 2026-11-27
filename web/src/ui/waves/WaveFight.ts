@@ -1,6 +1,7 @@
 import type { WaveStatus } from "@/api/waves";
 import { el } from "@/ui/dom";
 import { gameIcon } from "@/ui/gameIcon";
+import { isPhoneLayout } from "@/ui/phoneLayout";
 import "@/ui/styles/waves.css";
 import { waveMonsterImage, waveMonsterName } from "./waveArt";
 
@@ -84,7 +85,14 @@ export class WaveFightHud {
     status.append(plaque, healthGroup, leftGroup);
     status.classList.add("wave-status--waiting");
     this.element = status;
-    options.layer.append(status);
+    // A phone's strip has room in its middle (its title is hidden there): the pill rides in it.
+    const slot = isPhoneLayout() ? options.strip?.querySelector<HTMLElement>(".attack-strip__slot") : null;
+    if (slot) {
+      status.classList.add("wave-status--in-strip");
+      slot.prepend(status);
+    } else {
+      options.layer.append(status);
+    }
     this.place();
     window.addEventListener("resize", this.onResize);
   }
@@ -101,7 +109,7 @@ export class WaveFightHud {
   private place(): void {
     const bottom = this.options.strip?.getBoundingClientRect().bottom ?? 0;
     const top = `${Math.round(Math.max(0, bottom) + 8)}px`;
-    this.element.style.top = top;
+    if (!this.element.classList.contains("wave-status--in-strip")) this.element.style.top = top;
     for (const piece of this.extras) piece.style.top = top;
     if (this.slamPlate) this.slamPlate.style.top = `${Math.round(Math.max(0, bottom) + 28)}px`;
   }

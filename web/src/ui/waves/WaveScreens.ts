@@ -95,9 +95,8 @@ export const waveResultPopup = (result: RaidResult, actions: WaveResultActions, 
     const chip = el("p", "wave-result__repair");
     chip.append(gameIcon("tools", { size: 32, decorative: true, className: "wave-result__repair-icon" }), el("span", "", WAVE_LOST_CHIP));
     parts.push(chip);
-    if (wave.surrendered) {
-      parts.push(el("p", "wave-result__note", WAVE_SURRENDERED_LINE));
-    } else {
+    parts.push(el("p", "wave-result__note", wave.surrendered ? WAVE_SURRENDERED_LINE : WAVE_LOST_LINE));
+    if (!wave.surrendered) {
       const left = el("p", "wave-result__stat");
       left.append(
         gameIcon("health", { size: 24, decorative: true, className: "wave-result__stat-icon" }),
@@ -106,7 +105,11 @@ export const waveResultPopup = (result: RaidResult, actions: WaveResultActions, 
       );
       parts.push(left);
       const tip = waveTip(waveArmy(wave.run, wave.wave), (monster) => isFlyingMovement(monsterMovement(monster)));
-      parts.push(el("p", "wave-result__tip", tip ?? WAVE_LOST_LINE));
+      if (tip) {
+        const tipLine = el("p", "wave-result__tip");
+        tipLine.append(el("span", "wave-result__tip-sign", "Tip"), el("span", "", tip));
+        parts.push(tipLine);
+      }
     }
   }
   if (result.housedLost > 0) {

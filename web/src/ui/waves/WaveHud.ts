@@ -242,7 +242,13 @@ export class WaveHud {
 
     const start = el("button", "btn btn--primary wave-hud__start");
     start.type = "button";
-    start.append(gameIcon("swords", { size: 24, decorative: true, className: "wave-hud__start-icon" }), ` ${bonus ? "Start bonus" : `Start wave ${status.next}`}`);
+    // "Start wave 9"; just "Start" where the bar is narrow and the plaque already names the wave.
+    start.append(
+      gameIcon("swords", { size: 24, decorative: true, className: "wave-hud__start-icon" }),
+      el("span", "wave-hud__start-long", ` ${bonus ? "Start bonus" : `Start wave ${status.next}`}`),
+      el("span", "wave-hud__start-short", " Start"),
+    );
+    start.setAttribute("aria-label", bonus ? "Start the bonus wave" : `Start wave ${status.next}`);
     start.disabled = this.busy;
     start.addEventListener("click", () => this.options.onStart());
 

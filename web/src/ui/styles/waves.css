@@ -42,6 +42,7 @@
 /* The wave's name on the style's sign: the mustard plaque or the red ribbon. */
 .wave-hud__plaque,
 .wave-status__plaque,
+.wave-result__tip-sign,
 .wave-slam {
   display: inline-flex;
   align-items: center;
@@ -56,7 +57,7 @@
   white-space: nowrap;
 }
 
-:root[data-skin] :is(.wave-hud__plaque, .wave-status__plaque, .wave-slam) {
+:root[data-skin] :is(.wave-hud__plaque, .wave-status__plaque, .wave-result__tip-sign, .wave-slam) {
   border-style: solid;
   border-color: transparent;
   border-width: 0 12px;
@@ -70,7 +71,7 @@
   text-shadow: 0 1px 0 var(--skin-label-stroke);
 }
 
-:root[data-skin="flash"] :is(.wave-hud__plaque, .wave-status__plaque, .wave-slam) {
+:root[data-skin="flash"] :is(.wave-hud__plaque, .wave-status__plaque, .wave-result__tip-sign, .wave-slam) {
   border-width: 0 16px;
   border-image-width: 0 16px;
   padding-bottom: 3px;
@@ -210,6 +211,7 @@
 }
 
 .wave-hud__label-short,
+.wave-hud__start-short,
 .wave-hud__break {
   display: none;
 }
@@ -454,7 +456,7 @@
 
 .wave-hud--a .wave-hud__monsters,
 .wave-hud--b .wave-hud__monsters {
-  min-width: 0;
+  min-width: 56px;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -465,8 +467,8 @@
   .wave-hud--a {
     top: calc(var(--hud-height) + 12px);
     bottom: auto;
-    left: 120px;
-    right: 120px;
+    left: 160px;
+    right: 96px;
     flex-direction: column;
   }
 
@@ -484,8 +486,8 @@
   .wave-hud--a {
     top: calc(env(safe-area-inset-top, 0px) + 64px);
     bottom: auto;
-    left: 150px;
-    right: 150px;
+    left: calc(env(safe-area-inset-left, 0px) + 310px);
+    right: calc(env(safe-area-inset-right, 0px) + 70px);
     flex-direction: column;
   }
 
@@ -503,6 +505,21 @@
 
   .wave-hud--a .wave-hud__hint {
     display: none;
+  }
+}
+
+/* Narrow top bars (an upright iPad, a phone on its side): the plaque says
+   "W9" and the button "Start", so the monsters keep their room. */
+@media (min-width: 621px) and (max-width: 900px) and (min-height: 501px), (max-height: 500px) and (min-width: 621px) {
+  .wave-hud .wave-hud__tag .wave-hud__totem,
+  .wave-hud .wave-hud__plaque .wave-hud__label-long,
+  .wave-hud .wave-hud__start-long {
+    display: none;
+  }
+
+  .wave-hud .wave-hud__plaque .wave-hud__label-short,
+  .wave-hud .wave-hud__start-short {
+    display: inline;
   }
 }
 
@@ -582,8 +599,8 @@
 
 @media (min-width: 621px) and (max-width: 1100px) and (min-height: 501px) {
   .wave-hud--b {
-    left: 110px;
-    right: 110px;
+    left: 160px;
+    right: 96px;
   }
 }
 
@@ -687,13 +704,27 @@
 
   .wave-hud--b .wave-hud__start {
     order: 6;
-    flex: 1 1 auto;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .wave-hud--b .wave-hud__prize-totem > span {
+    display: none;
   }
 }
 
 @media (max-height: 500px) and (min-width: 621px) {
+  /* Between World chat and the yard switcher. */
   .wave-hud--b {
-    top: calc(env(safe-area-inset-top, 0px) + 110px);
+    top: calc(env(safe-area-inset-top, 0px) + 162px);
+  }
+
+  .wave-hud--b .wave-hud__pill {
+    min-height: 64px;
+  }
+
+  .wave-hud--b .wave-hud__pill .wave-hud__totem {
+    display: none;
   }
 
   .wave-hud--b .wave-hud__hint {
@@ -935,12 +966,20 @@
   }
 }
 
-/* An upright phone: the pill keeps left, so Surrender has its own corner. */
-@media (max-width: 620px) {
-  .wave-status {
-    left: calc(env(safe-area-inset-left, 0px) + 10px);
-    transform: none;
-  }
+/* A phone: the pill rides in the fight strip's empty middle (WaveFight
+   puts it in the strip's slot), so the strip is not a bare plank. */
+.wave-status--in-strip {
+  order: -1;
+  position: static;
+  min-height: 40px;
+  transform: none;
+}
+
+:root[data-skin] .wave-status--in-strip {
+  border-image: none;
+  border: 0;
+  filter: none;
+  padding: 0 4px;
 }
 
 /* ── The progress track ─────────────────────────────────────────────────── */
@@ -1090,14 +1129,26 @@
   opacity: 0.85;
 }
 
-/* The counter tip: one line in an inset callout. */
+/* The counter tip: one line on a recessed tray, headed by a small "Tip"
+   on the style's sign (the mustard plaque or the red ribbon). */
 .wave-result__tip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 8px 0 0;
-  padding: 8px 12px;
-  border-left: 4px solid var(--colour-accent, #ff8a2a);
-  border-radius: 8px;
+  padding: 6px 12px 6px 6px;
+  border: 1px solid var(--colour-border-strong, rgb(255 255 255 / 20%));
+  border-radius: 10px;
   background: var(--colour-surface-sunken, rgb(0 0 0 / 20%));
+  box-shadow: inset 0 2px 4px rgb(0 0 0 / 30%);
   font-weight: 700;
+}
+
+.wave-result__tip-sign {
+  flex: none;
+  min-height: 24px;
+  padding: 0 2px;
+  font-size: var(--text-sm);
 }
 
 .wave-result__actions {
@@ -1109,10 +1160,15 @@
 }
 
 .wave-result__actions .btn {
-  flex: 0 1 168px;
+  flex: 1 1 auto;
   min-width: 0;
+  max-width: 220px;
   min-height: 48px;
   white-space: nowrap;
+}
+
+.wave-result__actions .btn--outline {
+  flex: 0 1 130px;
 }
 
 /* The totem's moment: its art in a gold glow. */
@@ -1261,7 +1317,7 @@
     display: none;
   }
 
-  .events-card--wave .events-card__title {
+  .events-card--wave:has(.events-card__banner-image) .events-card__title {
     position: static;
     width: auto;
     height: auto;
@@ -1269,9 +1325,11 @@
     clip-path: none;
   }
 
-  .events-card--wave .events-card__countdown {
+  .events-card--wave:has(.events-card__banner-image) .events-card__countdown {
     position: static;
+    padding: 0;
     background: none;
+    color: inherit;
   }
 
   .events-card--wave .events-card__text {
@@ -1282,12 +1340,7 @@
   }
 
   .wave-card__next {
-    flex-wrap: nowrap;
     padding: 6px 10px;
-  }
-
-  .wave-card__next-title {
-    flex-basis: auto;
   }
 }
 
