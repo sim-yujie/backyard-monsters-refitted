@@ -32,14 +32,23 @@ export interface RaidSheetAsk {
   readonly standIn: boolean;
 }
 
+/** A raid's wild champion (beta 10): its type and level, which pick its sheet. */
+export interface RaidSheetChampion {
+  readonly t: number;
+  readonly l: number;
+}
+
 /** What a raid army's sheets come from, in order: every stand-in first, then the full copies. */
-export const raidSheetAsks = (monsters: Roster): RaidSheetAsk[] => {
+export const raidSheetAsks = (monsters: Roster, champion?: RaidSheetChampion): RaidSheetAsk[] => {
   const standIns: string[] = [];
   const full: string[] = [];
-  for (const [id, count] of Object.entries(monsters)) {
-    if (!(count > 0)) continue;
-    // Raiders are never champions, so the level does not pick the sheet.
-    const sheet = spriteFor(id);
+  const wanted: [string, number][] = Object.entries(monsters)
+    .filter(([, count]) => count > 0)
+    .map(([id]) => [id, 1]);
+  // A wild champion's sheet depends on its level (beta 10).
+  if (champion) wanted.push([`G${champion.t}`, champion.l]);
+  for (const [id, level] of wanted) {
+    const sheet = spriteFor(id, level);
     if (!sheet) continue;
     const standIn = sheetStandInUrl(sheet);
     if (standIn && !standIns.includes(standIn)) standIns.push(standIn);
@@ -72,8 +81,8 @@ const fetchAll = (asks: readonly RaidSheetAsk[], load: SheetLoader): string[] =>
 };
 
 /** Starts fetching a raid army's sheets; a failure is the fight's to retry. Returns the URLs asked for. */
-export const warmRaidSheets = (monsters: Roster, load: SheetLoader = queued): string[] =>
-  fetchAll(raidSheetAsks(monsters), load);
+export const warmRaidSheets = (monsters: Roster, load: SheetLoader = queued, champion?: RaidSheetChampion): string[] =>
+  fetchAll(raidSheetAsks(monsters, champion), load);
 
 /** The Trojan Horse's army as a roster, kinds in the order they come out (Object keys keep it). */
 const trojanRoster = (): Roster => Object.fromEntries(TROJAN_ROSTER.map((id) => [id, 1]));
@@ -99,6 +108,6 @@ export const raidSheetWarmer = (load: SheetLoader = queued): ((raid: RaidView | 
   return (raid) => {
     if (!raid || raid.phase !== "warning" || warmed.has(raid.id)) return;
     warmed.add(raid.id);
-    warmRaidSheets(raid.monsters ?? {}, load);
+    warmRaidSheets(raid.monsters ?? {}, load, raid.champion);
   };
 };

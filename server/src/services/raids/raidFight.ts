@@ -6,6 +6,7 @@ import {
   createBattle,
   damagePercent,
   digestState,
+  raidSpawnsUntilOf,
   ticks,
   toCombatYard,
   type BuildingHealthMap,
@@ -52,8 +53,9 @@ export interface RaidFightInput {
   readonly defence?: DefenderForces | null;
   /**
    * The tick every spawn has happened by, for a fight spread over more than
-   * one instant (`BattleOptions.raidSpawnsUntil`); absent for an ordinary
-   * raid, whose waves all land at `t: 0`. The Trojan Horse passes
+   * one instant (`BattleOptions.raidSpawnsUntil`); absent, the log's own
+   * last wave's tick (`raidSpawnsUntilOf`, 0 when every wave lands at
+   * `t: 0`). The Trojan Horse passes
    * `TROJAN_LAST_SPAWN_TICK` (`docs/design/trojan-horse.md` §5,
    * `trojanArmy.ts`).
    */
@@ -105,7 +107,10 @@ export const fightRaid = (input: RaidFightInput): RaidFightOutcome => {
     seed: input.log.seed,
     ...battleDefence(input.defence),
     raid: true,
-    ...(input.raidSpawnsUntil !== undefined ? { raidSpawnsUntil: input.raidSpawnsUntil } : {}),
+    // Every wave must land before the raid can end: the log's last wave's
+    // tick unless the caller says (beta 10's timed drops; the replay and the
+    // client read the same, `raidSpawnsUntilOf`).
+    raidSpawnsUntil: input.raidSpawnsUntil ?? raidSpawnsUntilOf(input.log.events),
   });
   // A raid's waves all land at once (`raidPlan.ts`); kept in log order, as the replay's sort keeps ties.
   const events = input.log.events
