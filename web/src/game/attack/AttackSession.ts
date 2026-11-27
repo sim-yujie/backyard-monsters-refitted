@@ -295,6 +295,12 @@ export interface AttackSessionOptions {
    * only; the battle is the same. Absent, everyone is drawn as themselves.
    */
   readonly skins?: BattleSkins;
+  /**
+   * DEV ONLY (`?krampus=6`, `monsterSkins.ts` `devSkins`): a Krampus of this
+   * level lands with the first drop, so the frost champion can be seen before
+   * the raids that bring it exist. Never recorded in the log the server gets.
+   */
+  readonly devKrampus?: number;
   /** The clock {@link AttackSession.skipToEnd} budgets a frame by, in ms; `performance.now` by default. */
   readonly now?: () => number;
 }
@@ -520,6 +526,7 @@ export class AttackSession {
   private readonly clockFromFirstDrop: boolean;
   private readonly raid: boolean;
   private skins_: BattleSkins | null;
+  private devKrampus: number;
   /** {@link AttackSessionOptions.raidSpawnsUntil}, 0 when absent. */
   private readonly raidSpawnsUntil: number;
   private readonly descentYard: number | undefined;
@@ -532,6 +539,7 @@ export class AttackSession {
     this.target = options.target;
     this.raid = options.raid ?? false;
     this.skins_ = options.skins ?? null;
+    this.devKrampus = options.devKrampus ?? 0;
     this.raidSpawnsUntil = Math.max(0, Math.floor(options.raidSpawnsUntil ?? 0));
     // The option (the dev practice's `?descentYard`), else the Descent target's own yard.
     this.descentYard = options.descentYard ?? descentYardOf(options.target).descentYard;
@@ -616,6 +624,7 @@ export class AttackSession {
       declareWar: this.declareWar_,
       ...(playerLevel === undefined ? {} : { playerLevel }),
       ...(this.descentYard === undefined ? {} : { descentYard: this.descentYard }),
+      ...(this.devKrampus > 0 ? { wildChampions: true } : {}),
       // The defence the server replays the battle against (issue #195).
       ...defence,
     });
@@ -947,6 +956,11 @@ export class AttackSession {
     };
     battle.apply(event);
     this.events.push(event);
+    if (this.devKrampus > 0) {
+      // Dev only: Krampus lands with the first drop, kept out of the log.
+      battle.apply({ ...event, monsters: {}, champion: { t: 6, l: this.devKrampus } });
+      this.devKrampus = 0;
+    }
     for (const [id, count] of Object.entries(input.monsters)) {
       if (count > 0) this.flung[id] = (this.flung[id] ?? 0) + count;
     }

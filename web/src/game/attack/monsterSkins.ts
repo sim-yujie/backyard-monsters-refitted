@@ -84,8 +84,13 @@ export const skinFile = (file: string, skin: MonsterSkin): string => {
  * (the yard's side): any fight drawn in a skin, to see the frost tribe before
  * its waves and camps exist. Nothing for anything else.
  */
-export const devSkins = (search: string): { skins?: BattleSkins } => {
+export const devSkins = (search: string): { skins?: BattleSkins; devKrampus?: number } => {
   const params = new URLSearchParams(search);
+  // `?krampus=1`..`6`: a Krampus of that level lands with the first drop (AttackSession).
+  const krampus = Math.floor(Number(params.get("krampus")));
+  if (krampus >= 1 && krampus <= 6) {
+    return { ...devSkins(search.replace(/krampus=\d/, "")), devKrampus: krampus };
+  }
   const attackers = params.get("monsterSkin") === "frost" ? "frost" : undefined;
   const defenders = params.get("defenderSkin") === "frost" ? "frost" : undefined;
   if (!attackers && !defenders) return {};

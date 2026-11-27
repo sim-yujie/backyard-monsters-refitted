@@ -1,0 +1,10 @@
+Generate an image using your image generation tool (one image only, do not make variations or extra files).
+
+Attached:
+- tribes-modern.png: four map avatars of our game's wild monster tribes. Their style is strict: flat 2D cartoon cel shading, a THICK dark outline round the figure and every part, flat fills with exactly one hard-edged shadow tone and one small highlight per colour, no painterly texture, no soft gradients, no fur strands, a slightly chunky simplified shape that reads at 40 px.
+- avatar-try1.png (av1/avatar.png): our first try at the fifth tribe's avatar (left figure): the right creature and pose, but painted far too detailed and soft next to the four.
+- krampus-levels.png: the creature, KRAMPUS (level 6, row 2 column 3).
+
+Job: redraw the LEFT figure of avatar.png (Krampus rearing on its hind legs, front hooves raised, frost swirling round its hooves) in EXACTLY the flat cel-shaded style of tribes-modern.png: thick dark outlines, flat fills, one hard shadow tone, simplified chunky shapes, fur as a few big flat tufts not strands. Colours: cool grey-white fur with flat blue-grey shadow, dark charcoal-navy face and legs, translucent-looking ice-blue crystal horns as flat cyan facets, glowing icy-cyan eyes, dark red tongue, dark iron plates, rusted brown chains, bronze bells, white-and-cyan frost swirls.
+One figure only, centred, filling about 85% of the canvas height, on a FLAT pure magenta #FF00FF background (no ground, no shadow, no gradient). Canvas 1024x1024. No text, no frame.
+Save the final PNG as avatar2.png in the current working directory.

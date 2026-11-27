@@ -1,5 +1,5 @@
-"""The frost tribe's avatar, both looks, from Codex call art-samples/frost-tribe/av1/avatar.png (3 cells of 512x1024:
-Modern cel-shaded figure, Classic painted figure, Classic face icon).
+"""The frost tribe's avatar, both looks, from Codex call art-samples/frost-tribe/av1/avatar.png (Classic painted figure and face
+icon) and av2/avatar2.png (the Modern flat cel-shaded figure).
 
 Run from the worktree root:  python web/tools/frost-kit/frost_avatar.py
 Writes, beside the other tribes' art:
@@ -18,6 +18,8 @@ from krampus_sheets import key_magenta  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[3]
 SRC = REPO / "art-samples" / "frost-tribe" / "av1" / "avatar.png"
+# The Modern avatar was redrawn flat cel-shaded with thick outlines to match the four tribes (Codex call av2).
+MODERN = REPO / "art-samples" / "frost-tribe" / "av2" / "avatar2.png"
 
 
 def trimmed(im):
@@ -38,8 +40,7 @@ def fit(im, w, h):
 
 def main():
     sheet = Image.open(SRC).convert("RGB").resize((1536, 1024), Image.LANCZOS)
-    modern = trimmed(key_magenta(sheet.crop((0, 0, 512, 1024))))
-    fit(modern, 244, 250).crop((0, 0, 244, 250))
+    modern = trimmed(key_magenta(Image.open(MODERN).convert("RGB").resize((1024, 1024), Image.LANCZOS)))
     canvas = Image.new("RGBA", (256, 256), (0, 0, 0, 0))
     canvas.alpha_composite(fit(modern, 236, 246), (10, 5))
     canvas.save(REPO / "web" / "public" / "tribes" / "frost-256.png", optimize=True)
