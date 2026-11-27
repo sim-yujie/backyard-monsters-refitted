@@ -40,6 +40,7 @@ import { mr1AttackVerdict } from "../../../services/maproom/v1/mr1AttackCheck.js
 import { createMR1Tribes } from "../../../services/maproom/v1/createMR1Tribes.js";
 import { MR1_TRIBES } from "../../../enums/Tribes.js";
 import { MR1_TRIBE_IDS } from "../../../game-data/tribes/v1/index.js";
+import { isEventYardId } from "../../../game-data/tribes/events/index.js";
 import { calculateBaseLevel, playerLevelOf, playerPointsOf } from "../../../services/base/calculateBaseLevel.js";
 import { RESOURCE_KEYS } from "../../../services/base/updateResources.js";
 import { mapSaveData } from "../../../services/base/mapSaveData.js";
@@ -214,7 +215,8 @@ export const baseLoad: KoaController = async (ctx) => {
       break;
 
     case BaseMode.WMATTACK: {
-      if (!ctx.meetsDiscordAgeCheck && !MR1_TRIBE_IDS.has(baseid)) throw discordAgeErr();
+      // Not for a Map Room 1 tribe or a Brukkarg event yard: no other player is touched.
+      if (!ctx.meetsDiscordAgeCheck && !MR1_TRIBE_IDS.has(baseid) && !isEventYardId(baseid)) throw discordAgeErr();
       
       await validateAttack(user, attackData, mapversion);
       const start = () => baseModeAttack({ user, baseid, mapversion, attackerLevel });

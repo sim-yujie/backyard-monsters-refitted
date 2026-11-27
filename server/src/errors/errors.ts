@@ -1324,3 +1324,41 @@ export const friendRefusedErr = (reason: FriendRefusal, details: object = {}) =>
     data: { reason, ...details },
     isClientFriendly: true,
   });
+
+/** Why an attack on a Brukkarg event yard is refused (beta 10, `services/events/yards/yardEventGate.ts`). */
+export type EventYardRefusal =
+  | "noEvent"
+  | "notThisEvent"
+  | "townHall"
+  | "tutorial"
+  | "notNext"
+  | "destroyed"
+  | "waves"
+  | "noCopy";
+
+const EVENT_YARD_REFUSAL_MESSAGES: Record<EventYardRefusal, string> = {
+  noEvent: "This event is over.",
+  notThisEvent: "That yard is not part of the event on now.",
+  townHall: "This event is for Town Hall 2 to 4.",
+  tutorial: "Finish the guided start to take part.",
+  notNext: "Beat the yards in order.",
+  destroyed: "You already wrecked that yard.",
+  waves: "Hold off more Brukkarg waves first.",
+  noCopy: "Your yard has not been copied yet. Try again.",
+};
+
+/**
+ * An attack on a Brukkarg event yard refused before anything is written:
+ * no event on, a yard of another event, the player outside the event's Town
+ * Hall range, a yard out of order or wrecked already, or (Brukkarg War) not
+ * enough waves beaten yet.
+ *
+ * @param detail - Figures for the client, e.g. `next` (the yard to attack) or `waves` (needed).
+ */
+export const eventYardRefusedErr = (reason: EventYardRefusal, detail: object = {}) =>
+  new ClientSafeError({
+    message: EVENT_YARD_REFUSAL_MESSAGES[reason],
+    status: Status.CONFLICT,
+    data: { reason, ...detail },
+    isClientFriendly: true,
+  });

@@ -15,6 +15,13 @@ import {
   releaseInfernoTribeFinalLock,
 } from "../inferno/infernoTribeSession.js";
 import { isInfernoTribeBaseid } from "../inferno/infernoTribes.js";
+import { isEventYardId } from "../../game-data/tribes/events/index.js";
+import {
+  acquireEventYardFinalLock,
+  eventYardSessionKey,
+  readEventYardSession,
+  releaseEventYardFinalLock,
+} from "../events/yards/eventYardSession.js";
 import {
   acquireMR1TribeFinalLock,
   mr1TribeSessionKey,
@@ -32,7 +39,8 @@ import type { AttackSession } from "./attackSession.js";
 /**
  * Checkpoints of the attacks on yards that have no row (owner, 2 Nov 2026:
  * leaving a battle must never undo it): a Map Room 1 tribe, a Descent yard
- * and a Moloch tribe of the Inferno map. Every player fights their own copy
+ * a Moloch tribe of the Inferno map and a Brukkarg event yard (beta 10,
+ * `services/events/yards/`). Every player fights their own copy
  * of those, so the attack is keyed by the attacker and the yard rather than
  * by a defender's `basesaveid` (`mr1TribeSession.ts`, `descentSession.ts`,
  * `infernoTribeSession.ts`), and so is its checkpoint. The checkpoint itself
@@ -51,7 +59,7 @@ import type { AttackSession } from "./attackSession.js";
  * before the write, is what makes that land nothing. So an attack lands once.
  */
 
-export type RowlessKind = "mr1" | "descent" | "inferno-tribe";
+export type RowlessKind = "mr1" | "descent" | "inferno-tribe" | "event";
 
 /** One attack's place: the kind, the attacker and the yard. */
 export interface RowlessRef {
@@ -79,10 +87,14 @@ export const rowlessKindOf = (baseid: unknown): RowlessKind | null => {
   if (MR1_TRIBE_IDS.has(text)) return "mr1";
   if (isDescentBaseid(text)) return "descent";
   if (isInfernoTribeBaseid(text)) return "inferno-tribe";
+  if (isEventYardId(text)) return "event";
   return null;
 };
 
-export const isInfernoKind = (kind: RowlessKind): boolean => kind !== "mr1";
+export const isInfernoKind = (kind: RowlessKind): boolean => kind === "descent" || kind === "inferno-tribe";
+
+/** Kinds keyed by the attacker and the yard (one session per yard), rather than by the attacker alone. */
+const perYard = (kind: RowlessKind): boolean => kind === "mr1" || kind === "event";
 
 export const rowlessCheckpointKey = ({ kind, userid, baseid }: RowlessRef) =>
   `attack-checkpoint:${kind}:${userid}:${baseid}`;
@@ -99,7 +111,7 @@ const memberOf = ({ kind, userid, baseid }: RowlessRef) => `${kind}:${userid}:${
 const refOf = (member: string): RowlessRef | null => {
   const [kind, userid, baseid, ...rest] = member.split(":");
   if (rest.length > 0 || !baseid) return null;
-  if (kind !== "mr1" && kind !== "descent" && kind !== "inferno-tribe") return null;
+  if (kind !== "mr1" && kind !== "descent" && kind !== "inferno-tribe" && kind !== "event") return null;
   const id = Number(userid);
   if (!Number.isSafeInteger(id) || id <= 0) return null;
   return { kind, userid: id, baseid };
@@ -165,8 +177,8 @@ export const countRowlessCloseFailure = async (ref: RowlessRef): Promise<void> =
  * so one on another yard is not this attack's.
  */
 export const readRowlessSession = async ({ kind, userid, baseid }: RowlessRef): Promise<RowlessSession | null> => {
-  if (kind === "mr1") {
-    const session = await readMR1TribeSession(userid, baseid);
+  if (perYard(kind)) {
+    const session = kind === "mr1" ? await readMR1TribeSession(userid, baseid) : await readEventYardSession(userid, baseid);
     return session ? { flingerCapacity: 0, session } : null;
   }
   const stored = kind === "descent" ? await readDescentSession(userid) : await readInfernoTribeSession(userid);
@@ -176,7 +188,9 @@ export const readRowlessSession = async ({ kind, userid, baseid }: RowlessRef): 
 const sessionKeyOf = ({ kind, userid, baseid }: RowlessRef): string =>
   kind === "mr1"
     ? mr1TribeSessionKey(userid, baseid)
-    : kind === "descent"
+    : kind === "event"
+      ? eventYardSessionKey(userid, baseid)
+      : kind === "descent"
       ? descentSessionKey(userid)
       : infernoTribeSessionKey(userid);
 
@@ -251,13 +265,17 @@ export const landRowlessOnce = async <T>(
 export const acquireRowlessFinalLock = ({ kind, userid, baseid }: RowlessRef): Promise<boolean> =>
   kind === "mr1"
     ? acquireMR1TribeFinalLock(userid, baseid)
-    : kind === "descent"
+    : kind === "event"
+      ? acquireEventYardFinalLock(userid, baseid)
+      : kind === "descent"
       ? acquireDescentFinalLock(userid)
       : acquireInfernoTribeFinalLock(userid);
 
 export const releaseRowlessFinalLock = ({ kind, userid, baseid }: RowlessRef): Promise<void> =>
   kind === "mr1"
     ? releaseMR1TribeFinalLock(userid, baseid)
-    : kind === "descent"
+    : kind === "event"
+      ? releaseEventYardFinalLock(userid, baseid)
+      : kind === "descent"
       ? releaseDescentFinalLock(userid)
       : releaseInfernoTribeFinalLock(userid);

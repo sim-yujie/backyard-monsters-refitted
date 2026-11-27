@@ -43,7 +43,7 @@ export type FlagOutcome = "refused" | "flagged";
  * with none (an Inferno Descent yard, a Moloch tribe, a Map Room 1 tribe), or
  * "unknown" for an old fight entry that did not say.
  */
-export type FlagYardKind = "yard" | "descent" | "inferno-tribe" | "mr1-tribe" | "unknown";
+export type FlagYardKind = "yard" | "descent" | "inferno-tribe" | "mr1-tribe" | "event-yard" | "unknown";
 
 /** A yard an entry names, with whose it is. */
 export interface FlagYard {
@@ -111,10 +111,10 @@ export interface FlaggedDetail {
 export const FLAGGED_PAGE = 200;
 
 const FIGHT =
-  /^Attack save on base (\S+) (rejected|flagged) \(([a-z]+)\): disagrees with the replay on (.+?)(?: \[(save \d+|descent|inferno-tribe|mr1-tribe)\])?$/s;
+  /^Attack save on base (\S+) (rejected|flagged) \(([a-z]+)\): disagrees with the replay on (.+?)(?: \[(save \d+|descent|inferno-tribe|mr1-tribe|event-yard)\])?$/s;
 /** An over-full fling (`combat/recordFlingRoom.ts`): a fight entry whose one field is `flingOverRoom`. */
 const FLING =
-  /^Attack save on base (\S+) (rejected|flagged) \(([a-z]+)\): fling over Flinger room(?:, [^[]*)?(?: \[(save \d+|descent|inferno-tribe|mr1-tribe)\])?$/s;
+  /^Attack save on base (\S+) (rejected|flagged) \(([a-z]+)\): fling over Flinger room(?:, [^[]*)?(?: \[(save \d+|descent|inferno-tribe|mr1-tribe|event-yard)\])?$/s;
 const ECONOMY = /^ECONOMY SAVE (REJECTED|FLAGGED) \(mode=([a-z]+)\): base (\S+), \d+s since the last save — (.*)$/s;
 const ATTACK = /^ATTACK VIOLATION: /;
 const RULE = /^([A-Za-z][\w-]*)/;
@@ -254,7 +254,7 @@ interface YardRow {
   bot: boolean | null;
 }
 
-const ROWLESS: ReadonlySet<string> = new Set(["descent", "inferno-tribe", "mr1-tribe"]);
+const ROWLESS: ReadonlySet<string> = new Set(["descent", "inferno-tribe", "mr1-tribe", "event-yard"]);
 
 const splitKey = (key: string): [string, string] => {
   const colon = key.indexOf(":");

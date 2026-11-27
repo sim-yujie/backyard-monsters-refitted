@@ -14,6 +14,7 @@ import { DECORATIONS_FOR_SALE, decorKindOf, decorOrder, decorationPrice, type De
 import { storedCount, storedDecorations } from "./decorStorage";
 import { isDecoration } from "./planner/placement";
 import { overCap } from "./storage";
+import { spurtzAllowed, spurtzTypesFor } from "./spurtzReward";
 import { isSurfaceInferno, purseFunds, surfaceInfernoStanding, UNDER_HALL_REQUIREMENT } from "./surfaceInferno";
 import { freeWorkers, sharperToolsMultiplier } from "./workers";
 import type { Yard, YardWorkers } from "./yardModel";
@@ -392,7 +393,9 @@ export const categoryOf = (type: number, kind: YardKind = "main"): BuildCategory
 export const buildOffer = (type: number, context: BuildContext): BuildOffer | null => {
   if (isDecoration(type)) return decorationOffer(type, context);
   const kind = context.kind ?? context.yard.kind;
-  const category = categoryOf(type, kind);
+  // Brukkarg War's Spurtz Cannons: off the menu unless the yard won them (`spurtzReward.ts`).
+  const spurtz = kind === "main" ? spurtzAllowed(type, context.save.rewards) : 0;
+  const category = categoryOf(type, kind) ?? (spurtz > 0 ? BuildCategory.DEFENSIVE : null);
   const row = rowOf(type, kind);
   const step = row?.[4][0];
   if (!category || !row || !step) return null;
@@ -411,7 +414,7 @@ export const buildOffer = (type: number, context: BuildContext): BuildOffer | nu
   const { yard } = context;
   const hall = inferno ? underHall : townHallLevel(yard);
   const owned = yard.buildings.reduce((count, one) => count + (one.type === type ? 1 : 0), 0);
-  const allowed = hall > 0 ? allowedAt(quantity, hall) : 0;
+  const allowed = spurtz > 0 ? spurtz : hall > 0 ? allowedAt(quantity, hall) : 0;
   const atOnce = buildsAtOnce(type, kind);
   const cost: UpgradeCost = { r1: step[0], r2: step[1], r3: step[2], r4: step[3] };
 
@@ -426,7 +429,7 @@ export const buildOffer = (type: number, context: BuildContext): BuildOffer | nu
       need: hall <= 0 ? 1 : (nextHallAllowing(quantity, hall, 0) ?? hall + 1),
     };
   } else if (owned >= allowed) {
-    common = { reason: "limit", have: owned, allowed, next: nextHallAllowing(quantity, hall, allowed) };
+    common = { reason: "limit", have: owned, allowed, next: spurtz > 0 ? null : nextHallAllowing(quantity, hall, allowed) };
   } else if (!requirementsMet(step[5], yard, underHall)) {
     const unmet = step[5].filter((entry) => !requirementsMet([entry], yard, underHall));
     const townHall = unmet.find(([required]) => isHall(required));
@@ -546,8 +549,10 @@ export const buildOffers = (category: BuildCategory, context: BuildContext): Bui
     );
     return [...stored, ...sold];
   }
-  const tab = catalogueFor(context.kind ?? context.yard.kind).find((entry) => entry.id === category);
-  return (tab?.types ?? [])
+  const kind = context.kind ?? context.yard.kind;
+  const tab = catalogueFor(kind).find((entry) => entry.id === category);
+  const won = kind === "main" && category === BuildCategory.DEFENSIVE ? spurtzTypesFor(context.save.rewards) : [];
+  return [...(tab?.types ?? []), ...won]
     .map((type) => buildOffer(type, context))
     .filter((offer): offer is BuildOffer => offer !== null);
 };

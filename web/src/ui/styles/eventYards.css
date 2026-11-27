@@ -1,0 +1,231 @@
+/*
+ * The Brukkarg attack events (beta 10, `ui/eventYards/yardEventUi.ts`): the
+ * Events card's yard track and Attack row, the line under an attack's
+ * result, and the prize pop-up. Values from tokens.css, so both looks and
+ * the light theme follow.
+ */
+
+/* ── The yard track ─────────────────────────────────────────────────────── */
+
+.yard-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.yard-track {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(32px, 1fr));
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.yard-track__yard {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 36px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--colour-border-subtle);
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text-muted);
+  font-weight: 700;
+  font-size: var(--text-sm);
+}
+
+.yard-track__yard--won {
+  border-color: var(--colour-success);
+  color: var(--colour-success);
+}
+
+.yard-track__yard--won .yard-track__number {
+  position: absolute;
+  right: 2px;
+  bottom: 0;
+  font-size: var(--text-xs);
+}
+
+.yard-track__yard--next {
+  border: 2px solid var(--colour-accent);
+  color: var(--colour-text-strong);
+  box-shadow: 0 0 0 2px var(--colour-change-halo);
+}
+
+.yard-track__gift {
+  position: absolute;
+  top: -6px;
+  right: -4px;
+}
+
+/* ── The next yard and Attack ───────────────────────────────────────────── */
+
+.yard-card__next {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.yard-card__info {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.yard-card__title {
+  margin: 0;
+  font-weight: 800;
+  color: var(--colour-text-strong);
+}
+
+.yard-card__damage,
+.yard-card__locked,
+.yard-card__refusal,
+.yard-card__done {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+}
+
+.yard-card__damage {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+
+.yard-card__refusal {
+  color: var(--colour-danger);
+}
+
+.yard-card__done {
+  font-weight: 800;
+  color: var(--colour-success);
+}
+
+.yard-card__prize {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.yard-card__at {
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+}
+
+.yard-card__attack {
+  flex: 0 0 auto;
+  min-height: 44px;
+  min-width: 112px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+}
+
+/* ── A prize: Glimmers, a Spurtz Cannon, the trophy ─────────────────────── */
+
+.yard-prize {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-weight: 800;
+}
+
+.yard-prize__building {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+}
+
+.yard-prize__count {
+  font-size: var(--text-sm);
+}
+
+/* ── Under an attack's result ───────────────────────────────────────────── */
+
+.yard-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  text-align: center;
+}
+
+.yard-result p {
+  margin: 0;
+}
+
+.yard-result__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-weight: 800;
+  font-size: var(--text-md);
+}
+
+.yard-result--won .yard-result__head {
+  color: var(--colour-success);
+}
+
+.yard-result__count,
+.yard-result__hint {
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+}
+
+/* ── The prize pop-up ───────────────────────────────────────────────────── */
+
+.yard-prize-popup {
+  width: min(360px, calc(100vw - 2 * var(--space-4)));
+}
+
+.yard-prize-popup__body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  text-align: center;
+}
+
+.yard-prize-popup__count {
+  margin: 0;
+  font-weight: 800;
+}
+
+.yard-prize-popup__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.yard-prize-popup__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.yard-prize-popup__item .yard-prize__building {
+  width: 72px;
+  height: 72px;
+}
+
+.yard-prize-popup__words {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.yard-prize-popup__ok {
+  min-width: 120px;
+  min-height: 44px;
+}

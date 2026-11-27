@@ -692,6 +692,8 @@ export interface BaseLoadResponse extends ApiEnvelope {
   /** [height, width]; 800 x 800 on Map Room 2. */
   worldsize: [number, number];
   currenttime: number;
+  /** Event rewards won (`server/src/enums/Rewards.ts` ids), e.g. Brukkarg War's Spurtz Cannons. */
+  rewards?: Record<string, unknown> | null;
   /**
    * The kinds of the seasonal events on now (`"halloween"`), absent when none
    * is (`server/src/services/yard/season.ts`). The yard dresses for them.

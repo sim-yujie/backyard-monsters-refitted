@@ -38,6 +38,9 @@ const BUTTON_FILE: Readonly<Record<number, string>> = {
   132: "magma_tower.v2.jpg",
   133: "seige_factory.jpg",
   134: "siege_lab.jpg",
+  // Brukkarg War's prizes (beta 10, `spurtzReward.ts`), Flash's buttons.
+  136: "spurtz_tower_button.jpg",
+  137: "black_diamond_spurtz_cannon_button.jpg",
 };
 
 /** The silhouettes that exist, by type (`YARD_PROPS.as` `silhouette_img`). */

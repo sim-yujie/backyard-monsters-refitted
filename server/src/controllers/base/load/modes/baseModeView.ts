@@ -9,6 +9,8 @@ import { tribeSaveHandler } from "../../../../services/maproom/tribeSaveHandler.
 import { cellCoordsFromBaseId, type CellCoords } from "../../../../services/maproom/v2/rangeCheck.js";
 import { getCurrentDateTime } from "../../../../utils/getCurrentDateTime.js";
 import { MR1_TRIBE_IDS } from "../../../../game-data/tribes/v1/index.js";
+import { isEventYardId } from "../../../../game-data/tribes/events/index.js";
+import { viewEventYard } from "../../../../services/events/yards/yardEventGate.js";
 import { isWildMonsterExpired } from "../../../../services/maproom/wildMonsterExpiry.js";
 import { isVisible } from "../../../../game-rules/maproom/sight.js";
 import { mr2HexShape } from "../../../../config/MapRoom2Config.js";
@@ -65,6 +67,12 @@ const isPlayerHomeYard = (save: Save | null): boolean =>
 export const baseModeView = async (baseid: string, mapversion: MapRoomVersion = MapRoomVersion.V2, worldid: string | null | undefined, user: User) => {
   if (mapversion === MapRoomVersion.V1 && MR1_TRIBE_IDS.has(baseid))
     return tribeSaveHandler(baseid, mapversion, worldid, user);
+
+  // A Brukkarg event yard (beta 10), from any Map Room: no row, no map cell.
+  if (isEventYardId(baseid)) {
+    const yard = await viewEventYard(postgres.em, user.userid, baseid, getCurrentDateTime());
+    return yard ? Object.assign(new Save(), yard) : null;
+  }
 
   let save = await postgres.em.findOne(Save, { baseid });
 
