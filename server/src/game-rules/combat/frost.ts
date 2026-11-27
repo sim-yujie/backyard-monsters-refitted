@@ -47,7 +47,7 @@ export const frostAreaTicks = (level: number): number =>
  * acts that much less often, a monster moves and swings that much slower.
  * 0 makes the frostball a look only.
  */
-export const FROSTBALL_SLOW = [15, 16, 17, 18, 19, 20] as const;
+export const FROSTBALL_SLOW = [10, 11, 12, 13, 14, 15] as const;
 
 /**
  * A frostball bursts where it lands: every tower whose middle is within this

@@ -58,7 +58,7 @@ describe("the frost numbers (proposed, frost.ts)", () => {
     expect([1, 6].map(frostAreaRadius)).toEqual([160, 210]);
     expect([1, 6].map(frostAreaSlow)).toEqual([25, 40]);
     expect([1, 6].map(frostAreaTicks)).toEqual([5 * 80, 7.5 * 80]);
-    expect([1, 6].map(frostballSlow)).toEqual([15, 20]);
+    expect([1, 6].map(frostballSlow)).toEqual([10, 15]);
     expect(FROSTBALL_TICKS).toBe(2 * TICKS_PER_SECOND);
     expect([1, 6].map(frostbiteShare)).toEqual([0.24, 0.33]);
     expect(FROSTBITE_SECONDS).toBe(3);
