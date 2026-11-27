@@ -717,13 +717,14 @@ export class EventsPanel {
       list.append(row);
       if (view.refusal?.key === key) list.append(refusalNote(view.refusal.message));
     });
-    section.append(head);
-    // Why the player cannot take part ("Move to Map Room 2 to take part."), above the goals.
+    // Why the player cannot take part ("Upgrade your Map Room to level 2 to take part."),
+    // first, before a counter they cannot raise (neon, 27 Nov).
     if (event.locked !== null) {
       const note = el("p", "events-ladder__locked");
       note.append(eventsArt("lock", 18, "events-ladder__lock"), el("span", "", event.locked));
       section.append(note);
     }
+    section.append(head);
     if (goalBar) section.append(goalsBar(ladder));
     section.append(list);
     return section;

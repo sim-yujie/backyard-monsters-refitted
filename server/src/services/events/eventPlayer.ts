@@ -57,6 +57,6 @@ export const lockedReason = (event: EventDefinition, player: EventPlayer): strin
     return `Reach Town Hall ${needs.townHall} to take part.`;
   }
   if (needs.tutorial && !player.tutorialDone) return "Finish the guided start to take part.";
-  if (needs.mapRoom2 && !player.mapRoom2) return "Move to Map Room 2 to take part.";
+  if (needs.mapRoom2 && !player.mapRoom2) return "Upgrade your Map Room to level 2 to take part.";
   return null;
 };

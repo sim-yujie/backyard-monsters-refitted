@@ -136,7 +136,7 @@ describe("takeover points", () => {
     const mapRoom1 = { buildingdata: {}, tutorialstage: 205, mr2upgraded: false, mapversion: 1 };
     expect(await count(store, IN, mapRoom1)).toEqual([]);
     expect(store.rows.size).toBe(0);
-    expect(lockedReason(RUN_EVENT, eventPlayerOf(mapRoom1 as never, false))).toBe("Move to Map Room 2 to take part.");
+    expect(lockedReason(RUN_EVENT, eventPlayerOf(mapRoom1 as never, false))).toBe("Upgrade your Map Room to level 2 to take part.");
     expect(lockedReason(RUN_EVENT, eventPlayerOf(READY as never, false))).toBeNull();
     // Upgraded but its flag not caught up yet still counts as Map Room 2.
     expect(lockedReason(RUN_EVENT, eventPlayerOf({ ...mapRoom1, mapversion: 2 } as never, false))).toBeNull();
