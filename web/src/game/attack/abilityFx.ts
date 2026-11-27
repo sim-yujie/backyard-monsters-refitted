@@ -206,7 +206,7 @@ export class TauntFx {
 }
 
 /** How long, in battle ticks, a beam or a mist shows. */
-export const BEAM_TICKS = 32;
+export const BEAM_TICKS = 64;
 export const MIST_TICKS = 96;
 
 interface Trail {
