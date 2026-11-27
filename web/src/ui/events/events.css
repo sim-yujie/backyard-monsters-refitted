@@ -220,11 +220,18 @@
   max-width: 100%;
 }
 
-.events-card--christmas .events-day .events-reward--decoration .events-reward__figure {
+.events-card--christmas .events-day .events-reward--decoration .events-reward__figure,
+.events-card--christmas .events-tier .events-reward--decoration .events-reward__figure {
+  /* Between words, or with a hyphen inside a long one ("Pine-cone"), never cut off (neon, round 3). */
   white-space: normal;
-  overflow-wrap: anywhere;
+  hyphens: auto;
   text-align: center;
   line-height: 1.1;
+}
+
+/* A ladder prize's name wraps too, so the Shiny beside it stays on its row on a phone (neon, round 3). */
+.events-card--christmas .events-tier .events-reward--decoration {
+  max-width: 6.5em;
 }
 
 :root[data-skin="flash"] .events-card--christmas .events-day[data-day="7"],
@@ -1141,6 +1148,11 @@
   /* On a phone on its side the calendar needs the height more than the picture (neon, round 2). */
   .events-card__banner--christmas {
     display: none;
+  }
+
+  /* Seven narrow tiles a row: the decoration's name a size smaller. */
+  .events-card--christmas .events-day .events-reward--decoration .events-reward__figure {
+    font-size: 0.65rem;
   }
 }
 
