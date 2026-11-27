@@ -618,14 +618,14 @@ const saveBase = async (
     if (loot) {
       // Tribe Plunder: a wild tribe's loot lands that much more, on top of
       // the credit the server's battle allowed (`weekendBoosts.ts`); wild
-      // tribes also give 25% more Goo (patch 6.9, `tribeGooBonus.ts`).
+      // tribes also give more Goo (patch 6.9; steps down from 9.1, `tribeGooBonus.ts`).
       const fromTribe = baseSave.type === BaseType.TRIBE;
       const plunder = plunderPercent(fromTribe, now);
       // The attacker's alliance loot bonus and the defender's raiders-carry (`allianceBonuses.ts`).
       const alliancePercent = await attackLootPercent(postgres.em, user.userid, baseSave.saveuserid);
       const gain = withPlunderBonus(
         withCampLootBonus(
-          withTribeGooBonus(mapByPercent(loot.credit, alliancePercent), fromTribe),
+          withTribeGooBonus(mapByPercent(loot.credit, alliancePercent), fromTribe, now),
           isMR2Camp(baseSave.type, userSave.mapversion)
         ),
         plunder

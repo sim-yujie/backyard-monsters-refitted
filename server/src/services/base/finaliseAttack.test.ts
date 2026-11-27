@@ -457,11 +457,11 @@ describe("finaliseAbandonedAttack", () => {
     expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
 
     // The r2 bomb's 100,000 comes off an empty pool first.
-    // A wild tribe: 25% more Goo (patch 6.9).
-    const r4WithBonus = withTribeGooBonus(save.credit, true).r4;
+    // A wild tribe: more Goo (patch 6.9; steps down from 9.1, read at banking).
+    const r4WithBonus = withTribeGooBonus(save.credit, true, now()).r4;
     expect(userSave.resources).toEqual({ r1: save.credit.r1, r2: save.credit.r2, r3: save.credit.r3, r4: r4WithBonus });
     // One point per resource looted, on the attacker's main save, as the save gives them (patch 7.7.2).
-    expect(userSave.points).toBe(String(lootPoints(withTribeGooBonus(save.credit, true))));
+    expect(userSave.points).toBe(String(lootPoints(withTribeGooBonus(save.credit, true, now()))));
     expect(defender.resources).toEqual({
       r1: 5_000_000 + save.defenderDelta.r1,
       r2: 5_000_000 + save.defenderDelta.r2,
