@@ -57,7 +57,7 @@ afterEach(() => {
 
 describe("the words", () => {
   it("names main waves out of 30 and the bonus waves apart", () => {
-    expect(waveStripLine(7, 31)).toBe("Wave 7 of 30");
+    expect(waveStripLine(7, 31)).toBe("Wave 7/30");
     expect(waveStripLine(31, 31)).toBe("Bonus wave 1");
     expect(waveCounter(7, 31)).toBe("7/30");
     expect(waveCounter(32, 31)).toBe("Bonus 2");
@@ -72,7 +72,7 @@ describe("WaveHud", () => {
     expect(hud.element.hidden).toBe(true);
     hud.update(status());
     expect(hud.element.hidden).toBe(false);
-    expect(hud.element.querySelector(".wave-hud__label")?.textContent).toBe("Wave 7/30");
+    expect(hud.element.querySelector(".wave-hud__label")?.textContent).toBe("Wave 7");
     // jsdom is wide: a computer's bar starts open.
     expect(hud.element.querySelectorAll(".wave-hud__monster")).toHaveLength(2);
     const start = hud.element.querySelector<HTMLButtonElement>(".wave-hud__start")!;
@@ -114,7 +114,7 @@ describe("WaveHud", () => {
 
 describe("waveTrack", () => {
   it("counts main waves out of 30, then the bonus waves, with six totem marks", () => {
-    expect(waveTrack(7, 32, 121, 31).querySelector(".wave-track__count")?.textContent).toBe("7/30");
+    expect(waveTrack(7, 32, 121, 31).querySelector(".wave-track__count")?.textContent).toBe("7/30 won");
     expect(waveTrack(31, 32, 121, 31).querySelector(".wave-track__count")?.textContent).toBe("Bonus 1/2");
     const track = waveTrack(10, 32, 121, 31);
     expect(track.querySelectorAll(".wave-track__mark")).toHaveLength(6);

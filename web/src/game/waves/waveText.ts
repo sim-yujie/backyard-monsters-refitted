@@ -5,9 +5,9 @@ import { waveName } from "@/api/waves";
  * owner asks of in-game text: the pictures and numbers carry the rest.
  */
 
-/** The raid strip's line for the whole fight: "Wave 7 of 30", "Bonus wave 1". */
+/** The raid strip's line for the whole fight, short enough for a phone's one row: "Wave 7/30", "Bonus wave 1". */
 export const waveStripLine = (wave: number, firstBonusWave: number): string =>
-  wave >= firstBonusWave ? waveName(wave, firstBonusWave) : `Wave ${wave} of ${firstBonusWave - 1}`;
+  wave >= firstBonusWave ? waveName(wave, firstBonusWave) : `Wave ${wave}/${firstBonusWave - 1}`;
 
 /** The HUD's counter: "7/30", or "Bonus 1" on the bonus waves. */
 export const waveCounter = (wave: number, firstBonusWave: number): string =>

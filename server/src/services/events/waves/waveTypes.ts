@@ -91,6 +91,11 @@ export interface WaveEventDefinition {
   readonly text: string;
   /** Days a run lasts when started from the dashboard (Flash: one week). */
   readonly days: number;
+  /**
+   * The waves; empty for an event that only borrows the event control and
+   * its progress row (Creature Carnage's attack yards, `bruk-port`): such an
+   * event has no wave bar, and "Next wave" refuses it (`noEvent`).
+   */
   readonly waves: WaveTable;
   /** One prize per wave, the same length as {@link waves}. */
   readonly prizes: readonly WavePrize[];

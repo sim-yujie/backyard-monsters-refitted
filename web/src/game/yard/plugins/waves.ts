@@ -99,12 +99,19 @@ export const wavesYardPlugin: YardPlugin = (mounts) => {
   void refresh();
   const timer = setInterval(() => void refresh(), WAVE_STATUS_REFRESH_MS);
   const stopWatch = raidWatch.subscribe(() => hud.update(raidWatch.current ? null : status, busy));
+  // Out of the way while a window (Events, Build, ...) or a pop-up is open.
+  const covered = (): boolean => overlay.modal.childElementCount > 0 || overlay.content.querySelector(":scope > .panel") !== null;
+  const observer = typeof MutationObserver === "function" ? new MutationObserver(() => hud.setCovered(covered())) : null;
+  observer?.observe(overlay.modal, { childList: true });
+  observer?.observe(overlay.content, { childList: true });
+  hud.setCovered(covered());
 
   return () => {
     gone = true;
     if (caller === go) caller = null;
     clearInterval(timer);
     stopWatch();
+    observer?.disconnect();
     hud.remove();
   };
 };

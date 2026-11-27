@@ -4,6 +4,7 @@ import { classicLook } from "@/game/classicLook";
 import { totemName, WAVE_LOST_LINE, WAVE_SURRENDERED_LINE } from "@/game/waves/waveText";
 import { coinAmount, coinWords } from "@/ui/events/coinUi";
 import { el } from "@/ui/dom";
+import { gameIcon } from "@/ui/gameIcon";
 import { Popup } from "@/ui/Popup";
 import "@/ui/styles/waves.css";
 import { totemImage } from "./waveArt";
@@ -39,10 +40,11 @@ export const waveTrack = (beaten: number, waves: number, totemType: number | nul
     mark.style.left = `${at(wave)}%`;
     mark.title = `Wave ${wave}: totem level ${index + 1}`;
     if (totemType !== null) mark.append(totemImage(totemType, index + 1, "wave-track__totem"));
+    mark.append(el("span", "wave-track__wave", wave > main ? `B${wave - main}` : String(wave)));
     bar.append(mark);
   }
   // The same count as the yard's bar: "7/30", then "Bonus 1/2".
-  const count = beaten <= main ? `${beaten}/${main}` : `Bonus ${beaten - main}/${waves - main}`;
+  const count = beaten <= main ? `${beaten}/${main} won` : `Bonus ${beaten - main}/${waves - main}`;
   track.append(bar, el("span", "wave-track__count", count));
   return track;
 };
@@ -76,7 +78,7 @@ export const waveResultPopup = (result: RaidResult, actions: WaveResultActions, 
   } else {
     parts.push(el("p", "wave-result__lead", wave.surrendered ? WAVE_SURRENDERED_LINE : WAVE_LOST_LINE));
     if (!wave.surrendered) {
-      parts.push(el("p", "wave-result__note", `Yard left: ${Math.round(result.health * 100)}%. Keep more than 10% and beat every monster to win.`));
+      parts.push(el("p", "wave-result__note", `Yard left: ${Math.round(result.health * 100)}% (need more than 10%, and every monster beaten).`));
     }
   }
   const actionsRow = el("div", "wave-result__actions");
@@ -88,7 +90,7 @@ export const waveResultPopup = (result: RaidResult, actions: WaveResultActions, 
     const next = el("button", "btn btn--primary wave-result__next");
     next.type = "button";
     const target = won ? wave.next! : wave.wave;
-    next.append(el("span", "wave-hud__start-icon", "▶"), ` ${won ? `Start ${waveName(target, wave.firstBonusWave).toLowerCase()}` : "Retry"}`);
+    next.append(gameIcon("swords", { size: 24, decorative: true, className: "wave-hud__start-icon" }), ` ${won ? `Start ${waveName(target, wave.firstBonusWave).toLowerCase()}` : "Retry"}`);
     next.addEventListener("click", () => {
       popup.close();
       actions.onNext?.();
@@ -111,7 +113,7 @@ export const totemPopup = (totem: NonNullable<WaveResult["totem"]>, onClose: () 
   popup.setContent(
     stage,
     el("p", "wave-totem__name", totemName(totem.level)),
-    el("p", "wave-totem__where", totem.placed ? "Upgraded on your yard." : "In storage: place it from Build ▸ Decorations."),
+    el("p", "wave-totem__where", totem.placed ? "Upgraded on your yard." : "Stored in Build ▸ Decorations."),
     ok,
   );
   return popup;
@@ -182,7 +184,7 @@ export const waveIntroPopup = (status: WaveStatus, onStart: () => void, onClose:
   if (status.next !== null) {
     const start = el("button", "btn btn--primary wave-result__next");
     start.type = "button";
-    start.append(el("span", "wave-hud__start-icon", "▶"), ` Start ${waveName(status.next, status.firstBonusWave).toLowerCase()}`);
+    start.append(gameIcon("swords", { size: 24, decorative: true, className: "wave-hud__start-icon" }), ` Start ${waveName(status.next, status.firstBonusWave).toLowerCase()}`);
     start.addEventListener("click", () => {
       popup.close();
       onStart();

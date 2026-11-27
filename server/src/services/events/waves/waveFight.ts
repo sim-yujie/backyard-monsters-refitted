@@ -138,7 +138,7 @@ export const waveStatusOf = (event: WaveEventDefinition, run: WaveRun, beaten: n
 /** The wave event on now and the player's place in it, or null when none is on. */
 export const readWaveStatus = async (em: EntityManager, userid: number, now: number): Promise<WaveStatus | null> => {
   const live = liveWaveEvent(now);
-  if (!live) return null;
+  if (!live || live.event.waves.length === 0) return null;
   const progress = await waveProgressStore().read(em, userid, runId(live.run));
   return waveStatusOf(live.event, live.run, progress.beaten, progress.lost);
 };
@@ -234,7 +234,7 @@ const freezeWave = async (
  */
 export const startNextWave = async (em: EntityManager, user: User, now: number): Promise<RaidStart & { wave: WaveStatus }> => {
   const live = liveWaveEvent(now);
-  if (!live) throw waveRefusedErr("noEvent");
+  if (!live || live.event.waves.length === 0) throw waveRefusedErr("noEvent");
   const progress = await waveProgressStore().read(em, user.userid, runId(live.run));
   const status = waveStatusOf(live.event, live.run, progress.beaten, progress.lost);
   if (status.next === null) throw waveRefusedErr("allBeaten");

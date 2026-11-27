@@ -1,6 +1,6 @@
 import { waveName, type WaveStatus } from "@/api/waves";
-import { waveCounter } from "@/game/waves/waveText";
 import { coinAmount, coinWords } from "@/ui/events/coinUi";
+import { gameIcon } from "@/ui/gameIcon";
 import { el } from "@/ui/dom";
 import { isPhoneLayout } from "@/ui/phoneLayout";
 import "@/ui/styles/waves.css";
@@ -68,6 +68,18 @@ export class WaveHud {
     this.element.append(this.pill, this.tray);
     const saved = readClosed();
     this.open = saved === null ? !isPhoneLayout() : !saved;
+    // On a phone the open tray covers part of the top; a tap anywhere else closes it.
+    this.outside = (event: PointerEvent) => {
+      if (this.open && isPhoneLayout() && !this.element.contains(event.target as Node)) this.setOpen(false);
+    };
+    document.addEventListener("pointerdown", this.outside, true);
+  }
+
+  private readonly outside: (event: PointerEvent) => void;
+
+  /** Hidden while a window or pop-up is over the yard, so its Start is never shown twice. */
+  setCovered(covered: boolean): void {
+    this.element.classList.toggle("wave-hud--covered", covered);
   }
 
   mount(host: HTMLElement): this {
@@ -76,6 +88,7 @@ export class WaveHud {
   }
 
   remove(): void {
+    document.removeEventListener("pointerdown", this.outside, true);
     this.element.remove();
   }
 
@@ -104,7 +117,7 @@ export class WaveHud {
     // The pill: the totem as it stands, the wave counter, the chevron.
     this.pill.replaceChildren(
       totemImage(status.totemType ?? 121, Math.max(1, status.totemLevel), `wave-hud__totem${status.totemLevel === 0 ? " wave-hud__totem--none" : ""}`),
-      el("span", "wave-hud__label", done ? "All waves beaten" : bonus ? waveName(status.next!, status.firstBonusWave) : `Wave ${waveCounter(status.next!, status.firstBonusWave)}`),
+      el("span", "wave-hud__label", done ? "All waves beaten" : waveName(status.next!, status.firstBonusWave)),
       // The tray opens downwards on a phone or iPad, upwards on a computer.
       el("span", "wave-hud__chevron", this.open === opensDown() ? "▴" : "▾"),
     );
@@ -138,8 +151,10 @@ export class WaveHud {
       if (more > 0) monsters.append(el("li", "wave-hud__more", `+${more}`));
     }
 
+    // The prize stands apart from the monsters and the button, so it never reads as a price.
     const prize = el("div", "wave-hud__prize");
     prize.title = "Prize for beating it";
+    prize.append(gameIcon("gift", { size: 24, decorative: true, className: "wave-hud__prize-icon" }));
     if (status.prize && status.prize.glimmers > 0) {
       const coins = coinAmount(`+${status.prize.glimmers}`, { size: 24 });
       coins.setAttribute("aria-label", coinWords(status.prize.glimmers));
@@ -147,13 +162,13 @@ export class WaveHud {
     }
     if (status.prize?.totemLevel && status.totemType) {
       const totem = el("span", "wave-hud__prize-totem");
-      totem.append(totemImage(status.totemType, status.prize.totemLevel, "wave-hud__prize-totem-art"), el("span", "", status.totemLevel === 0 ? "Totem" : "Totem up"));
+      totem.append(totemImage(status.totemType, status.prize.totemLevel, "wave-hud__prize-totem-art"), el("span", "", `Lv ${status.prize.totemLevel}`));
       prize.append(totem);
     }
 
     const start = el("button", "btn btn--primary wave-hud__start");
     start.type = "button";
-    start.append(el("span", "wave-hud__start-icon", "▶"), ` ${bonus ? "Start bonus" : `Start wave ${status.next}`}`);
+    start.append(gameIcon("swords", { size: 24, decorative: true, className: "wave-hud__start-icon" }), ` ${bonus ? "Start bonus" : `Start wave ${status.next}`}`);
     start.disabled = this.busy;
     start.addEventListener("click", () => this.options.onStart());
 

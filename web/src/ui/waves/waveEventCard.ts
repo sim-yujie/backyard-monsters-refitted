@@ -3,6 +3,7 @@ import { callNextWave } from "@/game/yard/plugins/waves";
 import { coinAmount, coinWords } from "@/ui/events/coinUi";
 import { EVENT_EXTRAS } from "@/ui/events/EventsPanel";
 import { el } from "@/ui/dom";
+import { gameIcon } from "@/ui/gameIcon";
 import "@/ui/styles/waves.css";
 import { totemImage, waveMonsterImage, waveMonsterName } from "./waveArt";
 import { waveTrack } from "./WaveScreens";
@@ -39,6 +40,8 @@ export const waveCardBody = (status: WaveStatus, onStart: () => void): HTMLEleme
     }
   }
   const prize = el("div", "wave-hud__prize");
+  prize.title = "Prize for beating it";
+  prize.append(gameIcon("gift", { size: 24, decorative: true, className: "wave-hud__prize-icon" }));
   if (status.prize && status.prize.glimmers > 0) {
     const coins = coinAmount(`+${status.prize.glimmers}`, { size: 24 });
     coins.setAttribute("aria-label", coinWords(status.prize.glimmers));
@@ -49,7 +52,7 @@ export const waveCardBody = (status: WaveStatus, onStart: () => void): HTMLEleme
   }
   const start = el("button", "btn btn--primary wave-card__start");
   start.type = "button";
-  start.append(el("span", "wave-hud__start-icon", "▶"), ` ${bonus ? "Start bonus" : `Start wave ${status.next}`}`);
+  start.append(gameIcon("swords", { size: 24, decorative: true, className: "wave-hud__start-icon" }), ` ${bonus ? "Start bonus" : `Start wave ${status.next}`}`);
   start.addEventListener("click", () => {
     start.disabled = true;
     onStart();
