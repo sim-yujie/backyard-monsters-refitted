@@ -23,14 +23,21 @@ export const WAVE_START_FAILED = "Could not start the wave. Try again.";
 
 const SEEN_KEY = "bymr.waveIntroSeen";
 
-/** Whether this device has shown run `run`'s arrival pop-up; marks it shown. */
-export const firstSightOf = (run: string): boolean => {
+/** Whether this device has yet to show run `run`'s arrival pop-up. */
+export const introDue = (run: string): boolean => {
   try {
-    if (window.localStorage.getItem(SEEN_KEY) === run) return false;
-    window.localStorage.setItem(SEEN_KEY, run);
-    return true;
+    return window.localStorage.getItem(SEEN_KEY) !== run;
   } catch {
     return false;
+  }
+};
+
+/** Marks run `run`'s arrival pop-up seen, once the player has closed it (a yard reload under it shows it again). */
+export const markIntroSeen = (run: string): void => {
+  try {
+    window.localStorage.setItem(SEEN_KEY, run);
+  } catch {
+    /* private mode: shown again next time */
   }
 };
 
@@ -66,6 +73,7 @@ export const wavesYardPlugin: YardPlugin = (mounts) => {
   let status: WaveStatus | null = null;
   let busy = false;
   let gone = false;
+  let intro: { close(): void } | null = null;
 
   const go = (): void => {
     if (busy || !status || status.next === null) return;
@@ -87,8 +95,9 @@ export const wavesYardPlugin: YardPlugin = (mounts) => {
       if (gone) return;
       status = answer.wave;
       // The event's arrival, once per run on this device, before its first wave.
-      if (status && status.beaten === 0 && status.lost === 0 && !raidWatch.current && firstSightOf(status.run)) {
-        waveIntroPopup(status, go, () => undefined).mount(overlay.modal);
+      if (status && !intro && status.beaten === 0 && status.lost === 0 && !raidWatch.current && introDue(status.run)) {
+        const run = status.run;
+        intro = waveIntroPopup(status, go, () => markIntroSeen(run)).mount(overlay.modal);
       }
       // Hidden while a wild raid is open or fighting: the server would refuse the wave anyway.
       hud.update(raidWatch.current ? null : status, busy);

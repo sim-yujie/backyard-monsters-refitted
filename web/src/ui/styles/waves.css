@@ -469,3 +469,13 @@
     display: none;
   }
 }
+
+@media (max-width: 480px) {
+  .wave-track__mark--bonus .wave-track__wave {
+    display: none;
+  }
+
+  .wave-result__actions .btn {
+    min-width: 120px;
+  }
+}
