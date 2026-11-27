@@ -161,11 +161,11 @@ describe("Thanksgiving turkey hunt", () => {
 });
 
 describe("Christmas present hunt", () => {
-  test("on from 7 December 2026 up to, not including, 4 January 2027", () => {
-    expect(yardHuntAt(at("2026-12-06T23:59:59Z"), EVENTS, NONE)).toBeNull();
-    expect(yardHuntAt(at("2026-12-07T00:00:00Z"), EVENTS, NONE)).toEqual({ event: PRESENT_HUNT_EVENT, field: "presents" });
-    expect(yardHuntAt(at("2027-01-03T23:59:59Z"), EVENTS, NONE)?.event).toBe(PRESENT_HUNT_EVENT);
-    expect(yardHuntOn(at("2027-01-04T00:00:00Z"), EVENTS, NONE)).toBe(false);
+  test("on from 25 December 2026 up to, not including, 8 January 2027", () => {
+    expect(yardHuntAt(at("2026-12-24T23:59:59Z"), EVENTS, NONE)).toBeNull();
+    expect(yardHuntAt(at("2026-12-25T00:00:00Z"), EVENTS, NONE)).toEqual({ event: PRESENT_HUNT_EVENT, field: "presents" });
+    expect(yardHuntAt(at("2027-01-07T23:59:59Z"), EVENTS, NONE)?.event).toBe(PRESENT_HUNT_EVENT);
+    expect(yardHuntOn(at("2027-01-08T00:00:00Z"), EVENTS, NONE)).toBe(false);
   });
 
   test("never during Thanksgiving: no turkeys and presents at once", () => {
@@ -175,7 +175,7 @@ describe("Christmas present hunt", () => {
   });
 
   test("the base load says christmas while on (beside the Krallen Hunt)", () => {
-    const kinds = activeEventKinds(at("2026-12-20T12:00:00Z"), EVENTS, NONE);
+    const kinds = activeEventKinds(at("2026-12-28T12:00:00Z"), EVENTS, NONE);
     expect(kinds).toContain("christmas");
     expect(kinds).toContain("krallen");
     expect(kinds).not.toContain("thanksgiving");
@@ -189,7 +189,7 @@ describe("Christmas present hunt", () => {
   });
 
   test("presents grow hourly like pumpkins, and count toward 'Presents found'", () => {
-    const inside = at("2026-12-20T09:00:00Z");
+    const inside = at("2026-12-28T09:00:00Z");
     const save: MushroomYardSave = {
       buildingdata: { "0": { id: 0, t: 14, x: 0, y: 0, X: 0, Y: 0, l: 3 } },
       storedata: {},

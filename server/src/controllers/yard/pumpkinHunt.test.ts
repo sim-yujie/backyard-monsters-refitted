@@ -149,11 +149,11 @@ describe("Thanksgiving turkey hunt ladder", () => {
 });
 
 describe("Christmas present hunt ladder", () => {
-  /** 2026-12-20T12:00:00Z, inside Christmas 2026. */
-  const CHRISTMAS = new Date(Date.UTC(2026, 11, 20, 12));
+  /** 2026-12-28T12:00:00Z, inside Christmas 2026. */
+  const CHRISTMAS = new Date(Date.UTC(2026, 11, 28, 12));
 
-  test("the proposed tiers: 25, 75, 150 and 250 presents", () => {
-    expect(CHRISTMAS_2026_LADDER.map((tier) => tier.need)).toEqual([25, 75, 150, 250]);
+  test("the turkey hunt's tiers (owner, 27 Nov 2026): 25, 50, 150 and 200 presents", () => {
+    expect(CHRISTMAS_2026_LADDER.map((tier) => tier.need)).toEqual([25, 50, 150, 200]);
   });
 
   test("during Christmas a present counts, and the 25th unlocks the first tier: 10 Shiny and 20 Glimmers", async () => {
@@ -178,7 +178,7 @@ describe("Christmas present hunt ladder", () => {
     setSystemTime(CHRISTMAS);
     const store = memoryProgressStore();
     const claims = eventsActions(store);
-    await store.addToCounter(em as unknown as EntityManager, 2, PRESENT_HUNT_EVENT, 250);
+    await store.addToCounter(em as unknown as EntityManager, 2, PRESENT_HUNT_EVENT, 200);
     const claimed = await run(claims.ladderClaim, { event: PRESENT_HUNT_EVENT, tier: 3 });
     expect(claimed.status).toBe(200);
     expect(claimed.body).toMatchObject({ credits: 130, eventcoins: 80 });

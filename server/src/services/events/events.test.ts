@@ -17,6 +17,7 @@ import {
   tierNeed,
 } from "../../game-data/events/events.js";
 import { rewardProblem } from "./grant.js";
+import { revampDecoration } from "../../game-data/revampDecorations.js";
 
 /** The event list (`game-data/events/events.ts`): every entry must be payable and well formed. */
 describe("the event list", () => {
@@ -88,22 +89,39 @@ describe("the event list", () => {
     expect(THANKSGIVING_2026_LADDER.at(-1)!.need).toBeLessThanOrEqual(days * 24);
   });
 
-  test("Christmas 2026 (proposal): 7 Dec to 4 Jan UTC, a 14-day calendar paced like Halloween's, 400 Glimmers", () => {
+  test("Christmas 2026 (owner, 27 Nov): 25 Dec to 8 Jan UTC, Halloween's gifts with winter decorations, the turkey ladder", () => {
     const christmas = EVENTS.find((event) => event.id === "christmas-2026")!;
-    expect(christmas).toMatchObject({ kind: "christmas", startsAt: "2026-12-07T00:00:00Z", endsAt: "2027-01-04T00:00:00Z" });
+    expect(christmas).toMatchObject({ kind: "christmas", startsAt: "2026-12-25T00:00:00Z", endsAt: "2027-01-08T00:00:00Z" });
     expect(CHRISTMAS_2026_CALENDAR).toHaveLength(14);
-    // The window is longer than the calendar, so a late starter can still claim every day.
+    // Two weeks, as Thanksgiving: the calendar fits the event's days.
     const days = (Date.parse(christmas.endsAt) - Date.parse(christmas.startsAt)) / 86_400_000;
-    expect(days).toBeGreaterThan(CHRISTMAS_2026_CALENDAR.length);
+    expect(days).toBe(14);
+    expect(days).toBeGreaterThanOrEqual(CHRISTMAS_2026_CALENDAR.length);
     const kinds = (calendar: typeof HALLOWEEN_2026_CALENDAR) => calendar.map((day) => day.rewards.map((one) => one.kind));
     expect(kinds(CHRISTMAS_2026_CALENDAR)).toEqual(kinds(HALLOWEEN_2026_CALENDAR));
+    // Thanksgiving's gifts, save the decorations: the winter ones on days 7 and 14.
+    const withoutDecor = (calendar: typeof HALLOWEEN_2026_CALENDAR) =>
+      calendar.map((day) => day.rewards.filter((one) => one.kind !== "decoration"));
+    expect(withoutDecor(CHRISTMAS_2026_CALENDAR)).toEqual(withoutDecor(THANKSGIVING_2026_CALENDAR));
     expect(CHRISTMAS_2026_CALENDAR[6]!.rewards).toContainEqual({ kind: "decoration", type: CHRISTMAS_DECOR.small, count: 1 });
     expect(CHRISTMAS_2026_CALENDAR[13]!.rewards).toContainEqual({ kind: "decoration", type: CHRISTMAS_DECOR.mid, count: 1 });
-    // The owner's big-event target: 15 a day over the calendar plus 20/35/55/80 over the ladder.
+    // The four winter decorations are this project's own, 233 to 236.
+    expect(Object.values(CHRISTMAS_DECOR)).toEqual([233, 234, 235, 236]);
+    for (const type of Object.values(CHRISTMAS_DECOR)) expect(revampDecoration(type), `${type}`).toBeDefined();
+    // The turkey hunt's steps and prizes, with the winter decorations in place of the Scarecrow and the maple.
+    expect(CHRISTMAS_2026_LADDER.map((tier) => tier.need)).toEqual(THANKSGIVING_2026_LADDER.map((tier) => tier.need));
+    expect(CHRISTMAS_2026_LADDER.map((tier) => tier.need)).toEqual([25, 50, 150, 200]);
+    const swapDecor = (tier: (typeof THANKSGIVING_2026_LADDER)[number]) =>
+      tier.rewards.map((one) => (one.kind === "decoration" ? { ...one, type: 0 } : one));
+    expect(CHRISTMAS_2026_LADDER.map(swapDecor)).toEqual(THANKSGIVING_2026_LADDER.map(swapDecor));
+    expect(CHRISTMAS_2026_LADDER[2]!.rewards).toContainEqual({ kind: "decoration", type: CHRISTMAS_DECOR.big, count: 1 });
+    expect(CHRISTMAS_2026_LADDER[3]!.rewards).toContainEqual({ kind: "decoration", type: CHRISTMAS_DECOR.top, count: 1 });
+    // Glimmers as Thanksgiving: 15 a day, 20/135/55/80 over the ladder, 500 in all.
+    expect(christmas.ladder!.tiers[1]!.rewards).toEqual([{ kind: "eventCoins", amount: 135 }]);
     const glimmers = [...christmas.calendar!, ...christmas.ladder!.tiers]
       .flatMap((one) => one.rewards)
       .reduce((sum, one) => sum + (one.kind === "eventCoins" ? one.amount : 0), 0);
-    expect(glimmers).toBe(400);
+    expect(glimmers).toBe(500);
     // Every tier reachable: at most one present an hour over its days.
     expect(CHRISTMAS_2026_LADDER.at(-1)!.need).toBeLessThanOrEqual(days * 24);
     expect(christmas.ladder!.tiers).toHaveLength(4);

@@ -56,11 +56,11 @@ describe("buildingCosts", () => {
     // without one are not buildable at any price. The Radio Tower (113) is
     // dropped on purpose (D15, `web/tools/gen-building-costs.mjs`). Then this
     // project's own Observatory (150, the alliance pass) and its decorations,
-    // 201 to 232 (`revampDecorations.ts`: the six autumn ones, then 26 new).
-    expect(BUILDING_COST_ROWS.length).toBe(134 + 1 + 32);
-    expect(Object.keys(COSTS).length).toBe(134 + 1 + 32);
-    expect(BUILDING_COST_ROWS.slice(-33, -32).map(([type]) => type)).toEqual([150]);
-    expect(BUILDING_COST_ROWS.slice(-32).map(([type]) => type)).toEqual(Array.from({ length: 32 }, (_, i) => 201 + i));
+    // 201 to 236 (`revampDecorations.ts`: the six autumn ones, 26 new, the four Christmas 2026 prizes).
+    expect(BUILDING_COST_ROWS.length).toBe(134 + 1 + 36);
+    expect(Object.keys(COSTS).length).toBe(134 + 1 + 36);
+    expect(BUILDING_COST_ROWS.slice(-37, -36).map(([type]) => type)).toEqual([150]);
+    expect(BUILDING_COST_ROWS.slice(-36).map(([type]) => type)).toEqual(Array.from({ length: 36 }, (_, i) => 201 + i));
   });
 
   test("rows are sorted by type and each type appears once", () => {

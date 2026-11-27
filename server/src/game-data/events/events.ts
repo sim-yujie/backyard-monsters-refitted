@@ -328,53 +328,48 @@ export const THANKSGIVING_2026_COINS: EventCoins = {
 /**
  * ═══════════════════════════════════════════════════════════════════════
  * CHRISTMAS 2026: dates, login calendar and present hunt ladder.
- * A PROPOSAL (beta 10, 27 Nov 2026): the owner has not set the prizes yet.
- * Change the numbers here; `events.test.ts` checks every reward can be paid.
- *
- * Christmas runs on its calendar dates like Halloween and Thanksgiving (no
- * dashboard switch): {@link CHRISTMAS_2026_STARTS} to {@link CHRISTMAS_2026_ENDS},
- * four weeks from after Thanksgiving's end (3 Dec) over Christmas and New
- * Year. The calendar has 14 days, so a player can miss up to 14 days of the
- * 28 and still claim them all (one claim per UTC day, in order). Locally,
- * `EVENTS_FORCE_ON=christmas-2026` starts it today.
+ * Set by the owner (27 Nov 2026): two weeks from Christmas Day, 25 Dec 2026
+ * to 8 Jan 2027 ({@link CHRISTMAS_2026_STARTS} to {@link CHRISTMAS_2026_ENDS},
+ * the end being the first moment it is over, as Thanksgiving's 19 Nov to
+ * 3 Dec); the daily gifts as Halloween's and Thanksgiving's, with the winter
+ * decorations on days 7 and 14; the presents ladder as the turkey hunt's,
+ * 25 / 50 / 150 / 200, with the winter decorations as its prizes. Like
+ * Thanksgiving, 14 calendar days in a 14-day event: a player must look in
+ * every day to claim all 14. Locally, `EVENTS_FORCE_ON=christmas-2026`
+ * starts it today. `events.test.ts` checks every reward can be paid.
  *
  * During the event the yard's mushrooms grow as presents, about one an hour,
  * at most 10 waiting (`services/yard/season.ts`), and every present picked
  * counts toward "Presents found". One in ten is a golden present worth 3 or 8
  * Shiny, as the golden turkey (`goldenOdds`, owner 19 Nov 2026 for turkeys).
- *
- * The winter decorations are not picked yet (option sheet on the owner's
- * desk), so the prizes name stand-ins: {@link CHRISTMAS_DECOR}. Once the
- * owner picks, give the new decorations their types in `revampDecorations.ts`
- * and point these constants at them; nothing else changes.
+ * The web client dresses the yard and the map for winter while it runs
+ * (`web/src/game/season.ts`).
  * ═══════════════════════════════════════════════════════════════════════
  */
-export const CHRISTMAS_2026_STARTS = "2026-12-07T00:00:00Z";
-export const CHRISTMAS_2026_ENDS = "2027-01-04T00:00:00Z";
+export const CHRISTMAS_2026_STARTS = "2026-12-25T00:00:00Z";
+export const CHRISTMAS_2026_ENDS = "2027-01-08T00:00:00Z";
 
 /**
- * The winter decoration prizes, by slot. STAND-INS until the owner picks the
- * winter decorations: existing decorations of about the right size.
- * `small` 66 Pine Cone (for the Snowman), `mid` 87 Bonsai Tree (for the
- * Present Pile), `big` 62 Green Gnome (for the Lamp Post with Lights),
- * `top` 206 Autumn Maple Tree (for the Decorated Christmas Tree).
+ * The four winter decorations (owner, 27 Nov 2026: "all 4 as painted"),
+ * this project's own types 233 to 236 (`revampDecorations.ts`), prizes only
+ * (not in the decoration shop): `small` the Snowman (day 7), `mid` the
+ * Present Pile (day 14), `big` the Lamp Post with Lights (150 presents),
+ * `top` the Christmas Tree (200 presents).
  */
 export const CHRISTMAS_DECOR = {
-  small: 66,
-  mid: 87,
-  big: 62,
-  top: 206,
+  small: 233,
+  mid: 234,
+  big: 235,
+  top: 236,
 } as const;
 
 /**
- * The 14 daily rewards, day 1 first: paced like Halloween's and
- * Thanksgiving's (the same resources, Shiny and speed-ups on the same days),
- * with winter decorations on days 7 and 14 and, on day 12, a Production
- * Overdrive (harvesters at double rate for 12 hours) as Thanksgiving's.
- * The Events card marks days 7 and 14 with a gold band (web
+ * The 14 daily rewards, day 1 first: as Halloween's and Thanksgiving's (the
+ * same resources, Shiny and speed-ups on the same days, and on day 12 a
+ * Production Overdrive as Thanksgiving's), with the winter decorations on
+ * days 7 and 14. The Events card marks days 7 and 14 with a gold band (web
  * `ui/events/events.css`): move it too if the decoration days move.
- * Plus 15 Glimmers a day (`coins`): 14 x 15 + 190 over the ladder = 400,
- * the owner's big-event target.
+ * Plus 15 Glimmers a day (`coins`).
  */
 export const CHRISTMAS_2026_CALENDAR: readonly CalendarDay[] = [
   /* Day 1  */ { rewards: [{ kind: "resources", amounts: { r1: 10_000, r2: 10_000 } }] },
@@ -399,20 +394,17 @@ export const CHRISTMAS_2026_CALENDAR: readonly CalendarDay[] = [
 ];
 
 /**
- * The present hunt ladder: `need` is the present count. At most one present
- * an hour grows (24 a day for a player who looks in at least every 10 hours),
- * so the top tier, 250, takes about 11 full days of the 28. Plus Glimmers
- * at each tier (`coins`: 20, 35, 55, 80).
+ * The present hunt ladder, as the turkey hunt's (owner, 27 Nov 2026): `need`
+ * is the present count. 25 for 10 Shiny, 50 for 100 Glimmers (paid through
+ * {@link CHRISTMAS_2026_COINS}), 150 for the Lamp Post with Lights and 20
+ * Shiny, 200 for the Christmas Tree and 30 Shiny. At most one present an
+ * hour grows (24 a day for a player who looks in at least every 10 hours),
+ * so 200 takes a little over 8 full days of the 14. Plus Glimmers at each
+ * tier (`coins`).
  */
 export const CHRISTMAS_2026_LADDER: readonly LadderTier[] = [
   /* 25 presents  */ { need: 25, rewards: [{ kind: "shiny", amount: 10 }] },
-  /* 75 presents  */ {
-    need: 75,
-    rewards: [
-      { kind: "speedup", item: "SP3", count: 2 },
-      { kind: "resources", amounts: { r1: 50_000, r2: 50_000, r3: 50_000, r4: 50_000 } },
-    ],
-  },
+  /* 50 presents  */ { need: 50, rewards: [] }, // 100 Glimmers, from CHRISTMAS_2026_COINS
   /* 150 presents */ {
     need: 150,
     rewards: [
@@ -420,14 +412,22 @@ export const CHRISTMAS_2026_LADDER: readonly LadderTier[] = [
       { kind: "shiny", amount: 20 },
     ],
   },
-  /* 250 presents */ {
-    need: 250,
+  /* 200 presents */ {
+    need: 200,
     rewards: [
       { kind: "decoration", type: CHRISTMAS_DECOR.top, count: 1 },
       { kind: "shiny", amount: 30 },
     ],
   },
 ];
+
+/**
+ * Christmas's event coins: Thanksgiving's ({@link THANKSGIVING_2026_COINS}:
+ * 15 a day, 20/35/55/80 over the ladder and the 50 tier's own 100), as the
+ * owner asked for the turkey hunt's steps and prizes: 500 Glimmers in all
+ * with the calendar.
+ */
+export const CHRISTMAS_2026_COINS: EventCoins = THANKSGIVING_2026_COINS;
 
 /**
  * ═══════════════════════════════════════════════════════════════════════
@@ -599,7 +599,7 @@ export const EVENTS: readonly EventDefinition[] = [
     endsAt: CHRISTMAS_2026_ENDS,
     calendar: CHRISTMAS_2026_CALENDAR,
     ladder: { label: "Presents found", tiers: CHRISTMAS_2026_LADDER },
-    coins: BIG_EVENT_COINS,
+    coins: CHRISTMAS_2026_COINS,
   },
 ].map(withEventCoins);
 
