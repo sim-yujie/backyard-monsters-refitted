@@ -420,7 +420,7 @@ export class YardRenderer {
     const key = on ? `${screen.width}x${screen.height}` : "";
     if (key !== this.snowScreen) {
       this.snowScreen = key;
-      this.snowfall.setFlakes(on ? flakeCount(screen.width, screen.height, quality()) : 0);
+      this.snowfall.setFlakes(on ? flakeCount(screen.width, screen.height, quality()) : 0, screen.width < 600);
     }
     if (this.snowfall.count === 0) return;
     this.snowfall.root.visible = true;

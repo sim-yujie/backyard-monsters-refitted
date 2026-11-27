@@ -99,10 +99,10 @@ export class YardSnowfall {
   }
 
   /**
-   * Snow on (`count` flakes) or off (0). Keeps the flakes it has when the
+   * Snow on (`count` flakes) or off (0); `narrow` for a phone-wide screen. Keeps the flakes it has when the
    * count is the same, so calling it each time the yard redraws costs nothing.
    */
-  setFlakes(count: number): void {
+  setFlakes(count: number, narrow = false): void {
     if (count === this.flakes.length) {
       this.root.visible = count > 0;
       return;
@@ -124,7 +124,8 @@ export class YardSnowfall {
         v: this.random(),
         fall: 22 + depth * 46,
         // Most flakes small; the nearest few big enough to read over bright snow (neon, 27 Nov 2026).
-        size: 4 + depth * depth * 7,
+        // On a phone-wide screen the nearest stay smaller (4-8 px), so they never blot out a tower (neon round 2).
+        size: 4 + depth * depth * (narrow ? 4 : 7),
         swayBy: 6 + this.random() * 14,
         swayRate: 0.6 + this.random() * 1.1,
         phase: this.random() * Math.PI * 2,
