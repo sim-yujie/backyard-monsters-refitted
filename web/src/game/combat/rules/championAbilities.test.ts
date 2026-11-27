@@ -226,6 +226,10 @@ describe("Gorgo", () => {
     const pound = firstAbility(battle, "chestPound", false, 400);
     expect(pound?.count).toBeGreaterThan(0);
     const gorgo = championOf(battle, false)!;
+    // The drawing's list of held towers: as many as the pound caught, each on him.
+    const held = battle.abilityMarks?.().taunted ?? [];
+    expect(held.length).toBe(pound?.count);
+    expect(held.every((one) => one.by === gorgo.id)).toBe(true);
     const shotAt = new Set<number>();
     watch(battle, 200, (event) => {
       if (event.kind === "shot") shotAt.add(event.creepId);

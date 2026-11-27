@@ -1513,7 +1513,12 @@ export interface Battle {
    * Spit marks right now, ascending building id (`championAbilities.ts`).
    * Drawing only.
    */
-  abilityMarks?(): { readonly stunned: readonly number[]; readonly marked: readonly number[] };
+  abilityMarks?(): {
+    readonly stunned: readonly number[];
+    readonly marked: readonly number[];
+    /** Towers a Chest Pound holds: the tower's building id, its Gorgo's creep id. */
+    readonly taunted?: readonly { readonly tower: number; readonly by: number }[];
+  };
   /**
    * The defender's champions in their cage right now (issues #260, #310), in
    * the order {@link BattleOptions.defenderChampions} gave them: before they
@@ -9077,7 +9082,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       ...(creep.leapStart >= 0 ? { leap: (tick - creep.leapStart) / POUNCE_TICKS } : {}),
     }));
 
-  const abilityMarks = (): { stunned: number[]; marked: number[] } => ({
+  const abilityMarks = (): {
+    stunned: number[];
+    marked: number[];
+    taunted: { tower: number; by: number }[];
+  } => ({
     stunned: towers
       .filter((tower) => tower.stunUntil > tick && tower.building.hp > 0)
       .map((tower) => tower.building.id)
@@ -9086,6 +9095,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       .filter(([id, mark]) => mark.until > tick && (buildingOf(id)?.hp ?? 0) > 0)
       .map(([id]) => id)
       .sort((one, other) => one - other),
+    taunted: towers
+      .filter((tower) => tower.tauntBy >= 0 && tower.tauntUntil > tick && tower.building.hp > 0)
+      .map((tower) => ({ tower: tower.building.id, by: tower.tauntBy }))
+      .sort((one, other) => one.tower - other.tower),
   });
 
   const weakenedTowers = (): number[] =>

@@ -56,7 +56,18 @@ import { FOMOR_ID } from "@/game/combat/rules/champions";
 import { DAVE_ID } from "@/game/combat/rules/specialMoves";
 import { BlastFx, type PunchyStrength } from "./blastFx";
 import { RingFx } from "./ringFx";
-import { ABILITY_LOOKS, BubbleFx, abilityStateTint, pounceLift, type BubbleAt } from "./abilityFx";
+import {
+  ABILITY_LOOKS,
+  BubbleFx,
+  StoneFx,
+  TauntFx,
+  TrailFx,
+  abilityStateTint,
+  pounceLift,
+  type BubbleAt,
+  type StoneAt,
+  type TauntAt,
+} from "./abilityFx";
 import {
   BANDITO_PUNCHY,
   QUAKE_PUNCHY,
@@ -906,6 +917,13 @@ export class AttackBattleLayer {
   private readonly towerStatus: TowerStatusIcons;
   /** Fomor's Bubbles round the creeps that have one (Monster Madness abilities). */
   private readonly bubbleFx = new BubbleFx();
+  private readonly stoneFx = new StoneFx();
+  private readonly tauntFx = new TauntFx();
+  private readonly trailFx = new TrailFx();
+  /** Gorgo's Stone Skin greys his body: a colour-matrix filter per creep, while it lasts. */
+  private readonly stoneFilters = new Map<number, ColorMatrixFilter>();
+  /** A tower's top middle in world px, for a Chest Pound's line; null for one not drawn. */
+  private readonly towerTop: (id: number) => Point | null;
   private readonly traps = new TrapReveal();
   private readonly bursts: Burst[] = [];
   private readonly scorches: Graphics[] = [];
@@ -1113,8 +1131,15 @@ export class AttackBattleLayer {
         ? { x: origin.x + BAR_OFFSET.x + BAR_WIDTH / 2, y: origin.y + BAR_OFFSET.y }
         : null;
     });
+    this.towerTop = (id) => {
+      const origin = this.host.centreOf(id) ? originOf.get(id) : undefined;
+      return origin ? { x: origin.x + BAR_OFFSET.x + BAR_WIDTH / 2, y: origin.y + BAR_OFFSET.y + 18 } : null;
+    };
     this.effects.addChild(this.towerStatus.root);
+    this.effects.addChild(this.trailFx.root);
+    this.effects.addChild(this.tauntFx.root);
     this.effects.addChild(this.bubbleFx.root);
+    this.effects.addChild(this.stoneFx.root);
     // The blast over the bars; the splats it leaves come after, over it.
     this.effects.addChild(this.blastAir);
 
@@ -1222,6 +1247,8 @@ export class AttackBattleLayer {
     this.showBombNumbers(shown);
     const marks = battle.abilityMarks?.();
     this.towerStatus.sync(battle.weakenedTowers(), marks?.stunned ?? [], marks?.marked ?? []);
+    this.drawTaunts(marks?.taunted ?? [], shown);
+    this.trailFx.update(shown);
 
     if (this.damageDirty) {
       this.damageDirty = false;
@@ -1490,6 +1517,11 @@ export class AttackBattleLayer {
     this.buildingBars.destroy();
     this.towerStatus.destroy();
     this.bubbleFx.destroy();
+    this.stoneFx.destroy();
+    this.tauntFx.destroy();
+    this.trailFx.destroy();
+    for (const filter of this.stoneFilters.values()) filter.destroy();
+    this.stoneFilters.clear();
     for (const burst of this.bursts) burst.ring.destroy();
     this.bursts.length = 0;
     for (const scorch of this.scorches) scorch.destroy();
@@ -1719,11 +1751,15 @@ export class AttackBattleLayer {
   /** Bars and hurt tints, once this frame's bullets have landed. */
   private paintCreeps(tick: number): void {
     const bubbles: BubbleAt[] = [];
+    const stones: StoneAt[] = [];
     for (const view of this.views.values()) {
       const shield = view.snapshot?.shield ?? 0;
       if (shield > 0 && !this.died.has(view.id)) {
         bubbles.push({ x: view.lastX, y: view.lastY, top: view.top, shield });
       }
+      const stone = view.snapshot?.stone === true && !this.died.has(view.id);
+      if (stone) stones.push({ id: view.id, x: view.lastX, y: view.lastY, top: view.top });
+      this.paintStone(view, stone);
       const bar = view.snapshot?.champion ? CHAMPION_BAR : BAR;
       view.barFront.width = Math.max(0, bar.width * this.shownFraction(view));
       view.body.tint =
@@ -1737,6 +1773,37 @@ export class AttackBattleLayer {
       this.paintZombie(view, tick);
     }
     this.bubbleFx.draw(bubbles);
+    this.stoneFx.draw(stones);
+  }
+
+  /**
+   * Gorgo's Stone Skin (lead's vet, 27 Nov 2026): his body goes grey while it
+   * lasts, a colour-matrix filter as a zombie's, and back to colour after.
+   */
+  private paintStone(view: CreepView, stone: boolean): void {
+    const filter = this.stoneFilters.get(view.id);
+    if (stone && !filter && !this.zombieFilters.has(view.id)) {
+      const grey = new ColorMatrixFilter();
+      grey.matrix = saturationMatrix(0.08);
+      this.stoneFilters.set(view.id, grey);
+      view.body.filters = [grey];
+    } else if (!stone && filter) {
+      view.body.filters = null;
+      filter.destroy();
+      this.stoneFilters.delete(view.id);
+    }
+  }
+
+  /** Chest Pound's holds: a line from each taunted tower to its Gorgo. */
+  private drawTaunts(taunted: readonly { readonly tower: number; readonly by: number }[], tick: number): void {
+    const lines: TauntAt[] = [];
+    for (const { tower, by } of taunted) {
+      const from = this.towerTop(tower);
+      const gorgo = this.views.get(by);
+      if (!from || !gorgo || this.died.has(by)) continue;
+      lines.push({ from, to: { x: gorgo.lastX, y: (gorgo.lastY + gorgo.top) / 2 } });
+    }
+    this.tauntFx.draw(lines, tick);
   }
 
   /**
@@ -1918,6 +1985,12 @@ export class AttackBattleLayer {
       this.zombieFilters.delete(view.id);
     }
     this.risen.delete(view.id);
+    const stone = this.stoneFilters.get(view.id);
+    if (stone) {
+      view.body.filters = null;
+      stone.destroy();
+      this.stoneFilters.delete(view.id);
+    }
     view.barBack.visible = false;
     view.barFront.visible = false;
     view.status.hide();
@@ -2861,11 +2934,32 @@ export class AttackBattleLayer {
         : null;
     if (event.radius > 0) this.spawnRing(event.tick, ground, event.radius, look.colour);
     if (to && look.landRing > 0) this.spawnRing(event.tick, to, look.landRing, look.colour);
+    if (look.castRing > 0) this.spawnRing(event.tick, ground, look.castRing, look.colour);
+    const middle = { x: ground.x, y: ((view?.top ?? ground.y - BODY_HEIGHT) + ground.y) / 2 };
+    if (to && look.beam) this.trailFx.beam(event.tick, middle, { x: to.x, y: to.y - 14 }, look.colour);
+    if (event.ability === "healingMist") this.mistOver(event, ground, look.colour);
     if (look.punchy) this.punchy(event.tick, ground, Math.max(40, event.radius * 0.6), look.punchy);
     // A Pounce shows its word as he takes off, not again as he lands.
     if (!look.word || (event.ability === "pounce" && !to)) return;
     const at = { x: ground.x, y: (view?.top ?? ground.y - BODY_HEIGHT) - 14 };
     this.fx.word(event.tick, `ability:${event.creepId}`, event.creepId, look.word, at);
+  }
+
+  /**
+   * Healing Mist (lead's vet, 27 Nov 2026): a green haze over its ring, and a
+   * small green ring at the feet of each of Fomor's side inside it.
+   */
+  private mistOver(event: Extract<BattleVisualEvent, { kind: "ability" }>, ground: Point, colour: number): void {
+    this.trailFx.mist(event.tick, ground, event.radius, colour);
+    if (event.radius <= 0) return;
+    for (const view of this.views.values()) {
+      const snapshot = view.snapshot;
+      if (!snapshot || view.id === event.creepId || this.died.has(view.id)) continue;
+      if (snapshot.friendly !== event.friendly) continue;
+      const dx = (view.lastX - ground.x) / event.radius;
+      const dy = (view.lastY - ground.y) / (event.radius / 2);
+      if (dx * dx + dy * dy <= 1) this.spawnRing(event.tick, { x: view.lastX, y: view.lastY }, 16, colour);
+    }
   }
 
   /**
