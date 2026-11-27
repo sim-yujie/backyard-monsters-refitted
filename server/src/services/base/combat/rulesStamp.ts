@@ -4,6 +4,7 @@ import { newVersionErr } from "../../../errors/errors.js";
 import { COMPATIBLE_RULES_VERSIONS } from "../../../game-rules/combat/rulesCompat.js";
 import { logger } from "../../../utils/logger.js";
 import { RULES_VERSION } from "../../defences/rulesVersion.js";
+import { ATTACK_STATS_VERSION } from "../../../game-data/stats/attackStatsVersion.js";
 
 /**
  * The battle-rules stamp a game page sends (owner's fix 1, Desk 8, 23 Nov
@@ -98,3 +99,49 @@ export const startedOnOldPage = (
   ours: string = RULES_VERSION,
   compatible: readonly string[] = COMPATIBLE_RULES_VERSIONS
 ): boolean => !stampPlays(sessionRules, ours, compatible);
+
+/**
+ * The request field the attack-stats stamp travels in, beside `rules`, on an
+ * attack start that carries `attackData` (beta 10, owner's pick B+).
+ */
+export const STATS_FIELD = "stats";
+
+/** The attack-stats stamp a request body carries, if any. */
+export const statsStampOf = (body: unknown): unknown =>
+  typeof body === "object" && body !== null ? (body as Record<string, unknown>)[STATS_FIELD] : undefined;
+
+/**
+ * Refuses an attack start from a page whose attack-stat table is not the
+ * server's (`game-data/stats/attackStatsVersion.ts`): the training, hatching
+ * and feeding ladders are not in the battle rules, so a release that changes
+ * only them leaves `rules` alone, and without this the page would reach the
+ * stat check in `validateAttack`. Call it right after {@link requirePageRules}
+ * on a start that carries `attackData`.
+ *
+ * A page from before this stamp sends none and is let through:
+ * `validateAttack` still refuses its old stats with "New version", never a
+ * ban (`pastAttackStats.ts`).
+ *
+ * @param route - Which start, for the log line.
+ * @throws {ClientSafeError} `newVersionErr` when the stamp is another table's.
+ */
+export const requirePageStats = (
+  ctx: Context,
+  user: Pick<User, "userid" | "username">,
+  stamp: unknown,
+  route: string,
+  ours: string = ATTACK_STATS_VERSION
+): void => {
+  if (stamp === undefined || stamp === null || stamp === "" || stamp === ours) return;
+  logger.info("Attack start refused for {username}: the page holds older monster stats ({sent})", {
+    event: "attack-start-old-page",
+    reason: "stats-stamp",
+    route,
+    userid: user.userid,
+    username: user.username,
+    sent: stampForLog(stamp),
+    ours,
+    ip: ctx.ip,
+  });
+  throw newVersionErr();
+};

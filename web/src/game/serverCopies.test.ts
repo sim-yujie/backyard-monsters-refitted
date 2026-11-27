@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { ATTACK_CHAMPION_PROPS, ATTACK_MONSTER_PROPS } from "./attack/attackStats";
+import { ATTACK_STATS_STAMP, attackStatsVersionOf } from "./attack/attackStatsVersion";
 import * as webCosts from "./yard/buildingCostData";
 import { INFERNO_REPAIR_TIMES, REPAIR_CAP_SECONDS, REPAIR_TIMES } from "./yard/repairTimeData";
 import { STARTER_KIT_SUMMARIES } from "./yard/starterKitData";
@@ -10,6 +11,10 @@ import * as serverRepair from "../../../server/src/game-data/repairTimes";
 import { STARTER_KITS } from "../../../server/src/game-data/starterKits";
 import { championStats } from "../../../server/src/game-data/stats/championStats";
 import { monsterStats } from "../../../server/src/game-data/stats/monsterStats";
+import {
+  ATTACK_STATS_VERSION,
+  attackStatsVersionOf as serverStatsVersionOf,
+} from "../../../server/src/game-data/stats/attackStatsVersion";
 
 /**
  * Drift checks for the tables the web keeps a copy of (beta 9 audit, 21 Nov
@@ -58,6 +63,17 @@ describe("the web's copies of server tables", () => {
     for (const [id, stat] of Object.entries(championStats)) {
       expect(ATTACK_CHAMPION_PROPS[id], id).toEqual({ t: stat.t, props: stat.props });
     }
+  });
+
+  it("the page's attack-stats stamp is the server's (attackStatsVersion.ts, beta 10)", () => {
+    // A page that stamps another table than the server's is refused with "New version" on every attack.
+    expect(ATTACK_STATS_STAMP).toBe(ATTACK_STATS_VERSION);
+    // The two copies of the hash agree on any table, not only on today's.
+    const sample = {
+      monsters: { C9: { hTime: [1.5, 2], cResource: [10] }, C1: { speed: [1] } },
+      champions: { G2: { t: 2, props: { movement: ["ground"], feedCount: [3, 6] } } },
+    };
+    expect(attackStatsVersionOf(sample)).toBe(serverStatsVersionOf(sample));
   });
 
   it("the Starter Kit picker shows each kit's real name, price and buildings (gen-starter-kits.mjs)", () => {

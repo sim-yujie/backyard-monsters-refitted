@@ -15,6 +15,7 @@ import {
 import type { AttackCheckpoint } from "@/game/attack/attackCheckpoint";
 import type { AttackRoster, AttackTarget, AttackTargetKind } from "@/game/attack/attackTarget";
 import { ATTACK_CHAMPION_PROPS, ATTACK_MONSTER_PROPS } from "@/game/attack/attackStats";
+import { ATTACK_STATS_STAMP } from "@/game/attack/attackStatsVersion";
 import { RULES_STAMP, startStamped } from "./rulesStamp";
 
 /**
@@ -243,6 +244,8 @@ export const loadAttack = async (
     attackData: JSON.stringify(buildAttackData(roster)),
     // This page's battle rules: an older page is refused with "New version" (`rulesStamp.ts`).
     rules: RULES_STAMP,
+    // And its monster numbers, the training and hatching ladders included (beta 10).
+    stats: ATTACK_STATS_STAMP,
     // Smart moving (beta 9): the moves "Move & attack" agreed to, made by this same request.
     ...(options.smartMoves ? { smartmoves: options.smartMoves } : {}),
   };

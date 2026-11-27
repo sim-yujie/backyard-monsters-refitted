@@ -99,3 +99,43 @@ describe("a save's attack, started on an old page", () => {
     expect(parseAttackSession(JSON.stringify({ attackerid: 2503, attackid: 42, startedat: 1, rules: "nope" }))?.rules).toBeUndefined();
   });
 });
+
+const { requirePageStats, statsStampOf, STATS_FIELD } = await import("./rulesStamp.js");
+const { ATTACK_STATS_VERSION } = await import("../../../game-data/stats/attackStatsVersion.js");
+
+describe("the attack-stats stamp (beta 10)", () => {
+  const statsRefusal = (stamp: unknown): string | null => {
+    try {
+      requirePageStats(ctx, user, stamp, "base/load:attack");
+      return null;
+    } catch (err) {
+      return (err as { data?: { reason?: string } }).data?.reason ?? String(err);
+    }
+  };
+
+  test("goes on with this server's table", () => {
+    expect(statsRefusal(ATTACK_STATS_VERSION)).toBeNull();
+  });
+
+  test("goes on without one: a page from before the stamp is left to validateAttack", () => {
+    for (const stamp of [undefined, null, ""]) expect(statsRefusal(stamp)).toBeNull();
+    expect(info).not.toHaveBeenCalled();
+  });
+
+  test("refuses another release's table with New version, logged as an old page", () => {
+    expect(statsRefusal("6164e7d8578cac11")).toBe("newVersion");
+    expect(info.mock.calls[0]![1]).toMatchObject({
+      event: "attack-start-old-page",
+      reason: "stats-stamp",
+      sent: "6164e7d8578cac11",
+      ours: ATTACK_STATS_VERSION,
+    });
+    expect(statsRefusal(42)).toBe("newVersion");
+  });
+
+  test("travels as `stats`", () => {
+    expect(STATS_FIELD).toBe("stats");
+    expect(statsStampOf({ stats: "abc" })).toBe("abc");
+    expect(statsStampOf(null)).toBeUndefined();
+  });
+});
