@@ -1,5 +1,5 @@
 import { Container, Graphics } from "pixi.js";
-import { KRAMPUS_ID, krampusAuraRadius, type CreepSnapshot } from "@/game/combat/rules";
+import { KRAMPUS_ID, krampusAuraRadius, type CreepSnapshot, type FrostArea } from "@/game/combat/rules";
 import type { Point } from "@/game/yard/YardGrid";
 
 /**
@@ -60,6 +60,61 @@ export class FrostAuraFx {
   destroy(): void {
     for (const entry of this.rings.values()) entry.ring.destroy();
     this.rings.clear();
+    this.root.destroy({ children: true });
+  }
+}
+
+/**
+ * The frost areas frost Eye-ras leave where they burst (beta 10, owner 27 Nov
+ * 2026: "a frost AOE that slows towers upon exploding"): the same icy disc
+ * as Krampus's aura, still on the ground, frosting over in its first half
+ * second and melting away in its last second. Drawing only; the towers it
+ * slows are the engine's (`engine.ts`, `frostArea`).
+ */
+export class FrostAreaFx {
+  private readonly discs = new Map<string, Graphics>();
+  readonly root = new Container();
+
+  constructor(private readonly world: (ix: number, iy: number) => Point) {
+    this.root.eventMode = "none";
+  }
+
+  /** Every area still on the ground, placed and faded by `tick`; the melted ones dropped. */
+  update(areas: readonly FrostArea[], tick: number): void {
+    const seen = new Set<string>();
+    for (const area of areas) {
+      if (tick >= area.until) continue;
+      const key = `${area.from}:${area.ix}:${area.iy}`;
+      seen.add(key);
+      let disc = this.discs.get(key);
+      if (!disc) {
+        disc = drawRing(area.radius);
+        const at = this.world(area.ix, area.iy);
+        disc.position.set(at.x, at.y);
+        this.discs.set(key, disc);
+        this.root.addChild(disc);
+      }
+      // 40 ticks (half a second) to frost over, 80 (a second) to melt.
+      const grow = Math.min(1, Math.max(0, (tick - area.from) / 40));
+      const melt = Math.min(1, Math.max(0, (area.until - tick) / 80));
+      disc.scale.set(0.6 + 0.4 * grow);
+      disc.alpha = Math.min(grow, melt);
+    }
+    for (const [key, disc] of this.discs) {
+      if (seen.has(key)) continue;
+      disc.destroy();
+      this.discs.delete(key);
+    }
+  }
+
+  /** How many areas are on the ground (for tests). */
+  get count(): number {
+    return this.discs.size;
+  }
+
+  destroy(): void {
+    for (const disc of this.discs.values()) disc.destroy();
+    this.discs.clear();
     this.root.destroy({ children: true });
   }
 }

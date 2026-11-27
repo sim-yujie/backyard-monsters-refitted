@@ -602,6 +602,13 @@ export interface RaidEvent {
    */
   readonly champion?: RaidChampion;
   /**
+   * The wave's monsters are the frost tribe's (beta 10, `frost.ts`): its
+   * Eye-ras, Teratorns and Fangs fight with frost, every other one is drawn
+   * in its frost skin. Absent, they are themselves. The server builds the
+   * log, so its fight, its replay and the page's playback all read it.
+   */
+  readonly frost?: true;
+  /**
    * Every raider still on the yard leaves now, as an attacker's Retreat
    * sends its army home (beta 10's time limit: healers can keep a raider
    * fighting a defender for the whole 10-minute cap). Set on a wave of no

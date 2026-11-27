@@ -146,3 +146,23 @@ describe("timed groups", () => {
     expect(events[1]!.strength).toBeUndefined();
   });
 });
+
+describe("a frost army (beta 10)", () => {
+  test("marks every wave frost, the champion's too; a plain army marks none", () => {
+    const frost = stagedRaidEvents({
+      bearings: [0, 180],
+      army: { C5: 2, C8: 4 },
+      drops: 2,
+      dropGapTicks: 800,
+      frost: true,
+      champion: { t: 6, l: 6 },
+      retreatAfterTicks: 4000,
+    });
+    const landing = frost.filter((event) => event.retreat !== true);
+    expect(landing.length).toBeGreaterThan(0);
+    expect(landing.every((event) => event.frost === true)).toBe(true);
+    expect(landing.some((event) => event.champion?.t === 6)).toBe(true);
+    const plain = stagedRaidEvents({ bearings: [0], army: { C5: 2 }, drops: 1, dropGapTicks: 0 });
+    expect(plain.some((event) => "frost" in event)).toBe(false);
+  });
+});

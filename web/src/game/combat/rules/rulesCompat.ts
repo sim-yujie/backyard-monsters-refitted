@@ -111,6 +111,13 @@
  * and an unchilled tower leave every number as it was, and no log could
  * bring a Krampus on before. So beta 9's 15bf255b01aafabc still plays the
  * same.
+ *
+ * Beta 10's frost monsters (`frost.ts`: the frost Eye-ra's area, the frost
+ * Teratorn's frostballs, the frost Fang's frostbite) fight only when a fight
+ * says its side is frost (`BattleOptions.frostAttackers`/`frostDefenders`, a
+ * raid wave's `frost`), which no log or attack before could; every other
+ * monster fights as before (the golden replays are unchanged). So beta 9's
+ * 15bf255b01aafabc still plays the same.
  */
 export const COMPATIBLE_RULES_VERSIONS: readonly string[] = ["15bf255b01aafabc"];
 

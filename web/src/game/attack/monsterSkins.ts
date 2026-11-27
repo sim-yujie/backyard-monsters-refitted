@@ -32,13 +32,18 @@ export interface BattleSkins {
   readonly defenders?: MonsterSkin;
 }
 
-/** The skin a creep is drawn with: its side's, if its monster has that skin. */
+/**
+ * The skin a creep is drawn with: its side's, if its monster has that skin,
+ * or frost for a creep the battle says is frost (`CreepSnapshot.frost`: a
+ * frost raid wave's), so the look always matches how it fights.
+ */
 export const creepSkin = (
   skins: BattleSkins | null | undefined,
   monsterId: string,
   friendly: boolean,
+  frost = false,
 ): MonsterSkin | undefined => {
-  const skin = friendly ? skins?.defenders : skins?.attackers;
+  const skin = frost ? "frost" : friendly ? skins?.defenders : skins?.attackers;
   return skin && hasSkin(monsterId, skin) ? skin : undefined;
 };
 
@@ -77,6 +82,19 @@ export const sheetSkin = (sheet: MonsterSheet): MonsterSkin | undefined => (shee
 export const skinFile = (file: string, skin: MonsterSkin): string => {
   const slash = file.lastIndexOf("/");
   return `${file.slice(0, slash + 1)}${skin}/${file.slice(slash + 1)}`;
+};
+
+/**
+ * A dev practice fight's frost abilities (`AttackSessionOptions.devFrost`):
+ * the side `?monsterSkin=frost` / `?defenderSkin=frost` draws in frost also
+ * fights with frost (`frost.ts`). Nothing for anything else.
+ */
+export const devFrostOf = (search: string): { devFrost?: { attackers?: boolean; defenders?: boolean } } => {
+  const params = new URLSearchParams(search);
+  const attackers = params.get("monsterSkin") === "frost";
+  const defenders = params.get("defenderSkin") === "frost";
+  if (!attackers && !defenders) return {};
+  return { devFrost: { ...(attackers ? { attackers } : {}), ...(defenders ? { defenders } : {}) } };
 };
 
 /**

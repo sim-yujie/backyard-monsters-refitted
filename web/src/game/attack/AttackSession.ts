@@ -301,6 +301,12 @@ export interface AttackSessionOptions {
    * the raids that bring it exist. Never recorded in the log the server gets.
    */
   readonly devKrampus?: number;
+  /**
+   * DEV ONLY, a practice fight (`?monsterSkin=frost`, `?defenderSkin=frost`):
+   * that side fights with the frost tribe's abilities (`frost.ts`), not only
+   * its look. A real attack never sets it: the server replays it without.
+   */
+  readonly devFrost?: { readonly attackers?: boolean; readonly defenders?: boolean };
   /** The clock {@link AttackSession.skipToEnd} budgets a frame by, in ms; `performance.now` by default. */
   readonly now?: () => number;
 }
@@ -527,6 +533,7 @@ export class AttackSession {
   private readonly raid: boolean;
   private skins_: BattleSkins | null;
   private devKrampus: number;
+  private readonly devFrost: { readonly attackers?: boolean; readonly defenders?: boolean };
   /** {@link AttackSessionOptions.raidSpawnsUntil}, 0 when absent. */
   private readonly raidSpawnsUntil: number;
   private readonly descentYard: number | undefined;
@@ -540,6 +547,7 @@ export class AttackSession {
     this.raid = options.raid ?? false;
     this.skins_ = options.skins ?? null;
     this.devKrampus = options.devKrampus ?? 0;
+    this.devFrost = options.devFrost ?? {};
     this.raidSpawnsUntil = Math.max(0, Math.floor(options.raidSpawnsUntil ?? 0));
     // The option (the dev practice's `?descentYard`), else the Descent target's own yard.
     this.descentYard = options.descentYard ?? descentYardOf(options.target).descentYard;
@@ -625,6 +633,8 @@ export class AttackSession {
       ...(playerLevel === undefined ? {} : { playerLevel }),
       ...(this.descentYard === undefined ? {} : { descentYard: this.descentYard }),
       ...(this.devKrampus > 0 ? { wildChampions: true } : {}),
+      ...(this.devFrost.attackers ? { frostAttackers: true } : {}),
+      ...(this.devFrost.defenders ? { frostDefenders: true } : {}),
       // The defence the server replays the battle against (issue #195).
       ...defence,
     });

@@ -32,6 +32,7 @@ export * from "./combatStatsData.js";
 export * from "./stats.js";
 export * from "./champions.js";
 export * from "./wildChampions.js";
+export * from "./frost.js";
 export * from "./stance.js";
 export * from "./brain.js";
 export * from "./habits.js";

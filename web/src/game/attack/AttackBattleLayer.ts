@@ -1,5 +1,5 @@
 import { creepSkin } from "./monsterSkins";
-import { FrostAuraFx } from "./frostAuraFx";
+import { FrostAreaFx, FrostAuraFx } from "./frostAuraFx";
 import {
   ColorMatrixFilter,
   Container,
@@ -22,6 +22,7 @@ import {
   type Battle,
   type BattleVisualEvent,
   type CreepSnapshot,
+  type FrostArea,
 } from "@/game/combat/rules";
 import { playEffect, preloadEffects } from "@/game/sound/sound";
 import { damageStep } from "@/game/yard/YardBuildings";
@@ -314,8 +315,8 @@ export const abilityTint = (creep: CreepSnapshot | null): number => {
   if (creep.burning) return 0xffb070;
   if (creep.enraged || creep.puttied) return 0xff9cff;
   if (creep.lootBoosted) return 0xa8ff80;
-  // Krampus's frost aura (beta 10): an icy blue.
-  if (creep.chilled) return 0x9fd8ff;
+  // Krampus's frost aura, a frostball or a frost Fang's bite (beta 10): an icy blue.
+  if (creep.chilled || creep.frostbitten) return 0x9fd8ff;
   return 0xffffff;
 };
 
@@ -860,6 +861,8 @@ export class AttackBattleLayer {
   private readonly effects = new Container();
   /** Krampus's frost aura rings on the ground (beta 10). */
   private frostAura: FrostAuraFx | null = null;
+  /** Frost Eye-ras' frost areas on the ground (beta 10). */
+  private frostAreas: FrostAreaFx | null = null;
   /** Drawn explosions, Eye-ra's fiery one (feat/eyera-explosion); inside `effects`. */
   private readonly blastAir = new Container();
   private readonly blastFx: BlastFx;
@@ -1187,6 +1190,8 @@ export class AttackBattleLayer {
       const live = battle.creeps();
       const seen = this.syncCreeps(live, tick);
       this.syncFrostAura(live, tick);
+      // A stand-in battle (tests) may not draw frost areas.
+      this.syncFrostAreas(battle.frostAreas?.() ?? [], tick);
       for (const event of battle.recentEvents(this.lastEventTick)) {
         this.sounds.onEvent(event);
         this.lootFx.onEvent(event);
@@ -1216,7 +1221,7 @@ export class AttackBattleLayer {
     this.siegeFx.update(siege, shown);
     this.lootFx.update(shown);
     this.showBombNumbers(shown);
-    this.towerStatus.sync(battle.weakenedTowers());
+    this.towerStatus.sync(battle.weakenedTowers(), battle.chilledTowers?.() ?? []);
 
     if (this.damageDirty) {
       this.damageDirty = false;
@@ -1480,6 +1485,8 @@ export class AttackBattleLayer {
     this.ringFx.destroy();
     this.frostAura?.destroy();
     this.frostAura = null;
+    this.frostAreas?.destroy();
+    this.frostAreas = null;
     for (const sprite of this.gibPool) sprite.destroy();
     this.gibPool.length = 0;
 
@@ -1599,6 +1606,16 @@ export class AttackBattleLayer {
       (this.host.groundShadowLayer?.() ?? this.effects).addChild(this.frostAura.root);
     }
     this.frostAura.update(creeps, tick);
+  }
+
+  /** Frost Eye-ras' frost areas on the ground, made the first time one bursts. */
+  private syncFrostAreas(areas: readonly FrostArea[], tick: number): void {
+    if (!this.frostAreas) {
+      if (areas.length === 0) return;
+      this.frostAreas = new FrostAreaFx((ix, iy) => groundWorld(ix, iy, this.origin));
+      (this.host.groundShadowLayer?.() ?? this.effects).addChild(this.frostAreas.root);
+    }
+    this.frostAreas.update(areas, tick);
   }
 
   /** Places every creep the engine has; returns their ids. */
@@ -1812,7 +1829,7 @@ export class AttackBattleLayer {
     const view = this.pool.pop() ?? this.makeView();
     view.id = creep.id;
     view.monsterId = creep.monsterId;
-    view.sheet = spriteFor(creep.monsterId, creep.level, creepSkin(this.session.skins, creep.monsterId, creep.friendly)) ?? null;
+    view.sheet = spriteFor(creep.monsterId, creep.level, creepSkin(this.session.skins, creep.monsterId, creep.friendly, creep.frost)) ?? null;
     view.lastX = ground.x;
     view.lastY = ground.y;
     view.lastTick = tick;
@@ -2225,7 +2242,7 @@ export class AttackBattleLayer {
         champion,
         event.amount,
         PROJECTILE_TICKS,
-        projectileStyle(monsterId),
+        projectileStyle(monsterId, view?.snapshot?.frost === true),
         modsOf(event),
       );
       return;
