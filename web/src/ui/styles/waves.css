@@ -542,3 +542,19 @@
   text-align: center;
   opacity: 0.85;
 }
+
+/* A phone on its side: the arrival pop-up keeps its words, track and buttons on screen. */
+@media (max-height: 450px) {
+  .wave-intro__banner,
+  .wave-intro__facts {
+    display: none;
+  }
+
+  .wave-intro .wave-track {
+    margin-top: 10px;
+  }
+
+  .wave-result__actions {
+    margin-top: 8px;
+  }
+}
