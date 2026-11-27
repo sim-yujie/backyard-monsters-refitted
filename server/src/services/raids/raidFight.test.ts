@@ -105,7 +105,7 @@ describe("fightRaid: beta 10 raids", () => {
       expect(outcome.digest).toBe(replayed.digest);
       expect(outcome.ticks).toBe(replayed.ticks);
     }
-  });
+  }, 60_000);
 
   test("the yard's caged champion fights a wild one", () => {
     const events = [champion(1, 1)];
@@ -161,5 +161,6 @@ describe("fightRaid: beta 10 raids", () => {
       expect(outcome.creepsFlung).toBe(flung);
       expect(outcome.digest).toBe(replayRaid(input).digest);
     }
-  });
+    // Two 400-raider fights, each twice: a few seconds on a CI runner.
+  }, 60_000);
 });

@@ -173,8 +173,13 @@ button.raid-alert__threat {
 /* "Prepare defences" reads as a button at every size (neon r1). */
 .raid-alert .raid-alert__prepare {
   min-height: 2.75rem;
-  border: 1px solid var(--colour-border);
+  border: 2px solid var(--colour-border-strong);
   background: var(--colour-surface-sunken);
+  box-shadow: 0 2px 0 var(--colour-art-shadow);
+}
+
+.raid-alert .raid-alert__engage {
+  white-space: nowrap;
 }
 
 .raid-alert .raid-alert__engage {
@@ -182,7 +187,7 @@ button.raid-alert__threat {
 }
 
 .raid-alert__monsters--champion {
-  padding-top: var(--space-2);
+  padding-top: var(--space-3);
 }
 
 .raid-alert__hint[hidden] {
@@ -242,7 +247,7 @@ button.raid-alert__threat {
 }
 
 /* The level as a dark chip with gold text: readable on steel and on cream. */
-.raid-alert__level {
+.raid-alert .raid-alert__monster .raid-alert__level {
   padding: 0 var(--space-2);
   border-radius: var(--radius-pill);
   background: #3a2a10;
@@ -481,6 +486,27 @@ button.raid-alert__threat {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .raid-alert .raid-alert__actions > .btn {
+    padding-inline: var(--space-2);
+    font-size: var(--text-sm);
+  }
+
+  /* The three pills on one row (neon r2). */
+  .raid-alert__stats {
+    gap: var(--space-1);
+  }
+
+  .raid-alert__pill {
+    gap: 2px;
+    padding: 0 var(--space-1);
+    font-size: var(--text-sm);
+  }
+
+  .raid-alert__pill .game-icon {
+    width: 20px;
+    height: 20px;
+  }
 }
 
 /* A phone on its side: the alert keeps its tribe line in view instead of
@@ -498,6 +524,51 @@ button.raid-alert__threat {
 
   .raid-alert__head {
     grid-template-columns: 4.5rem minmax(0, 1fr);
+  }
+
+  /* The stat row beside the splash and "+N more" beside the answers, so the
+     answers stay on a 390 px tall screen (neon r2). */
+  .raid-alert .panel__body {
+    grid-template-columns: 4.5rem minmax(0, 1fr);
+    grid-template-areas:
+      "splash words"
+      "splash stats"
+      "cards cards"
+      "more actions";
+    row-gap: var(--space-1);
+    column-gap: var(--space-3);
+  }
+
+  .raid-alert__head {
+    display: contents;
+  }
+
+  .raid-alert__splash {
+    grid-area: splash;
+    align-self: center;
+  }
+
+  .raid-alert__words {
+    grid-area: words;
+  }
+
+  .raid-alert__stats {
+    grid-area: stats;
+    justify-content: flex-start;
+  }
+
+  .raid-alert__monsters {
+    grid-area: cards;
+  }
+
+  .raid-alert__more {
+    grid-area: more;
+    align-self: center;
+    text-align: start;
+  }
+
+  .raid-alert__actions {
+    grid-area: actions;
   }
 
   .raid-alert__monster {
