@@ -14,8 +14,8 @@ import type { DressUpSet, DressPiece } from "./YardDressUp";
  *   {@link CLASSIC_SNOW}, snow tiles painted in the Flash grass tiles' style
  *   (Codex, `art-samples/christmas/snow`). A player who picked another ground
  *   (Rocky, Sand, Desert...) keeps it, as at Halloween; lava stays lava.
- * - **Props** round the plot's edge (`YardDressUp.ts`), sparse: snowmen,
- *   present piles and Christmas trees, the winter decorations' own pictures
+ * - **Props** round the plot's edge (`YardDressUp.ts`), sparse: snowmen
+ *   and Christmas trees, the winter decorations' own pictures
  *   in the look in use, so a yard that already shows one of them fetches
  *   nothing more.
  * - **Falling snow** over the yard (`YardSnowfall.ts`), by the Quality setting.
@@ -38,33 +38,33 @@ export const CLASSIC_SNOW: GroundSpec = {
   tile: [400, 200],
   repeat: [2, 2],
   painted: false,
-  fill: 0xa9afbf,
+  fill: 0x9a9fae,
   rangeInk: GROUNDS.snow.rangeInk!,
 };
 
 /** The props laid round the plot, in turn. */
-export type WinterPropName = "snowman" | "presents" | "tree";
+export type WinterPropName = "snowman" | "tree";
 
 const WINTER = artUrl("/assets/buildings/decorations/winter/");
 
 /** The file stem of each prop: the winter decoration it is. */
 const STEMS: Readonly<Record<WinterPropName, string>> = {
   snowman: "snowman",
-  presents: "present-pile",
   tree: "christmas-tree",
 };
 
 const piece = (url: string): readonly DressPiece[] => [{ url, dx: 0, dy: 0, scale: 1 }];
 
 /**
- * The winter props: snowman, present pile, snowman, Christmas tree round the
+ * The winter props: snowman, Christmas tree in turn round the
  * plot, one every 190 world px (Thanksgiving's corn shocks stood every 96 to
  * 130: the owner found those too many). The pictures are `@2x`, so Pixi draws
  * them at their in-game size; the Modern ones in the Quality's copy.
  */
 export const winterDressUp = (): DressUpSet<WinterPropName> => ({
   id: "winter",
-  props: { pattern: ["snowman", "presents", "snowman", "tree"], spacing: 190 },
+  // No present piles: round the plot they read as the hunt's presents (neon, 27 Nov 2026).
+  props: { pattern: ["snowman", "tree", "snowman", "tree"], spacing: 190 },
   pieces: (classic) => {
     const out = {} as Record<WinterPropName, readonly DressPiece[]>;
     for (const name of Object.keys(STEMS) as WinterPropName[]) {

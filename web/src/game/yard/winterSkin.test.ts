@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { existsSync } from "node:fs";
 import { propSpots } from "./thanksgivingSkin";
+import { clearOf } from "./YardDressUp";
 import { CLASSIC_SNOW, winterDressUp } from "./winterSkin";
 
 const ASSETS = new URL("../../../../server/public/assets/", import.meta.url);
@@ -20,7 +21,15 @@ describe("the Christmas dress-up (owner, 27 Nov 2026)", () => {
     const spots = propSpots(set, CORNERS, 7);
     expect(spots.length).toBeGreaterThan(8);
     expect(spots.length).toBeLessThan(45);
-    expect(new Set(spots.map((spot) => spot.prop))).toEqual(new Set(["snowman", "presents", "tree"]));
+    expect(new Set(spots.map((spot) => spot.prop))).toEqual(new Set(["snowman", "tree"]));
+  });
+
+  it("leaves out a prop that would stand under a building past the plot's edge", () => {
+    const spots = propSpots(winterDressUp(), CORNERS, 7);
+    const under = spots[3]!;
+    const kept = clearOf(spots, [{ x: under.x + 20, y: under.y - 10 }]);
+    expect(kept).not.toContain(under);
+    expect(kept.length).toBe(spots.length - 1);
   });
 
   it("uses the winter decorations' own pictures, in each look, all on disk", () => {

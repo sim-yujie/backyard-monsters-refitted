@@ -436,7 +436,9 @@ export class YardRenderer {
       : this.season === "thanksgiving" ? thanksgivingDressUp(thanksgivingSkin())
       : this.season === "christmas" ? winterDressUp()
       : null;
-    void this.dressUp.layout(set ? yard!.bounds : null, yard?.savedAt || 1, set, classicLook());
+    const keepClear =
+      set && yard ? yard.buildings.map((one) => yardToWorld(yard.bounds, one.x + one.footprint[0] / 2, one.y + one.footprint[1] / 2)) : [];
+    void this.dressUp.layout(set ? yard!.bounds : null, yard?.savedAt || 1, set, classicLook(), keepClear);
   }
 
   /** Buildings still waiting on, or missing, their picture. */

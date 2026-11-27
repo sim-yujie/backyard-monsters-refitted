@@ -9,7 +9,7 @@ import {
   type ThanksgivingSkin,
 } from "./thanksgivingSkin";
 import type { TurkeyStage } from "./YardTurkeys";
-import { depthKey, type YardBounds } from "./YardGrid";
+import { depthKey, type Point, type YardBounds } from "./YardGrid";
 
 /**
  * The props round the plot in an event's dress-up: at Thanksgiving
@@ -62,6 +62,14 @@ interface Placed {
   readonly sprite: Sprite;
 }
 
+/** How near (world px, across and down) a prop may stand to a building's centre before it is left out. */
+const KEEP_CLEAR_X = 70;
+const KEEP_CLEAR_Y = 45;
+
+/** The spots that stand clear of every point in `keepClear` (buildings' centres, world px). */
+export const clearOf = <S extends Point>(spots: readonly S[], keepClear: readonly Point[]): S[] =>
+  spots.filter((spot) => !keepClear.some((point) => Math.abs(spot.x - point.x) < KEEP_CLEAR_X && Math.abs(spot.y - point.y) < KEEP_CLEAR_Y));
+
 export class YardDressUp {
   private placed: Placed[] = [];
   /** The files that loaded, by URL. */
@@ -85,7 +93,13 @@ export class YardDressUp {
    * event dress-up, or an Inferno yard). A no-op when the same yard, set and
    * look are already laid; otherwise the pictures load first.
    */
-  async layout(bounds: YardBounds | null, seed: number, set: DressUpSet | null, classic: boolean): Promise<void> {
+  async layout(
+    bounds: YardBounds | null,
+    seed: number,
+    set: DressUpSet | null,
+    classic: boolean,
+    keepClear: readonly Point[] = [],
+  ): Promise<void> {
     const want = bounds && set ? `${set.id}:${classic ? "c" : "m"}:${seed}:${bounds.corners.map((p) => `${p.x},${p.y}`).join(";")}` : "";
     if (want === this.laidFor) {
       // The yard redrew and emptied the building layer: stand them back.
@@ -97,7 +111,8 @@ export class YardDressUp {
     this.laidFor = want;
     if (!bounds || !set) return;
 
-    const spots = propSpots(set, bounds.corners, seed);
+    // A building that stands past the plot's edge (a Trojan Horse, say) keeps its ground: no prop under it.
+    const spots = clearOf(propSpots(set, bounds.corners, seed), keepClear);
     if (spots.length === 0) return;
     const pieces = set.pieces(classic);
     await this.load([...new Set(spots.flatMap((spot) => pieces[spot.prop]!.map((one) => one.url)))]);
