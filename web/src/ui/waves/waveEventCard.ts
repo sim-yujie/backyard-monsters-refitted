@@ -51,7 +51,12 @@ export const waveCardBody = (status: WaveStatus, onStart: () => void): HTMLEleme
   }
   const start = el("button", "btn btn--primary wave-card__start");
   start.type = "button";
-  start.append(gameIcon("swords", { size: 24, decorative: true, className: "wave-hud__start-icon" }), ` ${bonus ? "Start bonus" : `Start wave ${status.next}`}`);
+  start.append(
+    gameIcon("swords", { size: 24, decorative: true, className: "wave-hud__start-icon" }),
+    el("span", "wave-hud__start-long", ` ${bonus ? "Start bonus" : `Start wave ${status.next}`}`),
+    el("span", "wave-hud__start-short", " Start"),
+  );
+  start.setAttribute("aria-label", bonus ? "Start the bonus wave" : `Start wave ${status.next}`);
   start.addEventListener("click", () => {
     start.disabled = true;
     onStart();

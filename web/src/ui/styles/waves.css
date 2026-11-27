@@ -1089,6 +1089,19 @@
     min-width: 2.6em;
   }
 
+  .wave-status--in-strip {
+    gap: 3px;
+  }
+
+  :root[data-skin] .wave-status--in-strip .wave-status__plaque {
+    border-width: 0 8px;
+    border-image-width: 0 8px;
+  }
+
+  .wave-status--in-strip .wave-status__bar {
+    min-width: 24px;
+  }
+
   .wave-status--in-strip .wave-status__face {
     width: 24px;
     height: 24px;
@@ -1527,8 +1540,13 @@
     white-space: nowrap;
   }
 
-  .wave-card__start .wave-hud__start-icon {
+  .wave-card__start .wave-hud__start-icon,
+  .wave-card__start .wave-hud__start-long {
     display: none;
+  }
+
+  .wave-card__start .wave-hud__start-short {
+    display: inline;
   }
 }
 
