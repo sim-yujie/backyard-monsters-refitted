@@ -1099,7 +1099,12 @@
   }
 
   .wave-status--in-strip .wave-status__bar {
-    min-width: 24px;
+    flex: 0 1 48px;
+    min-width: 30px;
+  }
+
+  .wave-status--in-strip .wave-status__left {
+    margin-left: 4px;
   }
 
   .wave-status--in-strip .wave-status__face {
@@ -1219,6 +1224,11 @@
 
 :root[data-skin="flash"] .wave-result__reward {
   background: linear-gradient(#5a3418, #3e220c);
+}
+
+/* The gain's green, lit, on the dark pill. */
+.wave-result__reward :is(span, strong) {
+  color: #9dff8a;
 }
 
 .wave-result__lead {
@@ -1385,8 +1395,14 @@
 
   .wave-surrender .wave-result__actions .btn {
     flex: 1 1 0;
-    padding-inline: 10px;
+    padding-inline: 4px;
     font-size: 13px;
+  }
+
+  /* Slimmer painted caps, so "Keep fighting" (the game's own words) clears the rivets. */
+  :root[data-skin] .wave-surrender .wave-result__actions .btn:is(.btn--outline, .btn--danger) {
+    border-width: 0 14px;
+    border-image-width: 0 14px;
   }
 
   .wave-result__actions .wave-hud__start-icon {
@@ -1583,9 +1599,11 @@
 }
 
 .wave-intro__facts {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, max-content));
+  display: flex;
+  flex-wrap: wrap;
   justify-content: center;
+  max-width: 100%;
+  box-sizing: border-box;
   gap: 6px 8px;
   margin: 10px 0 0;
   padding: 0;
@@ -1610,9 +1628,10 @@
   height: 20px;
 }
 
-@media (min-width: 621px) {
-  .wave-intro__facts {
-    grid-template-columns: repeat(4, max-content);
+@media (max-width: 420px) {
+  .wave-intro__fact {
+    padding: 3px 8px 3px 4px;
+    font-size: 12px;
   }
 }
 
@@ -1623,7 +1642,6 @@
   }
 
   .wave-intro__facts {
-    grid-template-columns: repeat(4, max-content);
     gap: 4px;
   }
 

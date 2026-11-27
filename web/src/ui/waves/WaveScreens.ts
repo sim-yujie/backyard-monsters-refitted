@@ -250,7 +250,7 @@ export const waveIntroPopup = (status: WaveStatus, onStart: () => void, onClose:
   const FACTS = [
     ["shield", "No loot lost"],
     ["tools", "Auto-repairs"],
-    ["eventcoin", "Glimmers every wave"],
+    ["eventcoin", "Glimmers per wave"],
     ["gift", "2 bonus waves"],
   ] as const;
   for (const [icon, words] of FACTS) {
