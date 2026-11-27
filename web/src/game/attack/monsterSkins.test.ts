@@ -91,9 +91,9 @@ describe("monster skins (frost tribe)", () => {
 });
 
 describe("devSkins", () => {
-  it("reads ?skin=frost and ?defenderSkin=frost, and nothing else", () => {
-    expect(devSkins("?skin=frost")).toEqual({ skins: { attackers: "frost" } });
-    expect(devSkins("?defenderSkin=frost&skin=frost")).toEqual({ skins: { attackers: "frost", defenders: "frost" } });
-    expect(devSkins("?skin=gold")).toEqual({});
+  it("reads ?monsterSkin=frost and ?defenderSkin=frost, and nothing else", () => {
+    expect(devSkins("?monsterSkin=frost")).toEqual({ skins: { attackers: "frost" } });
+    expect(devSkins("?defenderSkin=frost&monsterSkin=frost")).toEqual({ skins: { attackers: "frost", defenders: "frost" } });
+    expect(devSkins("?monsterSkin=gold&skin=auto")).toEqual({});
   });
 });
