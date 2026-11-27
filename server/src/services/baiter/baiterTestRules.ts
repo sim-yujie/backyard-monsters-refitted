@@ -4,8 +4,8 @@ import type { Save } from "../../database/models/save.model.js";
 import { monsterStats } from "../../game-data/stats/monsterStats.js";
 import {
   CHAMPION_MAX_FOOD_BONUS,
-  CHAMPION_MAX_POWER_LEVEL,
   KRALLEN_MAX_POWER_LEVEL,
+  championMaxPower,
   championByType,
   championStatWithFood,
   isChampionStance,
@@ -116,7 +116,8 @@ export const championLevelsOf = (t: number): number => {
 };
 
 /** The highest power level champion type `t` can have. */
-export const championPowerOf = (t: number): number => (t === KRALLEN_TYPE ? KRALLEN_MAX_POWER_LEVEL : CHAMPION_MAX_POWER_LEVEL);
+export const championPowerOf = (t: number): number =>
+  t === KRALLEN_TYPE ? KRALLEN_MAX_POWER_LEVEL : championMaxPower(championByType(t) ?? "");
 
 /** One row of a test army. */
 export interface TestRow {

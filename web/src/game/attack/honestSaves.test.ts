@@ -117,7 +117,9 @@ const fixtures = new Map<string, Fixture>(
  * The attacker's champions, as `battle.test.ts` gives them: Krallen, Gorgo,
  * Korath, Fomor. Krallen won the Krallen Hunt's 3x mark: her loot aura runs
  * past the load's clock (`la`), so the page flings her with it and the
- * server's replay stamps it too (owner, 13 Nov 2026).
+ * server's replay stamps it too (owner, 13 Nov 2026). Gorgo and Fomor at
+ * power level 3 hold two of their Monster Madness abilities (27 Nov 2026,
+ * `championAbilities.ts`), so their saves carry those too.
  */
 const CHAMPIONS: readonly ChampionSaveEntry[] = [
   { t: 5, l: 5, hp: 62_000, pl: 2, fb: 0, la: 1_800_000_000 },

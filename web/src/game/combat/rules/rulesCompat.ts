@@ -103,6 +103,14 @@
  * but beta 9's other changes move its battles, so 8.7's 92ea2dbbfe06531c is
  * not listed.
  *
+ * Beta 10's champion abilities (Monster Madness, `championAbilities.ts`,
+ * 27 Nov 2026) keep it empty, though they move no stored battle: every live
+ * Gorgo, Drull and Fomor holds power level 1, which unlocks none of them, and
+ * the rage Fomor's power levels 2 and 3 gave, which they replace, was never
+ * held. But a page on the older rules would fling a champion with abilities
+ * without them while the server's replay used them, so such a page must
+ * reload, as in patch 8.7 above.
+ *
  * Add the version a change replaces only when that change moves no battle.
  * A change that moves any battle result must empty this list.
  */

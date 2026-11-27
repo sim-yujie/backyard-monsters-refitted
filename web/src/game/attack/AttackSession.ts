@@ -2,7 +2,7 @@ import type { BaseLoadResponse } from "@/api/types";
 import {
   ATTACK_COUNTDOWN_SECONDS,
   CHAMPION_MAX_FOOD_BONUS,
-  CHAMPION_MAX_POWER_LEVEL,
+  championMaxPower,
   DECLARE_WAR_COUNTDOWN_SECONDS,
   DESCENT_YARDS,
   RETREAT_GRACE_SECONDS,
@@ -962,7 +962,9 @@ export class AttackSession {
     return {
       t: champion.t,
       l: champion.l,
-      ...(Number.isInteger(pl) && pl > 0 ? { pl: Math.min(pl, CHAMPION_MAX_POWER_LEVEL) } : {}),
+      ...(Number.isInteger(pl) && pl > 0
+        ? { pl: Math.min(pl, championMaxPower(championByType(champion.t) ?? "")) }
+        : {}),
       ...(Number.isInteger(fb) && fb > 0 ? { fb: Math.min(fb, CHAMPION_MAX_FOOD_BONUS) } : {}),
       ...(stance ? { s: stance } : {}),
       ...mind,

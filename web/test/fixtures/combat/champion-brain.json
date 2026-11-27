@@ -1,6 +1,6 @@
 {
   "name": "champion-brain",
-  "description": "A level 4 Gorgo at power level 3 flung in Hybrid with forty Pokeys and a learned brain that likes towers and the pack and shuns loot (issue #219).",
+  "description": "A level 4 Gorgo at power level 1 flung in Hybrid with forty Pokeys and a learned brain that likes towers and the pack and shuns loot (issue #219).",
   "yard": "sandbox",
   "without": [
     52,
@@ -37,7 +37,7 @@
         "champion": {
           "t": 1,
           "l": 4,
-          "pl": 3,
+          "pl": 1,
           "s": "hybrid",
           "b": {
             "tower": 150,

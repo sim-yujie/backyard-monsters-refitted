@@ -1,6 +1,6 @@
 {
   "name": "fomor-both-sides",
-  "description": "A level 6 Fomor at power level 3 enraging and following its wounded Pokeys, against a caged level 5 Fomor enraging the bunkers' garrisons (issue #222).",
+  "description": "A level 6 Fomor at power level 1, every live Fomor's, enraging and following its wounded Pokeys, against a caged level 5 Fomor enraging the bunkers' garrisons (issue #222). Power levels 3 and 2 until the Monster Madness abilities (27 Nov 2026).",
   "yard": "sandbox",
   "kind": "main",
   "levels": {
@@ -35,7 +35,7 @@
         "t": 3,
         "l": 5,
         "hp": 25000,
-        "pl": 2
+        "pl": 1
       }
     ]
   },
@@ -56,7 +56,7 @@
         "champion": {
           "t": 3,
           "l": 6,
-          "pl": 3,
+          "pl": 1,
           "fb": 2
         }
       }
@@ -64,7 +64,7 @@
   },
   "expected": {
     "ticks": 12200,
-    "damage": 3.426220083118423,
+    "damage": 2.1323324079701678,
     "destroyed": null,
     "attackloot": {
       "r1": 0,
@@ -79,89 +79,88 @@
       "r4": 0
     },
     "firedTraps": 0,
-    "destroyedBuildings": 13,
+    "destroyedBuildings": 9,
     "creepsFlung": 90,
     "creepsKilled": 91,
     "championHp": 0,
-    "damagedBuildings": 16,
-    "rngDraws": 6980,
+    "damagedBuildings": 11,
+    "rngDraws": 2833,
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "2325513c05ed2fe6"
+        "digest": "9ce24a53d67237f5"
       },
       {
         "tick": 1600,
-        "digest": "1f81cd92d29760a8"
+        "digest": "1b422b2635bc2144"
       },
       {
         "tick": 2400,
-        "digest": "bd9c3b1bce3236a9"
+        "digest": "21a2dc6836395366"
       },
       {
         "tick": 3200,
-        "digest": "0b177a8f30f04731"
+        "digest": "25d8a8dd69a7c5b7"
       },
       {
         "tick": 4000,
-        "digest": "515fb83afc73026c"
+        "digest": "0835f1f78b19cde9"
       },
       {
         "tick": 4800,
-        "digest": "20c2ccd7896e0361"
+        "digest": "e0f18cd2287d004c"
       },
       {
         "tick": 5600,
-        "digest": "ccba1f90cc2bdb7a"
+        "digest": "65fcdd29ce1a1a0b"
       },
       {
         "tick": 6400,
-        "digest": "cb31b364aeaac7a6"
+        "digest": "2075312dfb2a5887"
       },
       {
         "tick": 7200,
-        "digest": "126af3b9fad41093"
+        "digest": "cf34295885d47a9a"
       },
       {
         "tick": 8000,
-        "digest": "1edafb0a03edf7bc"
+        "digest": "e9f28d47f20fe5b9"
       },
       {
         "tick": 8800,
-        "digest": "4651764c07c948ce"
+        "digest": "71681eb538db66cf"
       },
       {
         "tick": 9600,
-        "digest": "502aafa752f6d2b1"
+        "digest": "621b43a22eb851dc"
       },
       {
         "tick": 10400,
-        "digest": "360e9fe1e699fbfb"
+        "digest": "5050d7a0c670efc2"
       },
       {
         "tick": 11200,
-        "digest": "7cbf85e02192d98a"
+        "digest": "2b85cf390796a79b"
       },
       {
         "tick": 12000,
-        "digest": "1615ff32a081dc84"
+        "digest": "7556e58fd4b6ea21"
       }
     ],
-    "digest": "c21ddf26eb3b6e30",
+    "digest": "2f3f69534316789d",
     "bunkerLosses": {
-      "83": {
-        "C1": 8
-      },
       "84": {
         "C2": 6
       }
     },
     "bunkerGarrisons": {
-      "83": {},
+      "83": {
+        "C1": 8
+      },
       "84": {}
     },
     "defenderChampionsHp": [
-      0
+      1060
     ]
   }
 }

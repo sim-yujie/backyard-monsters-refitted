@@ -178,7 +178,8 @@ describe("champions", () => {
   it("take any type at any level and power level in range", () => {
     expect(championLevels(1)).toBe(6);
     expect(championLevels(5)).toBe(5);
-    expect(championPowerLevels(1)).toBe(3);
+    expect(championPowerLevels(1)).toBe(4);
+    expect(championPowerLevels(4)).toBe(3);
     expect(championPowerLevels(5)).toBe(2);
     const army = withChampion(armyOf({}), { t: 5, l: 9, pl: 9 });
     expect(army.champions).toEqual([{ t: 5, l: 5, pl: 2 }]);

@@ -31,6 +31,7 @@
 export * from "./combatStatsData.js";
 export * from "./stats.js";
 export * from "./champions.js";
+export * from "./championAbilities.js";
 export * from "./stance.js";
 export * from "./brain.js";
 export * from "./habits.js";

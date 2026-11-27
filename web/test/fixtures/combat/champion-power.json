@@ -1,6 +1,6 @@
 {
   "name": "champion-power",
-  "description": "A level 4 Gorgo at power level 3 and food bonus 3 with sixty Pokeys: the food bonus's ladders add health, damage and speed to its level's (`ChampionBase.as:123-155`).",
+  "description": "A level 4 Gorgo at power level 1, every live Gorgo's, and food bonus 3 with sixty Pokeys: the food bonus's ladders add health, damage and speed to its level's (`ChampionBase.as:123-155`). Power level 3 until the Monster Madness abilities (27 Nov 2026), when it was the same fight; now 3 would be two abilities.",
   "yard": "sandbox",
   "without": [
     52,
@@ -37,7 +37,7 @@
         "champion": {
           "t": 1,
           "l": 4,
-          "pl": 3,
+          "pl": 1,
           "fb": 3
         }
       }
