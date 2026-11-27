@@ -1,3 +1,4 @@
+import { classicLook } from "@/game/classicLook";
 import type { EventReward, EventView, LadderView, Mr2WelcomeStatus } from "@/api/events";
 import {
   calendarDays,
@@ -350,9 +351,10 @@ const krallenPicture = (level: number, size: "card" | "icon", className: string)
 /** The event's banner picture; nothing when it has none or the file is missing. */
 const banner = (event: EventView): HTMLElement[] => {
   if (!event.banner) return [];
-  const band = el("div", `events-card__banner events-card__banner--${event.kind}`);
+  const classic = classicLook() && Boolean(event.bannerClassic);
+  const band = el("div", `events-card__banner events-card__banner--${event.kind}${classic ? " events-card__banner--classic" : ""}`);
   const image = el("img", "events-card__banner-image");
-  image.src = event.banner;
+  image.src = classic ? event.bannerClassic! : event.banner;
   image.alt = "";
   image.decoding = "async";
   image.addEventListener("error", () => band.remove(), { once: true });

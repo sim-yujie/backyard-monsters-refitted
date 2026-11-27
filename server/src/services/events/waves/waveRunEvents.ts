@@ -23,6 +23,7 @@ export const waveRunEvents = (list: readonly WaveRun[] = waveRuns()): EventDefin
         startsAt: iso(run.startsAt),
         endsAt: iso(run.endsAt),
         banner: event.banner.modern,
+        bannerClassic: event.banner.classic,
         ...(event.requires ? { requires: event.requires } : {}),
       },
     ];

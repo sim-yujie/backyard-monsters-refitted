@@ -1,0 +1,378 @@
+/* The wave events (beta 10, Wild Monster Invasion; neon's direction A,
+   27 Nov 2026): the yard's wave bar, the result and totem pop-ups, the
+   progress track and the Events card. The bar wears the dock's dome paint,
+   so it follows Modern and Classic with the rest of the HUD. */
+
+/* ── The yard's bar ─────────────────────────────────────────────────────── */
+
+/* Computer and iPad: open in the bottom middle, between Friends (left) and
+   Collect all (right); it grows upwards when the tray wraps. */
+.wave-hud {
+  position: absolute;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+  left: 210px;
+  right: 450px;
+  z-index: var(--z-hud);
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.wave-hud[hidden] {
+  display: none;
+}
+
+.wave-hud__pill,
+.wave-hud__tray {
+  pointer-events: auto;
+  box-sizing: border-box;
+  border: 3px solid var(--colour-dome-rim);
+  background: linear-gradient(var(--colour-dome-top), var(--colour-dome-bottom));
+  box-shadow: var(--shadow-dome-drop), var(--shadow-dome-edge);
+  color: var(--colour-text);
+}
+
+.wave-hud__pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 4px 14px 4px 6px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: var(--display-weight);
+  letter-spacing: var(--display-tracking);
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.wave-hud__pill:focus-visible,
+.wave-hud__start:focus-visible {
+  outline: 3px solid var(--colour-focus, #ffd34d);
+  outline-offset: 2px;
+}
+
+.wave-hud__totem {
+  width: 30px;
+  height: 38px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 3px var(--colour-art-shadow));
+}
+
+.wave-hud__totem--none {
+  filter: grayscale(1) brightness(0.7);
+  opacity: 0.7;
+}
+
+.wave-hud__chevron {
+  font-size: 0.8em;
+  opacity: 0.8;
+}
+
+.wave-hud__tray {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 12px;
+  max-width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--radius-lg);
+}
+
+.wave-hud__tray[hidden] {
+  display: none;
+}
+
+.wave-hud__monsters {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wave-hud__monster {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 48px;
+}
+
+.wave-hud__portrait,
+.wave-hud__secret {
+  width: 44px;
+  height: 44px;
+  border: 2px solid var(--colour-dome-rim);
+  border-radius: 10px;
+  object-fit: cover;
+  background: rgb(0 0 0 / 35%);
+}
+
+.wave-hud__secret {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border-color: #e7b53c;
+  color: #ffd76a;
+  font-family: var(--font-display);
+  font-size: 26px;
+}
+
+.wave-hud__count {
+  margin-top: -10px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: rgb(0 0 0 / 78%);
+  color: #fff;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.wave-hud__more {
+  align-self: center;
+  font-weight: 700;
+}
+
+.wave-hud__prize {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+}
+
+.wave-hud__prize-totem {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: var(--text-sm);
+}
+
+.wave-hud__prize-totem-art {
+  width: 22px;
+  height: 30px;
+  object-fit: contain;
+}
+
+.wave-hud__start {
+  min-height: 48px;
+  padding-inline: 16px;
+  white-space: nowrap;
+}
+
+.wave-hud__start-icon {
+  font-size: 1.1em;
+}
+
+.wave-hud__hint {
+  flex-basis: 100%;
+  margin: -2px 0 0;
+  font-size: var(--text-sm);
+  text-align: center;
+  opacity: 0.85;
+}
+
+.wave-hud__note {
+  margin: 0;
+  font-weight: 700;
+}
+
+.wave-hud--bonus .wave-hud__pill {
+  border-color: #e7b53c;
+}
+
+/* Phone (upright and on its side): closed at the top middle, between Chat
+   and Events; the tray opens downwards under it. */
+@media (max-width: 620px), (max-height: 500px) {
+  .wave-hud {
+    top: calc(env(safe-area-inset-top, 0px) + 120px);
+    bottom: auto;
+    left: 50%;
+    right: auto;
+    width: min(366px, calc(100vw - 24px));
+    flex-direction: column;
+    transform: translateX(-50%);
+  }
+
+  .wave-hud__pill {
+    min-height: 46px;
+    font-size: var(--text-sm);
+  }
+}
+
+/* Phone on its side: the top bar is one short row, so the bar sits higher. */
+@media (max-height: 500px) and (min-width: 621px) {
+  .wave-hud {
+    top: calc(env(safe-area-inset-top, 0px) + 64px);
+  }
+}
+
+/* ── The progress track ─────────────────────────────────────────────────── */
+
+.wave-track {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 6px 4px;
+}
+
+.wave-track__bar {
+  position: relative;
+  flex: 1 1 auto;
+  height: 12px;
+  border-radius: var(--radius-pill);
+  background: rgb(0 0 0 / 35%);
+  box-shadow: inset 0 1px 3px rgb(0 0 0 / 50%);
+}
+
+.wave-track__fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #f0a13a, #ffd34d);
+}
+
+.wave-track__mark {
+  position: absolute;
+  bottom: 2px;
+  display: flex;
+  justify-content: center;
+  width: 0;
+}
+
+.wave-track__totem {
+  width: 22px;
+  height: 30px;
+  object-fit: contain;
+  filter: grayscale(1) brightness(0.75);
+  opacity: 0.75;
+}
+
+.wave-track__mark--won .wave-track__totem {
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 60%));
+  opacity: 1;
+}
+
+.wave-track__count {
+  flex: none;
+  font-weight: 700;
+}
+
+/* ── The pop-ups ────────────────────────────────────────────────────────── */
+
+.wave-result__reward {
+  margin: 4px 0;
+  font-size: var(--text-xl, 1.6rem);
+  font-weight: 700;
+  text-align: center;
+}
+
+.wave-result__lead {
+  margin: 0 0 8px;
+  font-weight: 700;
+}
+
+.wave-result__note {
+  margin: 6px 0 0;
+  text-align: center;
+}
+
+.wave-result__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.wave-result__actions .btn {
+  min-width: 140px;
+  min-height: 48px;
+}
+
+.wave-totem__stage {
+  display: flex;
+  justify-content: center;
+  padding: 8px;
+}
+
+.wave-totem__art {
+  max-width: 160px;
+  height: 180px;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 10px rgb(0 0 0 / 45%));
+}
+
+.wave-totem__name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  text-align: center;
+}
+
+.wave-totem__where {
+  margin: 6px 0 14px;
+  text-align: center;
+}
+
+.wave-totem__ok {
+  display: block;
+  min-width: 140px;
+  min-height: 48px;
+  margin: 0 auto;
+}
+
+/* ── In the fight: surrender ────────────────────────────────────────────── */
+
+.wave-surrender-button {
+  min-height: 44px;
+  margin-inline-start: 8px;
+  padding-inline: 14px;
+  pointer-events: auto;
+}
+
+.raid-panic--wave {
+  border-color: #e7b53c;
+  background: rgb(40 28 8 / 82%);
+  color: #ffd76a;
+}
+
+/* ── The Events card ────────────────────────────────────────────────────── */
+
+.wave-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wave-card__next {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px;
+  border-radius: var(--radius-md);
+  background: rgb(0 0 0 / 18%);
+}
+
+.wave-card__next-title {
+  flex-basis: 100%;
+  margin: 0;
+  font-weight: 700;
+}
+
+.wave-card__start {
+  min-height: 48px;
+  margin-inline-start: auto;
+}
+
+/* The Flash strips are much wider than the Modern band. */
+.events-card__banner--wave.events-card__banner--classic {
+  aspect-ratio: 714 / 85;
+}

@@ -23,6 +23,7 @@ import { formatAmount } from "@/ui/format";
 import { Popup } from "@/ui/Popup";
 import { RESOURCE_KEYS, resourceAmount } from "@/ui/resourceIcon";
 import "@/ui/styles/raid.css";
+import { showWaveResult } from "@/ui/waves/WaveScreens";
 import { artUrl } from "../../artUrl";
 
 /**
@@ -215,7 +216,11 @@ export class RaidLock {
     const actions = element("div", "yard-attack-lock__actions");
     actions.append(button("Open the map", "btn btn--ghost", onMap));
     banner.append(
-      element("h2", "yard-attack-lock__title", `The ${raidTribe(tribe).name} Tribe is raiding your yard!`),
+      element(
+        "h2",
+        "yard-attack-lock__title",
+        tribe === "wave" ? "An invasion wave is attacking your yard!" : `The ${raidTribe(tribe).name} Tribe is raiding your yard!`,
+      ),
       element("p", "", "Your yard opens again when the raid is over."),
       actions,
     );
@@ -437,11 +442,14 @@ export const raidAftermathView = (
   host: HTMLElement,
   repair: () => RaidRepairOffer | null,
   notice: (message: string) => void,
+  /** A wave event's "Next wave" / "Retry" from its result (`plugins/waves.ts`); absent, none offered. */
+  nextWave?: () => void,
 ): RaidAftermathView => ({
   result: (result) =>
     new Promise<void>((resolve) => {
       raidResultPopup(result, repair(), resolve).mount(host);
     }),
+  wave: (result) => showWaveResult(host, result, { onNext: nextWave ?? null }),
   frequency: (tribe, defended) =>
     new Promise<RaidPreference | null>((resolve) => {
       raidFrequencyPopup(tribe, defended, resolve).mount(host);

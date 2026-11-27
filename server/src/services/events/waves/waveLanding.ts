@@ -123,6 +123,8 @@ export const landWave = async (
     run: record.run,
     wave: record.wave,
     waves: event.waves.length,
+    firstBonusWave: event.firstBonusWave,
+    totemType: event.totemType ?? null,
     beaten,
     surrendered: record.surrendered === true,
     next,

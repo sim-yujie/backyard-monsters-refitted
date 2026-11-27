@@ -18,6 +18,7 @@ import { RaidYardFlow } from "@/game/raid/raidYardFlow";
 import { repairAllOffer } from "@/game/yard/shop";
 import { RaidYardUi, raidAftermathView, type RaidRepairOffer } from "@/ui/raid/RaidScreens";
 import { YARD_PLUGINS, type YardMounts, type YardPlugin } from "../yardPlugins";
+import { callNextWave } from "./waves";
 
 /**
  * Own-yard plugin for wild monster raids (issue #226 WP4,
@@ -96,7 +97,7 @@ export const raidYardPlugin: YardPlugin = (mounts) => {
   const result = behind ? null : consumeRaidResult((landed) => !isMolochRaid(landed));
   if (result) {
     void runRaidAftermath(
-      { api: raidApi, view: raidAftermathView(overlay.modal, () => repairOffer(mounts), notice) },
+      { api: raidApi, view: raidAftermathView(overlay.modal, () => repairOffer(mounts), notice, callNextWave) },
       result,
     );
   }

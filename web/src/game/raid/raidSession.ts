@@ -2,6 +2,7 @@ import type { BaseLoadResponse } from "@/api/types";
 import type { RaidFight, RaidResult, RaidView } from "@/api/raid";
 import type { AttackTarget } from "@/game/attack/attackTarget";
 import type { RaidEvent } from "@/game/combat/rules";
+import type { WaveStatus } from "@/api/waves";
 
 /**
  * The hand-offs between the yard and the raid's fight (issue #226 WP4), one
@@ -23,6 +24,12 @@ export interface RaidRun {
    * aftermath are worded for "the wild monsters", not a tribe (§6).
    */
   readonly trojan?: boolean;
+  /**
+   * A wave event's wave (beta 10, Wild Monster Invasion): the raid scene
+   * names the wave ahead of the fight and in its strip (`raidPlugin.ts`),
+   * and the result is the wave's (`raidAftermath.ts`).
+   */
+  readonly wave?: WaveStatus;
 }
 
 let pendingRun: RaidRun | null = null;

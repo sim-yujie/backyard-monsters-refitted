@@ -19,12 +19,16 @@ export interface WaveResult {
   /** The wave fought, 1-based, and how many the event has. */
   readonly wave: number;
   readonly waves: number;
+  /** The first bonus wave (31): from there the screens say "Bonus wave". */
+  readonly firstBonusWave: number;
   /** Won: every raider down and more than 10% of the yard standing. */
   readonly beaten: boolean;
   /** Surrendered before the end (always a loss). */
   readonly surrendered: boolean;
   /** The next wave to call, or null once all are beaten. */
   readonly next: number | null;
+  /** The event's totem decoration (121, 131), or null. */
+  readonly totemType: number | null;
   /** Glimmers paid for it (0 for a loss or a wave already paid). */
   readonly glimmers: number;
   /** The totem's new level when this wave raised it, and its decoration type. */

@@ -23,6 +23,9 @@ const view = (answer: RaidPreference | null) => {
     result: vi.fn(async () => {
       order.push("result");
     }),
+    wave: vi.fn(async () => {
+      order.push("wave");
+    }),
     frequency: vi.fn(async () => {
       order.push("frequency");
       return answer;
@@ -65,5 +68,14 @@ describe("runRaidAftermath", () => {
     };
     await runRaidAftermath({ api, view: shown }, result(true));
     expect(notices).toEqual([expect.stringContaining("could not be saved")]);
+  });
+
+  it("a wave event's wave shows its own result and never asks how often (beta 10)", async () => {
+    const { shown, order } = view("more");
+    const api = { frequency: vi.fn() };
+    const wave = { event: "wmi1", run: "wmi1-1", wave: 3, waves: 32, firstBonusWave: 31, beaten: true, surrendered: false, next: 4, glimmers: 5 };
+    await runRaidAftermath({ api, view: shown }, { ...result(true), tribe: "wave", wave });
+    expect(order).toEqual(["wave"]);
+    expect(api.frequency).not.toHaveBeenCalled();
   });
 });

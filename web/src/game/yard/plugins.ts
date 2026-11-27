@@ -24,4 +24,5 @@ import "./plugins/slowInternet";
 import "./plugins/teamNotice";
 import "./plugins/safeMode";
 import "./plugins/tips";
+import "./plugins/waves";
 import "./plugins/weekend";

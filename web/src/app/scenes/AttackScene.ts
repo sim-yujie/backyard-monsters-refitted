@@ -782,7 +782,9 @@ export class AttackScene implements Scene {
         ? this.raidRun
           ? isMolochRaid(this.raidRun.raid)
             ? MOLOCH_RAID_TITLE
-            : `${tribeTitle(this.raidRun.raid.tribe)} raid`
+            : this.raidRun.wave
+              ? this.raidRun.wave.title
+              : `${tribeTitle(this.raidRun.raid.tribe)} raid`
           : "Wild monster raid"
         : isDefenceWatch(this.watchRun)
           ? `Defence replay: ${this.watchRun.defence.attacker.name}`
