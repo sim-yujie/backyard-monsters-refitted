@@ -2,10 +2,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RaidResult } from "@/api/raid";
 import type { WaveStatus } from "@/api/waves";
-import { waveCounter, waveStripLine } from "@/game/waves/waveText";
+import { rememberWaveArmy, waveCounter, waveStripLine, waveTip } from "@/game/waves/waveText";
 import { startWave } from "@/game/yard/plugins/waves";
 import { ApiError } from "@/api/http";
-import { WaveHud } from "./WaveHud";
+import { WaveHud, waveBarDirection } from "./WaveHud";
+import { scriptMonsters, yardHealth } from "./WaveFight";
 import { waveResultPopup, waveTrack } from "./WaveScreens";
 import { waveCardBody } from "./waveEventCard";
 
@@ -72,7 +73,8 @@ describe("WaveHud", () => {
     expect(hud.element.hidden).toBe(true);
     hud.update(status());
     expect(hud.element.hidden).toBe(false);
-    expect(hud.element.querySelector(".wave-hud__label")?.textContent).toBe("Wave 7");
+    expect(hud.element.querySelector(".wave-hud__label-long")?.textContent).toBe("Wave 7/30");
+    expect(hud.element.querySelector(".wave-hud__label-short")?.textContent).toBe("W7");
     // jsdom is wide: a computer's bar starts open.
     expect(hud.element.querySelectorAll(".wave-hud__monster")).toHaveLength(2);
     const start = hud.element.querySelector<HTMLButtonElement>(".wave-hud__start")!;
@@ -99,16 +101,53 @@ describe("WaveHud", () => {
     hud.update(status({ beaten: 30, next: 31, preview: [], prize: { glimmers: 40, totemLevel: 5 }, totemLevel: 4 }));
     expect(hud.element.querySelector(".wave-hud__secret")).not.toBeNull();
     expect(hud.element.querySelector(".wave-hud__prize-totem")).not.toBeNull();
-    expect(hud.element.querySelector(".wave-hud__label")?.textContent).toBe("Bonus wave 1");
+    expect(hud.element.querySelector(".wave-hud__label-long")?.textContent).toBe("Bonus 1/2");
     hud.update(status({ beaten: 32, next: null, preview: [], prize: null, totemLevel: 6 }));
     expect(hud.element.querySelector(".wave-hud__start")).toBeNull();
     expect(hud.element.querySelector(".wave-hud__label")?.textContent).toBe("All waves beaten");
+  });
+
+  it("folds from the bar's own chevron, and B on a computer never folds", () => {
+    const hud = new WaveHud({ onStart: vi.fn(), direction: "a" }).mount(document.body);
+    hud.update(status());
+    hud.element.querySelector<HTMLButtonElement>(".wave-hud__fold")!.click();
+    expect(hud.element.querySelector<HTMLElement>(".wave-hud__tray")!.hidden).toBe(true);
+    const pinned = new WaveHud({ onStart: vi.fn(), direction: "b" }).mount(document.body);
+    pinned.update(status());
+    expect(pinned.element.classList.contains("wave-hud--b")).toBe(true);
+    expect(pinned.element.querySelector(".wave-hud__fold")).toBeNull();
+    expect(pinned.element.querySelector<HTMLElement>(".wave-hud__tray")!.hidden).toBe(false);
+  });
+
+  it("reads the direction from the page's query", () => {
+    expect(waveBarDirection("?wavebar=b")).toBe("b");
+    expect(waveBarDirection("?wavebar=B&x=1")).toBe("b");
+    expect(waveBarDirection("")).toBe("a");
+    expect(waveBarDirection("?wavebar=c")).toBe("a");
   });
 
   it("disables the start while a wave is being called", () => {
     const hud = new WaveHud({ onStart: vi.fn() }).mount(document.body);
     hud.update(status(), true);
     expect(hud.element.querySelector<HTMLButtonElement>(".wave-hud__start")!.disabled).toBe(true);
+  });
+});
+
+describe("the fight's pill", () => {
+  it("shows the yard's health as the strip rounds its damage, and counts the script's monsters", () => {
+    expect(yardHealth(0)).toBe(100);
+    expect(yardHealth(23.7)).toBe(77);
+    expect(yardHealth(120)).toBe(0);
+    expect(scriptMonsters([{ monsters: { C1: 5, C2: 3 } }, { monsters: { G1: 1 } }])).toBe(9);
+  });
+
+  it("tips flyers first, then a champion, then a swarm", () => {
+    const flies = (monster: string) => monster === "C9";
+    expect(waveTip([], flies)).toBeNull();
+    expect(waveTip([{ monster: "C9", count: 2 }, { monster: "G1", count: 1 }], flies)).toContain("Flyers");
+    expect(waveTip([{ monster: "G1", count: 1 }], flies)).toContain("champion");
+    expect(waveTip([{ monster: "C1", count: 45 }], flies)).toContain("swarm");
+    expect(waveTip([{ monster: "C1", count: 5 }], flies)).toContain("Tough");
   });
 });
 
@@ -135,10 +174,13 @@ describe("the result pop-up", () => {
     expect(onNext).toHaveBeenCalledTimes(1);
   });
 
-  it("a loss offers Retry and says what winning needs", () => {
+  it("a loss offers Retry, says what winning needs, and gives a tip from the wave's army", () => {
+    rememberWaveArmy("wmi1-1", 7, [{ monster: "C3", count: 50 }]);
     waveResultPopup(result({ beaten: false, next: 7, glimmers: 0 }), { onNext: vi.fn() }, vi.fn()).mount(document.body);
     expect(document.body.textContent).toContain("Wave 7 lost");
     expect(document.body.textContent).toContain("more than 10%");
+    expect(document.body.textContent).toContain("Repairs started");
+    expect(document.body.querySelector(".wave-result__tip")?.textContent).toContain("big swarm");
     expect(document.body.querySelector(".wave-result__next")?.textContent).toContain("Retry");
   });
 

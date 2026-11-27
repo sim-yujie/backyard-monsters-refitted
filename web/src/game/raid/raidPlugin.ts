@@ -9,6 +9,7 @@ import { TRAP_BANNER, TRAP_BANNER_MS } from "@/game/trojan/trojanText";
 import { waveStripLine } from "@/game/waves/waveText";
 import { surrenderWave, waveName, type WaveSurrenderResponse } from "@/api/waves";
 import { confirmSurrender } from "@/ui/waves/WaveScreens";
+import { scriptMonsters, WaveFightHud, yardHealth } from "@/ui/waves/WaveFight";
 import { gameIcon } from "@/ui/gameIcon";
 import "@/ui/styles/raid.css";
 import { finishRaidFight, type RaidFinish } from "./raidFinish";
@@ -110,10 +111,31 @@ export const createRaidPlugin =
     // A wave event's wave: its name in the strip for the whole fight
     // ("Wave 7 of 32"), as Flash's warning line named it (`wmi_warning`).
     const waveLine = run.wave && run.wave.next !== null ? waveStripLine(run.wave.next, run.wave.firstBonusWave) : null;
-    if (waveLine) banner.classList.add("raid-panic--wave");
+    // The wave's own pieces (neon's direction A): the "WAVE 7" slam, then the
+    // status pill with the yard's health and the monsters left. The strip's
+    // own "Don't Panic" line stays hidden until the wave is over.
+    const fightHud =
+      run.wave && run.wave.next !== null && waveLine
+        ? new WaveFightHud({
+            layer: mounts.hudLayer ?? (mounts.hudSlot.closest(".attack-strip")?.parentElement as HTMLElement | null) ?? mounts.modal,
+            strip: mounts.hudSlot.closest<HTMLElement>(".attack-strip"),
+            wave: run.wave,
+            label: waveLine.replace("Bonus wave", "Bonus"),
+            shortLabel:
+              run.wave.next >= run.wave.firstBonusWave ? `B${run.wave.next - run.wave.firstBonusWave + 1}` : `W${run.wave.next}`,
+            slam: waveName(run.wave.next, run.wave.firstBonusWave).toUpperCase(),
+          })
+        : null;
+    const monstersInAll = fightHud ? scriptMonsters(waves) : 0;
+    if (waveLine) {
+      banner.classList.add("raid-panic--wave");
+      banner.hidden = true;
+      mounts.hudSlot.closest(".attack-strip")?.classList.add("attack-strip--wave");
+    }
     const startFight = (): void => {
       started = true;
       banner.textContent = waveLine ?? DONT_PANIC;
+      fightHud?.slam();
       session.playScript(waves, run.fight.tick);
       // The view turns to meet the first wave, as the Baiter's does: halfway
       // between it and the yard.
@@ -192,6 +214,7 @@ export const createRaidPlugin =
     const finish = async (): Promise<void> => {
       if (finishing) return;
       finishing = true;
+      banner.hidden = false;
       banner.textContent = waveLine ? "The wave is over…" : "The raid is over…";
       // Only once the fight is over: a raid may not be left while it plays.
       startOffer();
@@ -256,6 +279,7 @@ export const createRaidPlugin =
             return;
           }
           finishing = true;
+          banner.hidden = false;
           banner.textContent = "Surrendered…";
           try {
             const answer = await surrender(run.raid.id, session.state().tick);
@@ -267,6 +291,7 @@ export const createRaidPlugin =
           } catch {
             mounts.notices.show("wave", "The surrender did not go through. Try again.", { level: "info", timeoutMs: 6_000 });
             banner.textContent = waveLine ?? DONT_PANIC;
+            banner.hidden = Boolean(waveLine);
             finishing = false;
             button.disabled = false;
             // The fight ended meanwhile: land it the usual way.
@@ -276,12 +301,22 @@ export const createRaidPlugin =
           leave();
         });
       });
-      mounts.hudSlot.append(button);
+      // Top right, under the strip, apart from the speed buttons (neon's direction A).
+      if (fightHud) fightHud.adopt(button);
+      else mounts.hudSlot.append(button);
       surrenderButton = button;
     }
 
+    const showWave = (state: ReturnType<typeof session.state>): void => {
+      if (!fightHud) return;
+      // Still to come plus still on the field.
+      const left = started ? Math.max(0, monstersInAll - state.creepsFlung) + state.creepsAlive : monstersInAll;
+      fightHud.update(yardHealth(mounts.presentation.damageShown(state)), left);
+    };
+    showWave(session.state());
     const unsubscribe = session.subscribe((state) => {
       checkSpawns(state.tick);
+      showWave(state);
       if (state.phase === "ended") {
         if (surrenderButton) surrenderButton.hidden = true;
         void finish();
@@ -299,6 +334,7 @@ export const createRaidPlugin =
       unsubscribe();
       banner.remove();
       surrenderButton?.remove();
+      fightHud?.remove();
     };
   };
 

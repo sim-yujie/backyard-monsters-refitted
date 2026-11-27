@@ -1,32 +1,21 @@
-/* The wave events (beta 10, Wild Monster Invasion; neon's direction A,
-   27 Nov 2026): the yard's wave bar, the result and totem pop-ups, the
-   progress track and the Events card. The bar wears the dock's dome paint,
-   so it follows Modern and Classic with the rest of the HUD. */
+/* The wave events (beta 10, Wild Monster Invasion), redone to neon's
+   direction A spec (27 Nov 2026, wave-shots/ux2/neon-gap.md): the yard's
+   wave bar (A, and B behind ?wavebar=b until the owner picks), the fight's
+   slam plaque, status pill and Surrender, the pop-ups, the progress track
+   and the Events card.
 
-/* ── The yard's bar ─────────────────────────────────────────────────────── */
+   Everything wears the game's own paint, so it follows Modern and Classic
+   with the rest of the HUD (skin.css): the bars and chips' plate
+   (--skin-bar: riveted steel / Flash's brown chip), the title sign
+   (--skin-label: the mustard tin plaque / the red ribbon) and the painted
+   buttons (--skin-button). The dome colours are only the fallback for a
+   page with no skin set. */
 
-/* Computer and iPad: open in the bottom middle, between Friends (left) and
-   Collect all (right); it grows upwards when the tray wraps. */
-.wave-hud {
-  position: absolute;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
-  left: 210px;
-  right: 450px;
-  z-index: var(--z-hud);
-  display: flex;
-  flex-direction: column-reverse;
-  align-items: center;
-  gap: 6px;
-  pointer-events: none;
-}
-
-.wave-hud[hidden] {
-  display: none;
-}
+/* ── Shared paint ───────────────────────────────────────────────────────── */
 
 .wave-hud__pill,
-.wave-hud__tray {
-  pointer-events: auto;
+.wave-hud__tray,
+.wave-status {
   box-sizing: border-box;
   border: 3px solid var(--colour-dome-rim);
   background: linear-gradient(var(--colour-dome-top), var(--colour-dome-bottom));
@@ -34,12 +23,175 @@
   color: var(--colour-text);
 }
 
+/* The style's plate, as the top bar, the zoom rail and the fight strip wear it. */
+:root[data-skin] :is(.wave-hud__pill, .wave-hud__tray, .wave-status) {
+  border-style: solid;
+  border-color: transparent;
+  border-width: var(--skin-bar-edge);
+  border-image-source: var(--skin-bar);
+  border-image-slice: var(--skin-bar-slice) fill;
+  border-image-width: var(--skin-bar-width);
+  border-image-repeat: round;
+  background: none;
+  box-shadow: none;
+  filter: drop-shadow(0 4px 6px rgb(0 0 0 / 45%));
+  color: var(--skin-ink);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 70%);
+}
+
+/* The wave's name on the style's sign: the mustard plaque or the red ribbon. */
+.wave-hud__plaque,
+.wave-status__plaque,
+.wave-slam {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(#ffd34d, #e0a020);
+  color: #2c1a04;
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  letter-spacing: var(--display-tracking);
+  white-space: nowrap;
+}
+
+:root[data-skin] :is(.wave-hud__plaque, .wave-status__plaque, .wave-slam) {
+  border-style: solid;
+  border-color: transparent;
+  border-width: 0 12px;
+  border-radius: 0;
+  border-image-source: var(--skin-label);
+  border-image-slice: var(--skin-label-slice) fill;
+  border-image-width: 0 12px;
+  border-image-repeat: stretch;
+  background: none;
+  color: var(--skin-label-ink);
+  text-shadow: 0 1px 0 var(--skin-label-stroke);
+}
+
+:root[data-skin="flash"] :is(.wave-hud__plaque, .wave-status__plaque, .wave-slam) {
+  border-width: 0 16px;
+  border-image-width: 0 16px;
+  padding-bottom: 3px;
+  text-shadow:
+    0 1px 0 var(--skin-label-stroke), 1px 0 0 var(--skin-label-stroke), -1px 0 0 var(--skin-label-stroke), 0 -1px 0 var(--skin-label-stroke);
+}
+
+/* The painted buttons on the bar (the pop-ups are panels and get them from skin.css). */
+:root[data-skin] :is(.wave-hud :is(.btn--primary, .btn--danger), .btn.btn--danger.wave-fight-piece) {
+  --btn-ascent: var(--font-display-ascent);
+  --btn-descent: var(--font-display-descent);
+
+  padding: 0 2px;
+  border-style: solid;
+  border-color: transparent;
+  border-width: 0 var(--skin-button-cap);
+  border-radius: 0;
+  border-image-source: var(--skin-button);
+  border-image-slice: 0 var(--skin-button-slice) fill;
+  border-image-width: 0 var(--skin-button-cap);
+  border-image-repeat: stretch;
+  background: none;
+  color: #fff;
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  text-shadow:
+    0 2px 0 var(--skin-button-stroke), 2px 0 0 var(--skin-button-stroke), -2px 0 0 var(--skin-button-stroke), 0 -2px 0 var(--skin-button-stroke),
+    1.5px 1.5px 0 var(--skin-button-stroke), -1.5px 1.5px 0 var(--skin-button-stroke), 1.5px -1.5px 0 var(--skin-button-stroke), -1.5px -1.5px 0 var(--skin-button-stroke);
+}
+
+:root[data-skin] :is(.wave-hud :is(.btn--primary, .btn--danger), .btn.btn--danger.wave-fight-piece):hover:not(:disabled) {
+  background: none;
+  filter: brightness(1.08);
+}
+
+:root[data-skin] :is(.wave-hud :is(.btn--primary, .btn--danger), .btn.btn--danger.wave-fight-piece):disabled {
+  background: none;
+  filter: grayscale(1) brightness(0.85);
+}
+
+/* Surrender: the same painted plate turned crimson, here and in its check.
+   The painted art is orange (Modern) or yellow-orange (Classic); the turn
+   lands both on a deep red, and the outline goes dark red. */
+:root[data-skin] :is(.btn.btn--danger.wave-fight-piece, .wave-surrender .btn.btn--danger) {
+  --skin-button-stroke: #4a0606;
+
+  color: #fff;
+}
+
+:root[data-skin] .wave-surrender .btn.btn--danger {
+  border-style: solid;
+  border-color: transparent;
+  border-width: 0 var(--skin-button-cap);
+  border-radius: 0;
+  border-image-source: var(--skin-button);
+  border-image-slice: 0 var(--skin-button-slice) fill;
+  border-image-width: 0 var(--skin-button-cap);
+  border-image-repeat: stretch;
+  background: none;
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  text-shadow:
+    0 2px 0 var(--skin-button-stroke), 2px 0 0 var(--skin-button-stroke), -2px 0 0 var(--skin-button-stroke), 0 -2px 0 var(--skin-button-stroke),
+    1.5px 1.5px 0 var(--skin-button-stroke), -1.5px 1.5px 0 var(--skin-button-stroke), 1.5px -1.5px 0 var(--skin-button-stroke), -1.5px -1.5px 0 var(--skin-button-stroke);
+}
+
+:root[data-skin="scrap"] :is(.btn.btn--danger.wave-fight-piece, .wave-surrender .btn.btn--danger) {
+  filter: hue-rotate(-24deg) saturate(1.35) brightness(0.92);
+}
+
+:root[data-skin="flash"] :is(.btn.btn--danger.wave-fight-piece, .wave-surrender .btn.btn--danger) {
+  filter: hue-rotate(-38deg) saturate(1.5) brightness(0.9);
+}
+
+:root[data-skin="scrap"] :is(.btn.btn--danger.wave-fight-piece, .wave-surrender .btn.btn--danger):hover:not(:disabled) {
+  filter: hue-rotate(-24deg) saturate(1.35) brightness(1);
+}
+
+:root[data-skin="flash"] :is(.btn.btn--danger.wave-fight-piece, .wave-surrender .btn.btn--danger):hover:not(:disabled) {
+  filter: hue-rotate(-38deg) saturate(1.5) brightness(1);
+}
+
+/* The icons inside a turned button keep their own colours. */
+:root[data-skin="scrap"] :is(.btn.btn--danger.wave-fight-piece, .wave-surrender .btn.btn--danger) .game-icon {
+  filter: hue-rotate(24deg);
+}
+
+:root[data-skin="flash"] :is(.btn.btn--danger.wave-fight-piece, .wave-surrender .btn.btn--danger) .game-icon {
+  filter: hue-rotate(38deg);
+}
+
+/* ── The yard's bar: shared parts ───────────────────────────────────────── */
+
+.wave-hud {
+  position: absolute;
+  z-index: var(--z-hud);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.wave-hud[hidden],
+.wave-hud--covered {
+  display: none;
+}
+
+.wave-hud__pill,
+.wave-hud__tray {
+  pointer-events: auto;
+}
+
 .wave-hud__pill {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 8px;
   min-height: 48px;
-  padding: 4px 14px 4px 6px;
+  padding: 2px 12px 2px 6px;
   border-radius: var(--radius-pill);
   font-family: var(--font-display);
   font-size: var(--text-md);
@@ -51,16 +203,31 @@
 }
 
 .wave-hud__pill:focus-visible,
+.wave-hud__fold:focus-visible,
 .wave-hud__start:focus-visible {
   outline: 3px solid var(--colour-focus, #ffd34d);
   outline-offset: 2px;
 }
 
+.wave-hud__label-short,
+.wave-hud__break {
+  display: none;
+}
+
+.wave-hud__pill-prize {
+  display: inline-flex;
+  align-items: center;
+  padding-left: 8px;
+  border-left: 1px solid rgb(255 255 255 / 22%);
+  font-size: var(--text-sm);
+}
+
 .wave-hud__totem {
+  flex: none;
   width: 30px;
   height: 38px;
   object-fit: contain;
-  filter: drop-shadow(0 2px 3px var(--colour-art-shadow));
+  filter: drop-shadow(0 2px 3px var(--colour-art-shadow, rgb(0 0 0 / 50%)));
 }
 
 .wave-hud__totem--none {
@@ -68,9 +235,18 @@
   opacity: 0.7;
 }
 
+/* The chevrons: which way the bar opens, set per place below. */
+.wave-hud__chevron::before {
+  content: "▾";
+}
+
+.wave-hud--a .wave-hud__chevron::before {
+  content: "▴";
+}
+
 .wave-hud__chevron {
-  font-size: 0.8em;
-  opacity: 0.8;
+  font-size: 0.85em;
+  opacity: 0.85;
 }
 
 .wave-hud__tray {
@@ -78,21 +254,34 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 8px 12px;
+  gap: 8px 10px;
   max-width: 100%;
-  padding: 8px 10px;
-  border-radius: var(--radius-lg);
+  padding: 4px 6px 4px 8px;
+  border-radius: 14px;
 }
 
 .wave-hud__tray[hidden] {
   display: none;
 }
 
+.wave-hud__tag {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
+
+.wave-hud__plaque {
+  min-height: 30px;
+  padding: 2px 4px;
+  font-size: var(--text-md);
+}
+
 .wave-hud__monsters {
   display: flex;
   gap: 6px;
   margin: 0;
-  padding: 0;
+  padding: 2px 3px;
   list-style: none;
 }
 
@@ -106,20 +295,22 @@
 
 .wave-hud__portrait,
 .wave-hud__secret {
-  width: 44px;
-  height: 44px;
-  border: 2px solid var(--colour-dome-rim);
+  box-sizing: border-box;
+  width: 46px;
+  height: 46px;
+  border: 2px solid rgb(0 0 0 / 55%);
   border-radius: 10px;
   object-fit: cover;
   background: rgb(0 0 0 / 35%);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 18%), 0 2px 3px rgb(0 0 0 / 40%);
 }
 
 .wave-hud__secret {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-sizing: border-box;
-  border-color: #e7b53c;
+  border-color: #f5c542;
+  background: radial-gradient(#3a2a08, #120c02);
   color: #ffd76a;
   font-family: var(--font-display);
   font-size: 26px;
@@ -129,7 +320,7 @@
   margin-top: -10px;
   padding: 0 5px;
   border-radius: var(--radius-pill);
-  background: rgb(0 0 0 / 78%);
+  background: rgb(0 0 0 / 80%);
   color: #fff;
   font-size: var(--text-sm);
   font-weight: 700;
@@ -141,11 +332,34 @@
   font-weight: 700;
 }
 
+.wave-hud__divider {
+  flex: none;
+  align-self: stretch;
+  width: 1px;
+  margin-block: 6px;
+  background: rgb(255 255 255 / 22%);
+  box-shadow: 1px 0 0 rgb(0 0 0 / 35%);
+}
+
+/* The prize on a dark inset, so it reads as a reward, not a price. */
 .wave-hud__prize {
   display: flex;
+  flex: none;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  min-height: 36px;
+  padding: 2px 10px 2px 6px;
+  border-radius: 10px;
+  background: rgb(0 0 0 / 34%);
+  box-shadow: inset 0 2px 4px rgb(0 0 0 / 45%), 0 1px 0 rgb(255 255 255 / 12%);
+  color: #fff;
   font-weight: 700;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 80%);
+}
+
+.wave-hud__prize-icon {
+  width: 24px;
+  height: 24px;
 }
 
 .wave-hud__prize-totem {
@@ -162,21 +376,49 @@
 }
 
 .wave-hud__start {
+  flex: none;
   min-height: 48px;
-  padding-inline: 16px;
+  padding-inline: 8px;
   white-space: nowrap;
 }
 
 .wave-hud__start-icon {
-  font-size: 1.1em;
+  width: 24px;
+  height: 24px;
+  vertical-align: -6px;
+}
+
+/* The fold: a round steel or wood knob with the chevron. */
+.wave-hud__fold {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: rgb(0 0 0 / 28%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 14%);
+  color: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.wave-hud__fold::before {
+  content: "▾";
+}
+
+.wave-hud__fold:hover {
+  background: rgb(0 0 0 / 40%);
 }
 
 .wave-hud__hint {
   flex-basis: 100%;
-  margin: -2px 0 0;
+  margin: -2px 0 2px;
   font-size: var(--text-sm);
   text-align: center;
-  opacity: 0.85;
+  opacity: 0.9;
 }
 
 .wave-hud__note {
@@ -184,47 +426,520 @@
   font-weight: 700;
 }
 
-.wave-hud--bonus .wave-hud__pill {
-  border-color: #e7b53c;
+.wave-hud--bonus .wave-hud__tag .wave-hud__totem,
+.wave-hud--bonus .wave-hud__pill .wave-hud__totem {
+  filter: drop-shadow(0 0 4px #f5c542);
 }
 
-/* iPads and narrow windows: the bottom middle is too tight beside the dock,
-   so the bar goes under the top bar, in the middle, and opens downwards. */
+/* ── A: the dock bar ────────────────────────────────────────────────────── */
+
+/* Computer: one bar in the bottom middle, between Friends (left) and Collect
+   all (right), open; folded, a pill in the same place. */
+.wave-hud--a {
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+  left: 210px;
+  right: 450px;
+  flex-direction: column-reverse;
+}
+
+.wave-hud--a.wave-hud--open .wave-hud__pill {
+  display: none;
+}
+
+/* One row on a computer: the portraits scroll before anything wraps. */
+.wave-hud--a .wave-hud__tray,
+.wave-hud--b .wave-hud__tray {
+  flex-wrap: nowrap;
+}
+
+.wave-hud--a .wave-hud__monsters,
+.wave-hud--b .wave-hud__monsters {
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+/* iPad and narrow windows: the bottom middle is too tight beside the dock,
+   so the bar sits under the top bar, in the middle, and starts folded. */
 @media (min-width: 621px) and (max-width: 1100px) and (min-height: 501px) {
-  .wave-hud {
+  .wave-hud--a {
     top: calc(var(--hud-height) + 12px);
     bottom: auto;
-    left: 50%;
-    right: auto;
-    width: min(560px, calc(100vw - 260px));
+    left: 120px;
+    right: 120px;
     flex-direction: column;
-    transform: translateX(-50%);
+  }
+
+  .wave-hud--a .wave-hud__chevron::before {
+    content: "▾";
+  }
+
+  .wave-hud--a .wave-hud__fold::before {
+    content: "▴";
   }
 }
 
-/* Phone (upright and on its side): closed at the top middle, between Chat
-   and Events; the tray opens downwards under it. */
-@media (max-width: 620px), (max-height: 500px) {
-  .wave-hud {
+/* A phone on its side: the same bar under the short top bar. */
+@media (max-height: 500px) and (min-width: 621px) {
+  .wave-hud--a {
+    top: calc(env(safe-area-inset-top, 0px) + 64px);
+    bottom: auto;
+    left: 150px;
+    right: 150px;
+    flex-direction: column;
+  }
+
+  .wave-hud--a .wave-hud__chevron::before {
+    content: "▾";
+  }
+
+  .wave-hud--a .wave-hud__fold::before {
+    content: "▴";
+  }
+
+  .wave-hud--a .wave-hud__tray {
+    flex-wrap: nowrap;
+  }
+
+  .wave-hud--a .wave-hud__hint {
+    display: none;
+  }
+}
+
+/* Upright phone: a pill at the top between Chat and Events; it opens a tray
+   below them, over a dim, and stays to fold it. */
+@media (max-width: 620px) {
+  .wave-hud--a {
     top: calc(env(safe-area-inset-top, 0px) + 120px);
     bottom: auto;
-    left: 50%;
-    right: auto;
-    width: min(366px, calc(100vw - 24px));
+    left: 12px;
+    right: 12px;
     flex-direction: column;
-    transform: translateX(-50%);
   }
 
-  .wave-hud__pill {
-    min-height: 46px;
+  .wave-hud--a.wave-hud--open .wave-hud__pill {
+    display: flex;
+  }
+
+  .wave-hud--a .wave-hud__chevron::before {
+    content: "▾";
+  }
+
+  .wave-hud--a.wave-hud--open .wave-hud__chevron::before {
+    content: "▴";
+  }
+
+  .wave-hud--a .wave-hud__pill {
+    min-height: 50px;
     font-size: var(--text-sm);
+  }
+
+  .wave-hud--a .wave-hud__label-long {
+    display: none;
+  }
+
+  .wave-hud--a .wave-hud__label-short {
+    display: inline;
+    font-size: var(--text-md);
+  }
+
+  :root .wave-hud--a .wave-hud__tray {
+    flex-wrap: wrap;
+  }
+
+  :root[data-skin] .wave-hud--a .wave-hud__tray,
+  .wave-hud--a .wave-hud__tray {
+    position: absolute;
+    top: 94px;
+    left: 0;
+    right: 0;
+    box-shadow: 0 0 0 200vmax rgb(0 0 0 / 45%);
+  }
+
+  .wave-hud--a .wave-hud__tag,
+  .wave-hud--a .wave-hud__fold {
+    display: none;
+  }
+
+  .wave-hud--a .wave-hud__start {
+    flex-basis: 100%;
+    max-width: 260px;
   }
 }
 
-/* Phone on its side: the top bar is one short row, so the bar sits higher. */
+/* ── B: the tactical strip ──────────────────────────────────────────────── */
+
+/* Computer and iPad: always open, in the top middle under the resources. */
+.wave-hud--b {
+  top: calc(var(--hud-height) + 10px);
+  left: 200px;
+  right: 200px;
+}
+
+.wave-hud--b .wave-hud__pill {
+  display: none;
+}
+
+@media (min-width: 621px) and (max-width: 1100px) and (min-height: 501px) {
+  .wave-hud--b {
+    left: 110px;
+    right: 110px;
+  }
+}
+
+/* Phone (both ways up): a tab on the left edge; it slides out a drawer over a dim. */
+@media (max-width: 620px), (max-height: 500px) {
+  .wave-hud--b {
+    top: calc(env(safe-area-inset-top, 0px) + 224px);
+    left: 0;
+    right: auto;
+    align-items: flex-start;
+  }
+
+  .wave-hud--b .wave-hud__pill {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    width: 48px;
+    min-height: 92px;
+    margin-left: -6px;
+    padding: 4px 2px 4px 8px;
+    border-radius: 0 14px 14px 0;
+    font-size: var(--text-sm);
+  }
+
+  .wave-hud--b.wave-hud--open .wave-hud__pill {
+    display: none;
+  }
+
+  .wave-hud--b .wave-hud__label-long,
+  .wave-hud--b .wave-hud__pill-prize {
+    display: none;
+  }
+
+  .wave-hud--b .wave-hud__label-short {
+    display: inline;
+  }
+
+  .wave-hud--b .wave-hud__chevron::before {
+    content: "▸";
+  }
+
+  .wave-hud--b .wave-hud__fold::before {
+    content: "◂";
+  }
+
+  /* The drawer: the wave, its monsters and the fold; then the prize and Start. */
+  .wave-hud--b .wave-hud__tag {
+    order: 1;
+  }
+
+  .wave-hud--b .wave-hud__tag .wave-hud__totem,
+  .wave-hud--b .wave-hud__divider,
+  .wave-hud--b .wave-hud__prize-icon {
+    display: none;
+  }
+
+  .wave-hud--b .wave-hud__monsters {
+    order: 2;
+    flex: 1 1 auto;
+  }
+
+  .wave-hud--b .wave-hud__fold {
+    order: 3;
+    margin-left: auto;
+  }
+
+  .wave-hud--b .wave-hud__break {
+    display: block;
+    order: 4;
+    flex-basis: 100%;
+    height: 0;
+  }
+
+  .wave-hud--b .wave-hud__prize {
+    order: 5;
+  }
+
+  .wave-hud--b .wave-hud__hint {
+    order: 7;
+  }
+
+  .wave-hud--b .wave-hud__plaque .wave-hud__label-long {
+    display: none;
+  }
+
+  .wave-hud--b .wave-hud__plaque .wave-hud__label-short {
+    display: inline;
+  }
+
+  :root[data-skin] .wave-hud--b .wave-hud__tray,
+  .wave-hud--b .wave-hud__tray {
+    flex-wrap: wrap;
+    width: min(336px, calc(100vw - 40px));
+    margin-left: -6px;
+    padding-left: 12px;
+    border-radius: 0 16px 16px 0;
+    justify-content: flex-start;
+    box-shadow: 0 0 0 200vmax rgb(0 0 0 / 45%);
+  }
+
+  .wave-hud--b .wave-hud__start {
+    order: 6;
+    flex: 1 1 auto;
+  }
+}
+
 @media (max-height: 500px) and (min-width: 621px) {
-  .wave-hud {
-    top: calc(env(safe-area-inset-top, 0px) + 64px);
+  .wave-hud--b {
+    top: calc(env(safe-area-inset-top, 0px) + 110px);
+  }
+
+  .wave-hud--b .wave-hud__hint {
+    display: none;
+  }
+}
+
+/* ── The fight: slam plaque, status pill, Surrender ─────────────────────── */
+
+/* The strip's own damage readout and "Don't Panic" line give way to the pill. */
+.attack-strip--wave .attack-strip__damage {
+  display: none;
+}
+
+.wave-status,
+.wave-slam,
+.wave-fight-piece {
+  position: absolute;
+  z-index: var(--z-hud);
+}
+
+.wave-status {
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 2px 12px 2px 6px;
+  border-radius: var(--radius-pill);
+  font-weight: 700;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  transition: opacity 200ms ease-out;
+}
+
+.wave-status--waiting {
+  opacity: 0;
+}
+
+.wave-status__plaque {
+  min-height: 30px;
+  padding: 2px 4px;
+  font-size: var(--text-md);
+}
+
+.wave-status__label-short {
+  display: none;
+}
+
+.wave-status__health,
+.wave-status__left {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wave-status__heart {
+  width: 22px;
+  height: 22px;
+}
+
+/* The yard's health bar, with the 10% line a wave must stay above. */
+.wave-status__bar {
+  position: relative;
+  width: 128px;
+  height: 14px;
+  border-radius: var(--radius-pill);
+  background: rgb(0 0 0 / 50%);
+  box-shadow: inset 0 1px 3px rgb(0 0 0 / 60%), 0 1px 0 rgb(255 255 255 / 14%);
+}
+
+.wave-status__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 100%;
+  border-radius: inherit;
+  background: linear-gradient(#8ee86a, #4bb52e);
+  transition: width 250ms ease-out;
+}
+
+.wave-status__bar--low .wave-status__fill {
+  background: linear-gradient(#ffd060, #f0a500);
+}
+
+.wave-status__bar--lost .wave-status__fill {
+  background: linear-gradient(#ff6a5a, #d93829);
+}
+
+.wave-status__notch {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 3px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: #ff3b2f;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 70%);
+}
+
+.wave-status__percent {
+  min-width: 3.2em;
+  font-variant-numeric: tabular-nums;
+}
+
+.wave-status__face {
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  border: 2px solid rgb(0 0 0 / 55%);
+  border-radius: 8px;
+  object-fit: cover;
+  background: rgb(0 0 0 / 35%);
+}
+
+.wave-status__count {
+  min-width: 1.6em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The slam: the style's sign, big, in the top middle, then folded up into the pill. */
+.wave-slam {
+  left: 50%;
+  min-width: 300px;
+  min-height: 64px;
+  padding: 4px 18px;
+  font-size: 34px;
+  pointer-events: none;
+  transform: translateX(-50%);
+  filter: drop-shadow(0 6px 10px rgb(0 0 0 / 55%));
+}
+
+:root[data-skin] .wave-slam {
+  border-width: 0 28px;
+  border-image-width: 0 28px;
+}
+
+:root[data-skin="flash"] .wave-slam {
+  border-width: 0 36px;
+  border-image-width: 0 36px;
+  color: #fff;
+  text-shadow:
+    0 2px 0 var(--skin-label-stroke), 2px 0 0 var(--skin-label-stroke), -2px 0 0 var(--skin-label-stroke), 0 -2px 0 var(--skin-label-stroke),
+    2px 2px 0 var(--skin-label-stroke), -2px 2px 0 var(--skin-label-stroke);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .wave-slam {
+    animation: wave-slam-in 320ms cubic-bezier(0.2, 1.6, 0.4, 1) both;
+  }
+
+  .wave-slam--out {
+    animation: wave-slam-out 350ms ease-in both;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wave-slam--out {
+    opacity: 0;
+    transition: opacity 350ms;
+  }
+}
+
+@keyframes wave-slam-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) scale(1.8);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+}
+
+@keyframes wave-slam-out {
+  from {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-24px) scale(0.45);
+  }
+}
+
+/* Surrender: top right, under the strip, apart from the speed buttons. */
+.wave-surrender-button.wave-fight-piece {
+  right: calc(env(safe-area-inset-right, 0px) + 16px);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 48px;
+  min-height: 46px;
+  padding-inline: 4px;
+  pointer-events: auto;
+}
+
+.wave-surrender-button__icon {
+  width: 24px;
+  height: 24px;
+}
+
+@media (max-width: 620px), (max-height: 500px) {
+  .wave-status {
+    gap: 6px;
+    min-height: 44px;
+    padding: 2px 10px 2px 4px;
+  }
+
+  .wave-status__label-long {
+    display: none;
+  }
+
+  .wave-status__label-short {
+    display: inline;
+  }
+
+  .wave-status__bar {
+    width: 64px;
+  }
+
+  .wave-status__heart {
+    display: none;
+  }
+
+  .wave-slam {
+    min-width: 240px;
+    min-height: 56px;
+    font-size: 26px;
+  }
+
+  .wave-surrender-button.wave-fight-piece {
+    right: calc(env(safe-area-inset-right, 0px) + 10px);
+  }
+
+  .wave-surrender-button__word {
+    display: none;
+  }
+}
+
+/* An upright phone: the pill keeps left, so Surrender has its own corner. */
+@media (max-width: 620px) {
+  .wave-status {
+    left: calc(env(safe-area-inset-left, 0px) + 10px);
+    transform: none;
   }
 }
 
@@ -234,7 +949,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 18px 6px 4px;
+  margin: 18px 6px 24px;
 }
 
 .wave-track__bar {
@@ -264,7 +979,7 @@
   width: 22px;
   height: 30px;
   object-fit: contain;
-  filter: grayscale(1) brightness(0.75);
+  filter: grayscale(1) brightness(1.3) drop-shadow(0 1px 1px #000);
   opacity: 0.75;
 }
 
@@ -273,18 +988,54 @@
   opacity: 1;
 }
 
+/* Wave numbers in their own row under the bar, in the window's text colour. */
+.wave-track__wave {
+  position: absolute;
+  bottom: -20px;
+  color: var(--colour-text);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* The bonus waves' marks in gold, so "B1" and "B2" read as a prize, not a bug. */
+.wave-track__mark--bonus .wave-track__wave {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: linear-gradient(#ffe27a, #d9a21c);
+  color: #2c1a04;
+  text-shadow: none;
+}
+
+.wave-track__mark--bonus .wave-track__totem {
+  filter: drop-shadow(0 0 3px rgb(245 197 66 / 80%)) grayscale(0.4);
+}
+
 .wave-track__count {
   flex: none;
+  margin-left: 12px;
   font-weight: 700;
 }
 
 /* ── The pop-ups ────────────────────────────────────────────────────────── */
 
+/* The result and the surrender check: wide enough for two buttons side by side. */
+.wave-result,
+.wave-surrender {
+  width: min(460px, calc(100vw - 24px));
+}
+
 .wave-result__reward {
-  margin: 4px 0;
+  display: flex;
+  justify-content: center;
+  margin: 4px auto;
+  padding: 6px 18px;
+  width: fit-content;
+  border-radius: 14px;
+  background: radial-gradient(rgb(255 210 70 / 28%), transparent 70%);
   font-size: var(--text-xl, 1.6rem);
   font-weight: 700;
-  text-align: center;
 }
 
 .wave-result__lead {
@@ -297,27 +1048,84 @@
   text-align: center;
 }
 
-.wave-result__actions {
+/* The lost wave's wrench chip: what is true now. */
+.wave-result__repair {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: fit-content;
+  margin: 2px auto 8px;
+  padding: 4px 14px 4px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-sunken, rgb(0 0 0 / 25%));
+  box-shadow: inset 0 1px 3px rgb(0 0 0 / 35%);
+  font-weight: 700;
+}
+
+.wave-result__repair-icon {
+  width: 32px;
+  height: 32px;
+}
+
+.wave-result__stat {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 6px;
+  margin: 4px 0;
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.wave-result__stat-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.wave-result__stat-need {
+  font-size: var(--text-sm);
+  font-weight: 400;
+  opacity: 0.85;
+}
+
+/* The counter tip: one line in an inset callout. */
+.wave-result__tip {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  border-left: 4px solid var(--colour-accent, #ff8a2a);
+  border-radius: 8px;
+  background: var(--colour-surface-sunken, rgb(0 0 0 / 20%));
+  font-weight: 700;
+}
+
+.wave-result__actions {
+  display: flex;
+  flex-wrap: nowrap;
   justify-content: center;
   gap: 12px;
   margin-top: 16px;
 }
 
 .wave-result__actions .btn {
-  min-width: 140px;
+  flex: 0 1 168px;
+  min-width: 0;
   min-height: 48px;
+  white-space: nowrap;
 }
 
+/* The totem's moment: its art in a gold glow. */
 .wave-totem__stage {
   display: flex;
   justify-content: center;
   padding: 8px;
+  border-radius: 16px;
+  background: radial-gradient(rgb(255 210 70 / 38%), transparent 68%);
 }
 
 .wave-totem__art {
-  max-width: 160px;
+  max-width: 180px;
   height: 180px;
   object-fit: contain;
   filter: drop-shadow(0 6px 10px rgb(0 0 0 / 45%));
@@ -330,31 +1138,45 @@
   text-align: center;
 }
 
-.wave-totem__where {
-  margin: 6px 0 14px;
+.wave-totem__milestone {
+  margin: 2px 0 0;
+  font-size: var(--text-sm);
   text-align: center;
+  opacity: 0.85;
 }
 
-.wave-totem__ok {
-  display: block;
-  min-width: 140px;
-  min-height: 48px;
-  margin: 0 auto;
+.wave-totem__where {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 8px 0 0;
+  font-weight: 700;
 }
 
-/* ── In the fight: surrender ────────────────────────────────────────────── */
-
-.wave-surrender-button {
-  min-height: 44px;
-  margin-inline-start: 8px;
-  padding-inline: 14px;
-  pointer-events: auto;
+.wave-totem__where-icon {
+  width: 24px;
+  height: 24px;
 }
 
-.raid-panic--wave {
-  border-color: #e7b53c;
-  background: rgb(40 28 8 / 82%);
-  color: #ffd76a;
+.wave-totem .wave-result__actions .btn {
+  flex-basis: 150px;
+}
+
+/* A phone: the wave's pop-ups sit low, in thumb reach, as sheets. */
+@media (max-width: 620px) {
+  .popup-backdrop:has(> .wave-sheet) {
+    place-items: end center;
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+  }
+
+  .wave-sheet {
+    width: 100%;
+  }
+
+  .wave-totem__art {
+    height: 150px;
+  }
 }
 
 /* ── The Events card ────────────────────────────────────────────────────── */
@@ -365,14 +1187,17 @@
   gap: 10px;
 }
 
+/* The next wave on a recessed tray. */
 .wave-card__next {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 12px;
-  padding: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--colour-border-strong, rgb(255 255 255 / 20%));
   border-radius: var(--radius-md);
-  background: rgb(0 0 0 / 18%);
+  background: var(--colour-surface-sunken, rgb(0 0 0 / 18%));
+  box-shadow: inset 0 2px 4px rgb(0 0 0 / 35%);
 }
 
 .wave-card__next-title {
@@ -386,9 +1211,84 @@
   margin-inline-start: auto;
 }
 
+/* The banner kept low and its words to the left; the countdown rides on its
+   top right corner, and the title under it (the banner says it) goes. */
+.events-card--wave {
+  position: relative;
+}
+
+.events-card--wave .events-card__banner {
+  max-height: 76px;
+}
+
+.events-card--wave .events-card__banner-image {
+  object-position: left center;
+}
+
 /* The Flash strips are much wider than the Modern band. */
 .events-card__banner--wave.events-card__banner--classic {
   aspect-ratio: 714 / 85;
+}
+
+.events-card--wave:has(.events-card__banner-image) .events-card__head {
+  min-height: 0;
+}
+
+.events-card--wave:has(.events-card__banner-image) .events-card__title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.events-card--wave:has(.events-card__banner-image) .events-card__countdown {
+  position: absolute;
+  top: calc(var(--events-card-pad, 12px) + 6px);
+  right: calc(var(--events-card-pad, 12px) + 6px);
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: rgb(0 0 0 / 72%);
+  color: #ffd76a;
+  font-weight: 700;
+  text-shadow: none;
+}
+
+/* A phone on its side: no banner, one line of words, Start beside the monsters. */
+@media (max-height: 450px) {
+  .events-card--wave .events-card__banner {
+    display: none;
+  }
+
+  .events-card--wave .events-card__title {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+  }
+
+  .events-card--wave .events-card__countdown {
+    position: static;
+    background: none;
+  }
+
+  .events-card--wave .events-card__text {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+  }
+
+  .wave-card__next {
+    flex-wrap: nowrap;
+    padding: 6px 10px;
+  }
+
+  .wave-card__next-title {
+    flex-basis: auto;
+  }
 }
 
 /* ── The event's arrival ────────────────────────────────────────────────── */
@@ -415,144 +1315,53 @@
   margin: 10px 0 0;
 }
 
-/* ── Round 1 fixes (neon) ───────────────────────────────────────────────── */
-
-.wave-hud--covered {
-  display: none;
-}
-
-/* The prize in its own green chip, set off from the monsters and the button. */
-.wave-hud__prize {
-  padding: 4px 10px 4px 6px;
-  border: 2px solid rgb(120 200 90 / 70%);
-  border-radius: var(--radius-pill);
-  background: rgb(40 90 30 / 55%);
-}
-
-.wave-hud__prize-icon {
-  width: 24px;
-  height: 24px;
-}
-
-.wave-hud__start-icon {
-  width: 24px;
-  height: 24px;
-  vertical-align: -6px;
-}
-
-.wave-track {
-  margin-bottom: 18px;
-}
-
-.wave-track__wave {
-  position: absolute;
-  top: 18px;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.wave-track__totem {
-  filter: grayscale(1) brightness(1.3) drop-shadow(0 1px 1px #000);
-}
-
-/* The wave card's banner kept low, so the next wave and its Start show
-   without scrolling on short screens; gone on a phone on its side. */
-.events-card--wave .events-card__banner {
-  max-height: clamp(56px, 10vh, 96px);
-  max-height: clamp(56px, 10dvh, 96px);
-}
-
-@media (max-height: 450px) {
-  .events-card--wave .events-card__banner {
-    display: none;
-  }
-}
-
-@media (max-width: 480px) {
-
-  .wave-result__actions .btn {
-    min-width: 120px;
-  }
-}
-
-.wave-surrender-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 44px;
-}
-
-.wave-surrender-button__icon {
-  width: 24px;
-  height: 24px;
-}
-
-@media (max-width: 480px) {
-  .wave-surrender-button {
-    padding-inline: 10px;
-  }
-
-  .wave-surrender-button__word {
-    display: none;
-  }
-}
-
-/* ── Round 2 fixes (neon) ───────────────────────────────────────────────── */
-
-/* Wave numbers in their own row under the bar, in the window's text colour. */
-.wave-track {
-  margin-bottom: 24px;
-}
-
-.wave-track__wave {
-  top: auto;
-  bottom: -20px;
-  color: var(--colour-text);
-  text-shadow: none;
-}
-
-.wave-track__count {
-  margin-left: 6px;
-}
-
-.wave-hud__prize {
-  color: #fff;
-  text-shadow: 0 1px 2px rgb(0 0 0 / 80%);
-}
-
 .wave-intro__facts {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, max-content));
   justify-content: center;
-  gap: 6px;
+  gap: 6px 8px;
   margin: 10px 0 0;
   padding: 0;
   list-style: none;
 }
 
 .wave-intro__fact {
-  padding: 2px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px 3px 6px;
   border-radius: var(--radius-pill);
-  background: rgb(0 0 0 / 18%);
+  background: var(--colour-surface-sunken, rgb(0 0 0 / 18%));
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 30%);
   font-size: var(--text-sm);
   font-weight: 700;
   white-space: nowrap;
 }
 
-.wave-totem__milestone {
-  margin: 2px 0 0;
-  font-size: var(--text-sm);
-  text-align: center;
-  opacity: 0.85;
+.wave-intro__fact-icon {
+  width: 20px;
+  height: 20px;
 }
 
-/* A phone on its side: the arrival pop-up keeps its words, track and buttons on screen. */
-@media (max-height: 450px) {
-  .wave-intro__banner,
+@media (min-width: 621px) {
   .wave-intro__facts {
+    grid-template-columns: repeat(4, max-content);
+  }
+}
+
+/* A phone on its side: the arrival keeps a one-line fact strip, track and buttons. */
+@media (max-height: 450px) {
+  .wave-intro__banner {
     display: none;
+  }
+
+  .wave-intro__facts {
+    grid-template-columns: repeat(4, max-content);
+    gap: 4px;
+  }
+
+  .wave-intro__fact {
+    padding: 1px 8px 1px 4px;
   }
 
   .wave-intro .wave-track {
@@ -561,12 +1370,5 @@
 
   .wave-result__actions {
     margin-top: 8px;
-  }
-}
-
-/* A phone on its side has the width for the one-row tray. */
-@media (max-height: 500px) and (min-width: 621px) {
-  .wave-hud {
-    width: min(600px, calc(100vw - 300px));
   }
 }

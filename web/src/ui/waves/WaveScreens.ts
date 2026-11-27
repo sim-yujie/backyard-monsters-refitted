@@ -1,7 +1,9 @@
 import type { RaidResult } from "@/api/raid";
 import { waveName, type WaveResult, type WaveStatus } from "@/api/waves";
 import { classicLook } from "@/game/classicLook";
-import { totemName, WAVE_LOST_LINE, WAVE_SURRENDERED_LINE } from "@/game/waves/waveText";
+import { monsterMovement } from "@/game/combat/rules";
+import { isFlyingMovement } from "@/game/combat/rules/targeting";
+import { totemName, WAVE_LOST_CHIP, WAVE_LOST_LINE, WAVE_SURRENDERED_LINE, waveArmy, waveTip } from "@/game/waves/waveText";
 import { coinAmount, coinWords } from "@/ui/events/coinUi";
 import { el } from "@/ui/dom";
 import { gameIcon } from "@/ui/gameIcon";
@@ -40,6 +42,7 @@ export const waveTrack = (beaten: number, waves: number, totemType: number | nul
     mark.style.left = `${at(wave)}%`;
     mark.title = `Wave ${wave}: totem level ${index + 1}`;
     if (totemType !== null) mark.append(totemImage(totemType, index + 1, "wave-track__totem"));
+    if (wave > main) mark.classList.add("wave-track__mark--bonus");
     mark.append(el("span", "wave-track__wave", wave > main ? `B${wave - main}` : String(wave)));
     bar.append(mark);
   }
@@ -52,7 +55,19 @@ export const waveTrack = (beaten: number, waves: number, totemType: number | nul
 export interface WaveResultActions {
   /** Calls the next wave (or retries this one) at once; null hides the button. */
   readonly onNext: (() => void) | null;
+  /** Opens Build on the totem's tile, for a totem won into storage ("Place now"); absent, only OK. */
+  readonly onPlaceTotem?: ((type: number) => void) | null;
 }
+
+/** A skinned second button ("Later", "Keep fighting"): the style's second plate. */
+const laterButton = (words: string, className: string): HTMLButtonElement => {
+  const button = el("button", `btn btn--outline ${className}`, words);
+  button.type = "button";
+  return button;
+};
+
+/** The phone's pop-ups sit low, as sheets in thumb reach (`waves.css`). */
+const SHEET = "wave-sheet";
 
 /** The wave's own result (`RaidResult.wave`); `onClose` runs whichever way it is closed. */
 export const waveResultPopup = (result: RaidResult, actions: WaveResultActions, onClose: () => void): Popup => {
@@ -61,7 +76,7 @@ export const waveResultPopup = (result: RaidResult, actions: WaveResultActions, 
   const won = wave.beaten;
   const popup = new Popup({
     title: won ? `${name} beaten!` : `${name} lost`,
-    className: `wave-result wave-result--${won ? "won" : "lost"}`,
+    className: `wave-result wave-result--${won ? "won" : "lost"} ${SHEET}`,
     onClose,
   });
   const parts: HTMLElement[] = [];
@@ -76,9 +91,22 @@ export const waveResultPopup = (result: RaidResult, actions: WaveResultActions, 
     parts.push(waveTrack(wave.next === null ? wave.waves : wave.next - 1, wave.waves, wave.totemType ?? wave.totem?.type ?? null, wave.firstBonusWave));
     if (result.damaged.length > 0) parts.push(el("p", "wave-result__note", "Damaged buildings are repairing."));
   } else {
-    parts.push(el("p", "wave-result__lead", wave.surrendered ? WAVE_SURRENDERED_LINE : WAVE_LOST_LINE));
-    if (!wave.surrendered) {
-      parts.push(el("p", "wave-result__note", `Yard left: ${Math.round(result.health * 100)}% (need more than 10%, and every monster beaten).`));
+    // The wrench and what is true now: repairs started, nothing taken.
+    const chip = el("p", "wave-result__repair");
+    chip.append(gameIcon("tools", { size: 32, decorative: true, className: "wave-result__repair-icon" }), el("span", "", WAVE_LOST_CHIP));
+    parts.push(chip);
+    if (wave.surrendered) {
+      parts.push(el("p", "wave-result__note", WAVE_SURRENDERED_LINE));
+    } else {
+      const left = el("p", "wave-result__stat");
+      left.append(
+        gameIcon("health", { size: 24, decorative: true, className: "wave-result__stat-icon" }),
+        el("span", "", `Yard left: ${Math.round(result.health * 100)}%`),
+        el("span", "wave-result__stat-need", "(need more than 10%)"),
+      );
+      parts.push(left);
+      const tip = waveTip(waveArmy(wave.run, wave.wave), (monster) => isFlyingMovement(monsterMovement(monster)));
+      parts.push(el("p", "wave-result__tip", tip ?? WAVE_LOST_LINE));
     }
   }
   if (result.housedLost > 0) {
@@ -87,8 +115,7 @@ export const waveResultPopup = (result: RaidResult, actions: WaveResultActions, 
     );
   }
   const actionsRow = el("div", "wave-result__actions");
-  const later = el("button", "btn wave-result__later", "Later");
-  later.type = "button";
+  const later = laterButton("Later", "wave-result__later");
   later.addEventListener("click", () => popup.close());
   actionsRow.append(later);
   if (actions.onNext && (won ? wave.next !== null : true)) {
@@ -107,20 +134,47 @@ export const waveResultPopup = (result: RaidResult, actions: WaveResultActions, 
   return popup;
 };
 
-/** The totem's moment: its new picture, the wave that raised it, and where it is. */
-export const totemPopup = (totem: NonNullable<WaveResult["totem"]>, onClose: () => void, wave?: string): Popup => {
-  const popup = new Popup({ title: totem.level === 1 ? "Totem won!" : "Totem upgraded!", className: "wave-totem", onClose });
+/**
+ * The totem's moment: its new picture in a gold glow, the wave that raised
+ * it, and where it is; "Place now" opens Build on it when it went to storage.
+ */
+export const totemPopup = (
+  totem: NonNullable<WaveResult["totem"]>,
+  onClose: () => void,
+  wave?: string,
+  onPlace?: ((type: number) => void) | null,
+): Popup => {
+  const popup = new Popup({ title: totem.level === 1 ? "Totem won!" : "Totem upgraded!", className: `wave-totem ${SHEET}`, onClose });
   const stage = el("div", "wave-totem__stage");
   stage.append(totemImage(totem.type, totem.level, "wave-totem__art"));
-  const ok = el("button", "btn btn--primary wave-totem__ok", "OK");
-  ok.type = "button";
-  ok.addEventListener("click", () => popup.close());
+  const where = el("p", "wave-totem__where");
+  where.append(
+    gameIcon(totem.placed ? "townhall" : "gift", { size: 24, decorative: true, className: "wave-totem__where-icon" }),
+    el("span", "", totem.placed ? "Upgraded on your yard" : "In storage"),
+  );
+  const row = el("div", "wave-result__actions");
+  if (!totem.placed && onPlace) {
+    const later = laterButton("Later", "wave-totem__later");
+    later.addEventListener("click", () => popup.close());
+    const place = el("button", "btn btn--primary wave-totem__place", "Place now");
+    place.type = "button";
+    place.addEventListener("click", () => {
+      popup.close();
+      onPlace(totem.type);
+    });
+    row.append(later, place);
+  } else {
+    const ok = el("button", "btn btn--primary wave-totem__ok", "OK");
+    ok.type = "button";
+    ok.addEventListener("click", () => popup.close());
+    row.append(ok);
+  }
   popup.setContent(
     stage,
     el("p", "wave-totem__name", totemName(totem.level)),
-    ...(wave ? [el("p", "wave-totem__milestone", `${wave} prize`)] : []),
-    el("p", "wave-totem__where", totem.placed ? "Upgraded on your yard." : "Stored in Build ▸ Decorations."),
-    ok,
+    ...(wave ? [el("p", "wave-totem__milestone", `${wave} milestone`)] : []),
+    where,
+    row,
   );
   return popup;
 };
@@ -131,16 +185,16 @@ export const confirmSurrender = (host: HTMLElement, wave: string): Promise<boole
     let answered = false;
     const popup = new Popup({
       title: "Surrender?",
-      className: "wave-surrender",
+      className: `wave-surrender ${SHEET}`,
       onClose: () => {
         if (!answered) resolve(false);
       },
     });
-    const keep = el("button", "btn wave-surrender__keep", "Keep fighting");
-    keep.type = "button";
+    const keep = laterButton("Keep fighting", "wave-surrender__keep");
     keep.addEventListener("click", () => popup.close());
-    const give = el("button", "btn btn--danger wave-surrender__give", "Surrender");
+    const give = el("button", "btn btn--danger wave-surrender__give");
     give.type = "button";
+    give.append(gameIcon("retreat", { size: 24, decorative: true, className: "wave-hud__start-icon" }), " Surrender");
     give.addEventListener("click", () => {
       answered = true;
       resolve(true);
@@ -148,7 +202,7 @@ export const confirmSurrender = (host: HTMLElement, wave: string): Promise<boole
     });
     const row = el("div", "wave-result__actions");
     row.append(keep, give);
-    popup.setContent(el("p", "wave-result__lead", `${wave} counts as lost. The monsters leave and your yard repairs.`), row);
+    popup.setContent(el("p", "wave-result__lead", `${wave} counts as lost. Damage so far stays; repairs start.`), row);
     popup.mount(host);
   });
 
@@ -161,7 +215,15 @@ export const showWaveResult = async (host: HTMLElement, result: RaidResult, acti
   const totem = result.wave?.totem;
   if (totem && result.wave?.beaten) {
     const wave = result.wave ? waveName(result.wave.wave, result.wave.firstBonusWave) : undefined;
-    await new Promise<void>((resolve) => totemPopup(totem, resolve, wave).mount(host));
+    let place = false;
+    await new Promise<void>((resolve) =>
+      totemPopup(totem, resolve, wave, actions.onPlaceTotem ? () => (place = true) : null).mount(host),
+    );
+    // Placing it wins over the next wave: Build opens, the wave waits.
+    if (place) {
+      actions.onPlaceTotem?.(totem.type);
+      return;
+    }
   }
   if (next) actions.onNext?.();
 };
@@ -172,7 +234,7 @@ export const showWaveResult = async (host: HTMLElement, result: RaidResult, acti
  * first prize, and "Start wave 1" or "Later".
  */
 export const waveIntroPopup = (status: WaveStatus, onStart: () => void, onClose: () => void): Popup => {
-  const popup = new Popup({ title: status.title, className: "wave-intro", onClose });
+  const popup = new Popup({ title: status.title, className: `wave-intro ${SHEET}`, onClose });
   const band = el("div", "wave-intro__banner");
   const picture = el("img", "wave-intro__banner-image");
   picture.alt = "";
@@ -182,12 +244,21 @@ export const waveIntroPopup = (status: WaveStatus, onStart: () => void, onClose:
   const parts: HTMLElement[] = [band];
   if (status.text) parts.push(el("p", "wave-intro__text", status.text));
   const facts = el("ul", "wave-intro__facts");
-  for (const fact of ["No loot lost", "Auto-repairs", "Glimmers every wave", "2 bonus waves"]) facts.append(el("li", "wave-intro__fact", fact));
+  const FACTS = [
+    ["shield", "No loot lost"],
+    ["tools", "Auto-repairs"],
+    ["eventcoin", "Glimmers every wave"],
+    ["gift", "2 bonus waves"],
+  ] as const;
+  for (const [icon, words] of FACTS) {
+    const fact = el("li", "wave-intro__fact");
+    fact.append(gameIcon(icon, { size: 16, decorative: true, className: "wave-intro__fact-icon" }), el("span", "", words));
+    facts.append(fact);
+  }
   parts.push(facts);
   if (status.totemType !== null) parts.push(waveTrack(status.beaten, status.waves, status.totemType, status.firstBonusWave));
   const row = el("div", "wave-result__actions");
-  const later = el("button", "btn wave-result__later", "Later");
-  later.type = "button";
+  const later = laterButton("Later", "wave-result__later");
   later.addEventListener("click", () => popup.close());
   row.append(later);
   if (status.next !== null) {

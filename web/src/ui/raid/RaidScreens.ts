@@ -444,12 +444,14 @@ export const raidAftermathView = (
   notice: (message: string) => void,
   /** A wave event's "Next wave" / "Retry" from its result (`plugins/waves.ts`); absent, none offered. */
   nextWave?: () => void,
+  /** A totem won into storage: Build opens on it ("Place now"). */
+  placeTotem?: (type: number) => void,
 ): RaidAftermathView => ({
   result: (result) =>
     new Promise<void>((resolve) => {
       raidResultPopup(result, repair(), resolve).mount(host);
     }),
-  wave: (result) => showWaveResult(host, result, { onNext: nextWave ?? null }),
+  wave: (result) => showWaveResult(host, result, { onNext: nextWave ?? null, onPlaceTotem: placeTotem ?? null }),
   frequency: (tribe, defended) =>
     new Promise<RaidPreference | null>((resolve) => {
       raidFrequencyPopup(tribe, defended, resolve).mount(host);

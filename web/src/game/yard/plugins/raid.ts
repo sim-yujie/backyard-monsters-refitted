@@ -97,7 +97,7 @@ export const raidYardPlugin: YardPlugin = (mounts) => {
   const result = behind ? null : consumeRaidResult((landed) => !isMolochRaid(landed));
   if (result) {
     void runRaidAftermath(
-      { api: raidApi, view: raidAftermathView(overlay.modal, () => repairOffer(mounts), notice, callNextWave) },
+      { api: raidApi, view: raidAftermathView(overlay.modal, () => repairOffer(mounts), notice, callNextWave, (type) => mounts.scene.openBuildMenu(type)) },
       result,
     );
   }

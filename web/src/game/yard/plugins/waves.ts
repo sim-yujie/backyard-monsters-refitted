@@ -1,6 +1,7 @@
 import { raidRefusal } from "@/api/raid";
 import { waveApi, type WaveApi, type WaveStatus } from "@/api/waves";
 import { setRaidRun } from "@/game/raid/raidSession";
+import { rememberWaveArmy } from "@/game/waves/waveText";
 import { raidWatch } from "@/game/raid/raidWatch";
 import { WaveHud } from "@/ui/waves/WaveHud";
 import { waveIntroPopup } from "@/ui/waves/WaveScreens";
@@ -57,6 +58,7 @@ export const startWave = async (
 ): Promise<boolean> => {
   try {
     const response = await api.next();
+    if (response.wave.next !== null) rememberWaveArmy(response.wave.run, response.wave.next, response.wave.preview);
     setRaidRun({ raid: response.raid, fight: response.fight, save: mounts.store.save, wave: response.wave });
     mounts.scene.openRaid();
     return true;
