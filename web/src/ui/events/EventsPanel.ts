@@ -519,11 +519,11 @@ export class EventsPanel {
     return true;
   }
 
-  /** Scrolls the page so the first card of kind `kind` starts at the top (the wave event's, opened for a wave). */
+  /** Scrolls the first card of kind `kind` into view, if it is not already (the wave event's, opened for a wave). */
   showCard(kind: string): boolean {
     const card = this.element.querySelector<HTMLElement>(`.events-card--${kind}`);
     if (!card) return false;
-    card.scrollIntoView?.({ block: "start" });
+    card.scrollIntoView?.({ block: "nearest" });
     return true;
   }
 
