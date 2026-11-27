@@ -63,6 +63,8 @@ export interface LadderClaimReport {
   event: string;
   tier: number;
   granted: GrantedReward[];
+  /** The yard's `rewards` after the claim, when it paid into them. */
+  rewards?: Record<string, unknown>;
 }
 
 /**
@@ -171,7 +173,14 @@ export const eventsActions = (store: EventProgressStore, fixed?: readonly EventD
       }
 
       const plan = planGrant(save, tier.rewards, now);
-      const report: LadderClaimReport = { event: event.id, tier: body.tier, granted: plan.granted };
+      // The yard's prizes after it (a Korath power, Monster Madness crystals): the
+      // page keeps them in its save, which a yard answer does not carry.
+      const report: LadderClaimReport = {
+        event: event.id,
+        tier: body.tier,
+        granted: plan.granted,
+        ...(plan.slices.rewards && { rewards: plan.slices.rewards }),
+      };
       return {
         report,
         credit: plan.credit,

@@ -1,4 +1,5 @@
 import {
+  YardChampionCrystalSchema,
   YardChampionFeedSchema,
   YardChampionForgetSchema,
   YardChampionRaiseSchema,
@@ -7,6 +8,7 @@ import {
   YardChampionStanceSchema,
   YardChampionTypedSchema,
 } from "../../schemas/YardSchemas.js";
+import { spendCrystal } from "../../services/events/championCrystals.js";
 import { korathRaisable } from "../../services/inferno/korath.js";
 import {
   championCancelEggGoneErr,
@@ -40,6 +42,30 @@ export const yardChampionRaiseAction = defineYardAction({
     planChampionRaise(save, body.type, now, {
       korath: body.type === KORATH_TYPE && (await korathRaisable(em, user.userid)),
     }),
+});
+
+/**
+ * `POST /bm/yard/champion/crystal` — spend one Monster Madness crystal on
+ * Gorgo, Drull, Fomor or Korath: his next ability, whether or not the player
+ * has him yet (`services/events/championCrystals.ts`). Refusals:
+ * `409 notCrystalChampion`, `409 noCrystal`, `409 allAbilities`.
+ * The report: `{ type, abilities, crystals, hasChampion, rewards }`.
+ */
+export const yardChampionCrystalAction = defineYardAction({
+  schema: YardChampionCrystalSchema,
+  run: ({ save, body }) => {
+    const spent = spendCrystal(save, body.type);
+    return {
+      report: {
+        type: spent.type,
+        abilities: spent.abilities,
+        crystals: spent.crystals,
+        hasChampion: spent.hasChampion,
+        rewards: spent.rewards,
+      },
+      slices: { rewards: spent.rewards, ...(spent.champions && { champion: spent.champions }) },
+    };
+  },
 });
 
 /** `POST /bm/yard/champion/cancel-egg` — gone with the eggs (owner, 2026-10-28): `410 eggsRemoved`. */

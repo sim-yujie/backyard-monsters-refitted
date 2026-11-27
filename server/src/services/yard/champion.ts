@@ -11,7 +11,7 @@ import {
   type FeedRecipe,
 } from "../../game-data/championCatalogue.js";
 import { Status } from "../../enums/StatusCodes.js";
-import { korathPowerOf } from "../../game-data/events/monsterMadness.js";
+import { powerLevelFor } from "../events/championCrystals.js";
 import { championByType, forgetHabits, hasHabits, hasMode, type ChampionStance } from "../../game-rules/combat/index.js";
 import { ClientSafeError } from "../../middleware/clientSafeError.js";
 import type { ChampionData } from "../../schemas/ChampionSchema.js";
@@ -298,9 +298,10 @@ export const planChampionRaise = (
     ft: now + entry.feedTime,
     fd: 0,
     fb: 0,
-    // Korath hatches with the power won in Monster Madness, if any
-    // (`services/events/korathPower.ts`); every other champion at the catalogue's.
-    pl: entry.t === KORATH_TYPE ? Math.max(entry.powerLevel, korathPowerOf(save.rewards)) : entry.powerLevel,
+    // A champion hatches with the abilities its Monster Madness crystals
+    // unlocked, if any (`services/events/championCrystals.ts`; Korath's are
+    // his powers, `korathPower.ts`); Krallen at the catalogue's.
+    pl: powerLevelFor(save.rewards, entry.t, entry.powerLevel),
     status: CHAMPION_STATUS.ACTIVE,
   };
   if (existing >= 0) champions[existing] = champion;

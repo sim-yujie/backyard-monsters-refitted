@@ -42,9 +42,22 @@ const tribePrice = (level: number): number =>
 export const tribeTakeoverPoints = (level: number): number =>
   Math.round(Math.exp((tribePrice(level) - OUTPOST_INTERCEPT) / OUTPOST_SLOPE));
 
-/** The points one takeover scores: a tribe camp by its level, a player's outpost its empire value. */
+/**
+ * The most a player's outpost scores (owner, 27 Nov 2026): a top tribe camp's
+ * value, about level 44's. Before, an outpost scored its whole empire value,
+ * so a big player's outposts traded between friends were worth far more than
+ * any camp (the loophole the Monster Madness check found).
+ */
+export const PLAYER_OUTPOST_POINTS_CAP = 3_200_000;
+
+/**
+ * The points one takeover scores: a tribe camp by its level, a player's
+ * outpost its empire value up to {@link PLAYER_OUTPOST_POINTS_CAP}.
+ */
 export const takeoverPoints = (target: { tribe: boolean; level: number; empireValue: number }): number =>
-  target.tribe ? tribeTakeoverPoints(target.level) : Math.max(0, Math.floor(target.empireValue) || 0);
+  target.tribe
+    ? tribeTakeoverPoints(target.level)
+    : Math.min(PLAYER_OUTPOST_POINTS_CAP, Math.max(0, Math.floor(target.empireValue) || 0));
 
 /** The events that count takeovers and are on at `now`. */
 export const takeoverEventsOn = (now: number, events: readonly EventDefinition[] = liveEvents()): EventDefinition[] =>
