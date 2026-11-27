@@ -270,7 +270,7 @@ describe("a wave's landing", () => {
     expect(save.buildingdata!["7"]).toBeDefined();
     expect((save.buildinghealthdata as Record<string, unknown>)["7"]).toBeUndefined();
     expect(save.firedtraps ?? []).not.toContain(7);
-    expect(save.champion).toEqual([{ t: 1, l: 3, hp: 5000 }]);
+    expect(save.champion as unknown).toEqual([{ t: 1, l: 3, hp: 5000 }]);
     expect(result.housedLost).toBe(0);
     expect(save.buildingdata!["2"]!.rE).toBe(1);
   });
