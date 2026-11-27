@@ -4,6 +4,7 @@ import { Assets, Texture, type Graphics } from "pixi.js";
 import type { BaseLoadResponse } from "@/api/types";
 import { readYard } from "./yardModel";
 import { YardGround } from "./YardGround";
+import { setClassicLook } from "@/game/classicLook";
 
 /**
  * One cohesive ground (#197): grass is laid over the whole world and a margin
@@ -135,5 +136,36 @@ describe("YardGround", () => {
       ground.destroy();
     }
     snow.destroy();
+  });
+
+  it("snows at Christmas on the grass grounds, each look its own snow; a picked ground and lava stay", async () => {
+    try {
+      setClassicLook(false);
+      for (const id of ["meadow", "original"] as const) {
+        const modern = new YardGround(id);
+        modern.setSeason("christmas");
+        expect(await fetched(modern)).toEqual([1, 2, 3, 4].map((n) => `/assets/yardbg/snow/layer${n}@2x.webp`));
+      }
+      const desert = new YardGround("desert");
+      desert.setSeason("christmas");
+      expect((await fetched(desert))[0]).toBe("/assets/yardbg/desert/layer1@2x.webp");
+
+      setClassicLook(true);
+      const classic = new YardGround("original");
+      classic.setSeason("christmas");
+      expect(await fetched(classic)).toEqual([1, 2, 3, 4].map((n) => `/assets/yardbg/snow-classic/layer${n}.webp`));
+      expect(classic.rangeInk()).not.toBeNull();
+      const rock = new YardGround("rock");
+      rock.setSeason("christmas");
+      expect((await fetched(rock))[0]).toBe("/assets/yardbg/rock/2180_isorock1_isorock1.png");
+
+      // Off again after the event: the grass comes back.
+      const after = new YardGround("original");
+      after.setSeason("christmas");
+      after.setSeason("normal");
+      expect((await fetched(after))[0]).toBe("/assets/yardbg/grass/2174_isograss1_isograss1.png");
+    } finally {
+      setClassicLook(false);
+    }
   });
 });

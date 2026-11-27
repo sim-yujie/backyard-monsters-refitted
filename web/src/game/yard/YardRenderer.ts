@@ -29,7 +29,10 @@ import { onGroundChange } from "./groundChoice";
 import { classicLook } from "@/game/classicLook";
 import { thanksgivingSkin } from "./thanksgivingSkin";
 import { YardTurkeys } from "./YardTurkeys";
-import { YardDressUp } from "./YardDressUp";
+import { thanksgivingDressUp, YardDressUp } from "./YardDressUp";
+import { winterDressUp } from "./winterSkin";
+import { flakeCount, YardSnowfall } from "./YardSnowfall";
+import { quality } from "@/game/quality";
 import { UpgradePreview } from "./UpgradePreview";
 import { upgradeLook } from "./upgradeLook";
 import { BlueprintLayer } from "./planner/BlueprintLayer";
@@ -104,8 +107,12 @@ export class YardRenderer {
   private readonly buildings = new YardBuildings();
   /** Thanksgiving: turkeys roam in place of the mushrooms (`YardTurkeys.ts`). */
   private readonly turkeys = new YardTurkeys(this.buildings);
-  /** Thanksgiving: the props round the plot (`YardDressUp.ts`). */
+  /** Thanksgiving and Christmas: the props round the plot (`YardDressUp.ts`). */
   private readonly dressUp = new YardDressUp(this.buildings);
+  /** Christmas: the falling snow (`YardSnowfall.ts`), sized for the screen and the Quality. */
+  private readonly snowfall = new YardSnowfall();
+  /** The screen size the snow was counted for. */
+  private snowScreen = "";
   /** The ghost of a building's next look while its window offers the upgrade (beta 8); see `setUpgradePreview`. */
   private readonly upgradePreview = new UpgradePreview();
   /** Holds the ghost, so the blueprint view can hide it while the ghost keeps its own visibility. */
@@ -277,6 +284,7 @@ export class YardRenderer {
       this.buildings.shadows,
       this.buildings.tops,
       this.giblets.root,
+      this.snowfall.root,
       this.collect.root,
       this.blueprint.root,
       this.chrome,
@@ -390,11 +398,41 @@ export class YardRenderer {
     this.placeFinds(yard, []);
   }
 
-  /** Lays (or takes away) the Thanksgiving props round the plot, for the yard on screen. */
+  /**
+   * The Christmas snowfall, one frame: counted again when the screen's size
+   * changes (`flakeCount`), then moved. Off outside Christmas, on Low, in an
+   * Inferno yard, with reduced motion asked for, and with `?snow=0` on the
+   * page's address (for frame-time checks).
+   */
+  private fallSnow(visible: Rect, deltaSeconds: number): void {
+    const screen = this.pixi?.screen;
+    if (!screen) return;
+    const on =
+      this.season === "christmas" &&
+      this.yard !== null &&
+      this.yard.kind !== "inferno" &&
+      !prefersReducedMotion() &&
+      !snowSwitchedOff();
+    const key = on ? `${screen.width}x${screen.height}` : "";
+    if (key !== this.snowScreen) {
+      this.snowScreen = key;
+      this.snowfall.setFlakes(on ? flakeCount(screen.width, screen.height, quality()) : 0);
+    }
+    if (this.snowfall.count === 0) return;
+    this.snowfall.root.visible = true;
+    this.snowfall.update(visible, screen.width, screen.height, deltaSeconds);
+  }
+
+  /** Lays (or takes away) the season's props round the plot (Thanksgiving, Christmas), for the yard on screen. */
   private dressYard(): void {
     const yard = this.yard;
-    const on = this.season === "thanksgiving" && yard !== null && yard.kind !== "inferno";
-    void this.dressUp.layout(on ? yard.bounds : null, yard?.savedAt || 1, on ? thanksgivingSkin() : null, classicLook());
+    const surface = yard !== null && yard.kind !== "inferno";
+    const set =
+      !surface ? null
+      : this.season === "thanksgiving" ? thanksgivingDressUp(thanksgivingSkin())
+      : this.season === "christmas" ? winterDressUp()
+      : null;
+    void this.dressUp.layout(set ? yard!.bounds : null, yard?.savedAt || 1, set, classicLook());
   }
 
   /** Buildings still waiting on, or missing, their picture. */
@@ -518,6 +556,9 @@ export class YardRenderer {
       this.shakeMushrooms();
       this.popMushrooms(deltaSeconds);
       if (this.turkeysOn) this.turkeys.update(deltaSeconds);
+      this.fallSnow(visible, deltaSeconds);
+    } else if (this.snowfall.count > 0) {
+      this.snowfall.root.visible = false;
     }
 
     if (this.chromeDirty) {
@@ -1449,6 +1490,7 @@ export class YardRenderer {
     this.popping.clear();
     this.turkeys.destroy();
     this.dressUp.destroy();
+    this.snowfall.destroy();
     this.planner.destroy();
     this.jobBars.destroy();
     this.hatchMarks.destroy();
@@ -1719,3 +1761,13 @@ const JOB_BAR_CLEARANCE = BAR_HEIGHT + 22;
 
 /** Corners as the flat point list `Graphics.poly` wants. */
 const flatten = (corners: Corners): number[] => corners.flatMap(([x, y]) => [x, y]);
+
+/** `?snow=0` (or `off`) on the page's address: no falling snow, to time frames with and without it. Read once. */
+let snowOff: boolean | null = null;
+const snowSwitchedOff = (): boolean => {
+  if (snowOff === null) {
+    const asked = typeof location === "undefined" ? null : new URLSearchParams(location.search).get("snow");
+    snowOff = asked === "0" || asked === "off";
+  }
+  return snowOff;
+};

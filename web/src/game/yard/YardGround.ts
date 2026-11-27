@@ -3,6 +3,8 @@ import type { Season } from "@/game/season";
 import { noiseMask } from "./groundNoise";
 import { currentGround, GROUNDS, groundUrls, type GroundId, type GroundSpec } from "./groundChoice";
 import { leafSpots, PROP_BOXES, PROP_SCALE, PROPS_ART, recolourGround, thanksgivingSkin } from "./thanksgivingSkin";
+import { CLASSIC_SNOW } from "./winterSkin";
+import { classicLook } from "@/game/classicLook";
 import type { YardBounds } from "./YardGrid";
 import { artUrl } from "../../artUrl";
 
@@ -171,11 +173,16 @@ export class YardGround {
     this.root.addChild(this.surround, this.plot, this.clip, this.boundary);
   }
 
-  /** The ground's art now: lava in the Inferno, the event's dress on a grass ground, else the pick. */
+  /**
+   * The ground's art now: lava in the Inferno, the event's dress on a grass
+   * ground (Halloween's dusk; Christmas's snow, each look its own:
+   * `winterSkin.ts`), else the pick.
+   */
   private spec(): GroundSpec {
     if (this.terrain === "lava") return LAVA;
     const picked = GROUNDS[this.ground];
     if (picked.grass && this.season === "halloween") return SPOOKY;
+    if (picked.grass && this.season === "christmas") return classicLook() ? CLASSIC_SNOW : GROUNDS.snow;
     return picked;
   }
 
