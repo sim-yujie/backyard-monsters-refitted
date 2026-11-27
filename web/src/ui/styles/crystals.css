@@ -716,3 +716,31 @@
     text-overflow: ellipsis;
   }
 }
+
+/* ── Layout check (CI, 27 Nov 2026): the list keeps a few rows on short screens ── */
+@media (max-height: 600px) {
+  /* The switch already says how many crystals are held. */
+  .crystal-abilities__head {
+    display: none;
+  }
+
+  .crystal-abilities {
+    gap: var(--space-1);
+  }
+}
+
+@media (max-height: 500px) {
+  .crystal-abilities__rows {
+    padding: 2px;
+  }
+
+  .crystal-abilities__inspector {
+    min-height: 26px;
+    padding: 1px var(--space-2);
+    font-size: var(--text-xs);
+  }
+
+  .champion-tab__views {
+    margin-top: var(--space-1);
+  }
+}
