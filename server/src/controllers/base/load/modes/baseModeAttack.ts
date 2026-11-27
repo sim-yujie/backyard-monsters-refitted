@@ -36,7 +36,7 @@ import { catchUpArmiesForAttack } from "../../../../services/yard/armies.js";
 import { getOutpostOwnerSave } from "../../../../services/base/getOutpostOwnerSave.js";
 import { poolAmounts } from "../../../../services/base/combat/attackLoot.js";
 import { autobankOwner } from "../../../../services/maproom/v2/autobank.js";
-import { academyLevels } from "../../../../services/base/combat/abandonedAttack.js";
+import { surfaceArmyLevels } from "../../../../services/inferno/surfaceLevels.js";
 import { academyRanks } from "../../../../game-rules/combat/index.js";
 import { mr2NeighbourBonusMode } from "../../../../config/MapRoom2Config.js";
 import { loadFriendlyNeighbourCount } from "../../../../services/maproom/v2/neighbourDefence.js";
@@ -375,7 +375,9 @@ export const baseModeAttack = async ({
   // The attacker's academy levels after that catch-up, and whether Declare War
   // runs for them: frozen into the session and served to the client, so the
   // battle is fought with these however either moves meanwhile (issue #201).
-  const attackerAcademy = academyLevels(userSave.academy);
+  // An Inferno monster brought up through the Cavern fights at its Inferno
+  // Academy level (beta 10, `surfaceArmyLevels`).
+  const attackerAcademy = await surfaceArmyLevels(userSave, armies.entryHoused);
   // The Monster Lab ranks, frozen the same way (issue #352).
   const attackerRanks = academyRanks(userSave.academy);
 

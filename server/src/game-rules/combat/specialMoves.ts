@@ -124,8 +124,11 @@ export const WEAKEN_SECONDS = 5;
 
 /** C6 Ichi: "Thorns". */
 export const ICHI_ID = "C6";
-/** What share of the health it actually lost goes back at the striker: 10%, 15%, 20%. */
-export const thornsShare = (rank: number): number => (5 + 5 * rank) / 100;
+/**
+ * What share of the health it actually lost goes back at the striker: 7%, 10%,
+ * 13% (beta 10, owner, desk b10-numbers, 27 Nov 2026; was 10%, 15%, 20%).
+ */
+export const thornsShare = (rank: number): number => (4 + 3 * rank) / 100;
 
 /** C10 Crabatron: "Critical Hits". */
 export const CRABATRON_ID = "C10";

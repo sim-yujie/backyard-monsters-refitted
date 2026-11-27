@@ -144,8 +144,8 @@ describe("the Defences screen", () => {
       row.querySelector(".defences-row__unavailable")?.textContent,
     ]);
     expect(words).toEqual([
-      [true, "Replay not available after a game update"],
-      [true, "Replay not available after a game update"],
+      [true, "Recorded before beta 10"],
+      [true, "Recorded before beta 10"],
       [true, "Replay not available"],
     ]);
   });
@@ -206,7 +206,7 @@ describe("Watch", () => {
       [DEFENCE_GONE_TEXT, async () => Promise.reject(new ApiError("That defence could not be found.", { status: 404 }))],
       [DEFENCE_LOAD_FAILED_TEXT, async () => Promise.reject(new Error("offline"))],
       // The server updated its rules since the list was fetched.
-      ["Replay not available after a game update", async (id) => replayAnswer(defence({ id, rulesVersion: "0000000000000000" }))],
+      ["Recorded before beta 10", async (id) => replayAnswer(defence({ id, rulesVersion: "0000000000000000" }))],
     ];
     for (const [words, replay] of cases) {
       const { host, onWatch } = await openDoor(fakeApi([defence()], replay));

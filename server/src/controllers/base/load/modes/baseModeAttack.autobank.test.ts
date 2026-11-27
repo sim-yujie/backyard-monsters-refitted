@@ -411,3 +411,27 @@ describe("the hatch quest at the attack load (patch 7.8)", () => {
     expect(jobQuestEvents(catchUpArmyRow(outpost as never, defenderMain() as never, now()).jobs)).toEqual({});
   });
 });
+
+describe("the attack load's levels for Inferno monsters (beta 10)", () => {
+  test("an Inferno monster brought up through the Cavern fights at its Inferno Academy level", async () => {
+    const attackerSave = tables.get(Save)!.find((row) => row.basesaveid === 2526)!;
+    attackerSave.baseid_inferno = 7001;
+    attackerSave.academy = { C1: { level: 4 } };
+    attackerSave.monsters = { housed: { C1: 5, IC2: 4 } };
+    // Housing to keep them and a Flinger to send them.
+    attackerSave.buildingdata = {
+      ...(attackerSave.buildingdata as Row),
+      "2": { id: 2, t: 15, X: 400, Y: 0, l: 3 },
+      "3": { id: 3, t: 5, X: 0, Y: 400, l: 3 },
+    };
+    tables.get(Save)!.push({ basesaveid: 7002, baseid: "7001", userid: ATTACKER, type: "inferno", academy: { IC2: { level: 3 } } });
+    attackerSave.homebase = ["241", "207"];
+    attackerSave.flinger = 3;
+
+    const session = await attack(OUTPOST_BASEID);
+
+    expect(session?.entryHoused).toEqual({ "2000241207": { C1: 5, IC2: 4 } });
+    // Before beta 10 the surface read the main Academy only, so IC2 fought at level 1.
+    expect(session?.attackerAcademy).toEqual({ C1: 4, IC2: 3 });
+  });
+});
