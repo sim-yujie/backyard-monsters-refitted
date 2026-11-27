@@ -558,8 +558,32 @@
     display: none;
   }
 
-  .wave-hud .wave-hud__plaque .wave-hud__label-mid {
+  .wave-hud .wave-hud__plaque .wave-hud__label-mid,
+  .wave-hud .wave-hud__divider,
+  .wave-hud .wave-hud__start .wave-hud__start-icon {
     display: none;
+  }
+
+  .wave-hud .wave-hud__tray {
+    gap: 6px;
+  }
+
+  .wave-hud .wave-hud__monsters {
+    gap: 3px;
+  }
+
+  .wave-hud .wave-hud__monster {
+    width: 38px;
+  }
+
+  .wave-hud .wave-hud__monsters .wave-hud__portrait,
+  .wave-hud .wave-hud__monsters .wave-hud__secret {
+    width: 36px;
+    height: 36px;
+  }
+
+  .wave-hud .wave-hud__prize {
+    padding-inline: 6px 8px;
   }
 
   .wave-hud .wave-hud__plaque .wave-hud__label-short,
@@ -1055,7 +1079,10 @@
   }
 
   .wave-status--in-strip .wave-status__bar {
-    width: 44px;
+    flex: 1 1 44px;
+    width: auto;
+    min-width: 36px;
+    max-width: 72px;
   }
 
   .wave-status--in-strip .wave-status__percent {
@@ -1275,6 +1302,12 @@
   flex: 0 1 130px;
 }
 
+/* The surrender check: two long words, an even split. */
+.wave-surrender .wave-result__actions .btn {
+  flex: 1 1 0;
+  padding-inline: 14px;
+}
+
 /* The totem's moment: its art in a gold glow. */
 .wave-totem__stage {
   display: flex;
@@ -1335,6 +1368,12 @@
 
   .wave-result__actions .btn--outline {
     flex-basis: 104px;
+  }
+
+  .wave-surrender .wave-result__actions .btn {
+    flex: 1 1 0;
+    padding-inline: 10px;
+    font-size: 13px;
   }
 
   .wave-result__actions .wave-hud__start-icon {
@@ -1399,11 +1438,11 @@
 }
 
 .events-card--wave .events-card__banner {
-  max-height: 76px;
+  max-height: 92px;
 }
 
 .events-card--wave .events-card__banner-image {
-  object-position: left top;
+  object-position: left center;
 }
 
 /* The Flash strips are much wider than the Modern band. */
@@ -1458,10 +1497,7 @@
   }
 
   .events-card--wave .events-card__text {
-    display: -webkit-box;
-    overflow: hidden;
-    -webkit-line-clamp: 1;
-    -webkit-box-orient: vertical;
+    margin-block: 2px;
   }
 
   .wave-card__next {
@@ -1485,8 +1521,22 @@
   }
 
   .wave-card__start {
+    flex-shrink: 0;
     min-height: 40px;
     justify-self: end;
+    white-space: nowrap;
+  }
+
+  .wave-card__start .wave-hud__start-icon {
+    display: none;
+  }
+}
+
+/* Upright iPads and phones: a wrapped Start spans the card, as Claim does. */
+@media (max-width: 900px) and (min-height: 451px) {
+  .wave-card__start {
+    flex-basis: 100%;
+    max-width: none;
   }
 }
 
