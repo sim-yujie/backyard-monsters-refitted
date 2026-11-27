@@ -2,6 +2,7 @@ import type { Page } from "@playwright/test";
 import {
   openAchievements,
   openBaiterPreview,
+  openChampionAbilities,
   openFriendsScreen,
   openMoveTray,
   openRepeatResult,
@@ -135,6 +136,19 @@ export const WINDOWS: readonly WindowCase[] = [
     allTabs: true,
     inSight: ".locker-detail__action",
     open: dock("monsters"),
+  },
+  {
+    // The Champion tab's Abilities view (Monster Madness crystals, 27 Nov
+    // 2026): four champion rows and Unlock, the first row's Unlock in sight.
+    id: "champion-abilities",
+    optional: true,
+    why: "the yard has no Champion Cage or Chamber, so no Champion tab",
+    label: "Champion abilities",
+    panel: ".monsters-screen",
+    items: ".crystal-row",
+    tabs: false,
+    inSight: ".crystal-abilities__held",
+    open: openChampionAbilities,
   },
   {
     // The round Friends button opens this popup (FriendsWindow.ts) in the modal layer.
