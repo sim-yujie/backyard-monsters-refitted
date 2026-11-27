@@ -56,6 +56,7 @@ import { FOMOR_ID } from "@/game/combat/rules/champions";
 import { DAVE_ID } from "@/game/combat/rules/specialMoves";
 import { BlastFx, type PunchyStrength } from "./blastFx";
 import { RingFx } from "./ringFx";
+import { ABILITY_LOOKS, BubbleFx, abilityStateTint, pounceLift, type BubbleAt } from "./abilityFx";
 import {
   BANDITO_PUNCHY,
   QUAKE_PUNCHY,
@@ -309,6 +310,9 @@ export const groundWorld = (ix: number, iy: number, origin: Point): Point => ({
  */
 export const abilityTint = (creep: CreepSnapshot | null): number => {
   if (!creep) return 0xffffff;
+  // Gorgo's stone, Acid Spit's green, a stun's daze (Monster Madness abilities).
+  const state = abilityStateTint(creep);
+  if (state !== null) return state;
   if (creep.burning) return 0xffb070;
   if (creep.enraged || creep.puttied) return 0xff9cff;
   if (creep.lootBoosted) return 0xa8ff80;
@@ -381,6 +385,10 @@ export const layoutCreep = (
   } else if (creep.flying) {
     altitude = flyerAltitude(creep.monsterId);
     y += options.reducedMotion ? -altitude : hoverOffset(pose.age, altitude);
+  } else if (creep.leap !== undefined && !options.reducedMotion) {
+    // Drull's Pounce: up and over in an arc, drawn over what he leaps.
+    altitude = pounceLift(creep.leap);
+    y -= altitude;
   } else if (creep.hop !== undefined && !options.reducedMotion) {
     // Malphus over a wall: its body sorts by the height it is drawn at, like a
     // flyer's, so it shows over the wall rather than behind it.
@@ -896,6 +904,8 @@ export class AttackBattleLayer {
   private readonly buildingBars: BuildingBars;
   /** The towers' stickers over their bars: "weakened" by an Octo-ooze (owner, beta 6). */
   private readonly towerStatus: TowerStatusIcons;
+  /** Fomor's Bubbles round the creeps that have one (Monster Madness abilities). */
+  private readonly bubbleFx = new BubbleFx();
   private readonly traps = new TrapReveal();
   private readonly bursts: Burst[] = [];
   private readonly scorches: Graphics[] = [];
@@ -1104,6 +1114,7 @@ export class AttackBattleLayer {
         : null;
     });
     this.effects.addChild(this.towerStatus.root);
+    this.effects.addChild(this.bubbleFx.root);
     // The blast over the bars; the splats it leaves come after, over it.
     this.effects.addChild(this.blastAir);
 
@@ -1209,7 +1220,7 @@ export class AttackBattleLayer {
     this.siegeFx.update(siege, shown);
     this.lootFx.update(shown);
     this.showBombNumbers(shown);
-    this.towerStatus.sync(battle.weakenedTowers());
+    this.towerStatus.sync(battle.weakenedTowers(), battle.abilityMarks?.().stunned ?? []);
 
     if (this.damageDirty) {
       this.damageDirty = false;
@@ -1477,6 +1488,7 @@ export class AttackBattleLayer {
     this.towerFx.destroy();
     this.buildingBars.destroy();
     this.towerStatus.destroy();
+    this.bubbleFx.destroy();
     for (const burst of this.bursts) burst.ring.destroy();
     this.bursts.length = 0;
     for (const scorch of this.scorches) scorch.destroy();
@@ -1705,7 +1717,12 @@ export class AttackBattleLayer {
 
   /** Bars and hurt tints, once this frame's bullets have landed. */
   private paintCreeps(tick: number): void {
+    const bubbles: BubbleAt[] = [];
     for (const view of this.views.values()) {
+      const shield = view.snapshot?.shield ?? 0;
+      if (shield > 0 && !this.died.has(view.id)) {
+        bubbles.push({ x: view.lastX, y: view.lastY, top: view.top, shield });
+      }
       const bar = view.snapshot?.champion ? CHAMPION_BAR : BAR;
       view.barFront.width = Math.max(0, bar.width * this.shownFraction(view));
       view.body.tint =
@@ -1718,6 +1735,7 @@ export class AttackBattleLayer {
       this.paintGlint(view, tick);
       this.paintZombie(view, tick);
     }
+    this.bubbleFx.draw(bubbles);
   }
 
   /**
@@ -2628,6 +2646,10 @@ export class AttackBattleLayer {
       );
       return;
     }
+    if (event.kind === "ability") {
+      this.onAbility(event);
+      return;
+    }
     if (event.kind === "quake") {
       this.spawnQuake(event.tick, groundWorld(event.ix, event.iy, this.origin), event.radius);
       return;
@@ -2820,6 +2842,29 @@ export class AttackBattleLayer {
       }
     }
     this.splats.push({ tick, at, radius, disc, gibs });
+  }
+
+  /**
+   * One of Gorgo's, Drull's or Fomor's abilities went off (Monster Madness,
+   * `abilityFx.ts`): rings in its colour round the champion to its reach and
+   * where it landed, its word over the champion, and a punchy blast for the
+   * heavy ones.
+   */
+  private onAbility(event: Extract<BattleVisualEvent, { kind: "ability" }>): void {
+    const look = ABILITY_LOOKS[event.ability];
+    const view = this.views.get(event.creepId);
+    const ground = view ? { x: view.lastX, y: view.lastY } : groundWorld(event.ix, event.iy, this.origin);
+    const to =
+      event.toIx !== undefined && event.toIy !== undefined
+        ? groundWorld(event.toIx, event.toIy, this.origin)
+        : null;
+    if (event.radius > 0) this.spawnRing(event.tick, ground, event.radius, look.colour);
+    if (to && look.landRing > 0) this.spawnRing(event.tick, to, look.landRing, look.colour);
+    if (look.punchy) this.punchy(event.tick, ground, Math.max(40, event.radius * 0.6), look.punchy);
+    // A Pounce shows its word as he takes off, not again as he lands.
+    if (!look.word || (event.ability === "pounce" && !to)) return;
+    const at = { x: ground.x, y: (view?.top ?? ground.y - BODY_HEIGHT) - 14 };
+    this.fx.word(event.tick, `ability:${event.creepId}`, event.creepId, look.word, at);
   }
 
   /**
