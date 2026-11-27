@@ -67,6 +67,8 @@ import {
   type RaidScreen,
 } from "./raidStore.js";
 import { countAfterCommit } from "../alliance/allianceProgress.js";
+import { isWaveTribe } from "../events/waves/waveTribe.js";
+import { landWave } from "../events/waves/waveLanding.js";
 
 /**
  * The server's side of a wild monster raid, end to end (#226 WP3,
@@ -671,11 +673,13 @@ const settleRaid = async (
 
       const outcome = raid.outcome as RaidFightOutcome;
       completed = await catchUpLockedRow(tx, locked, now);
-      const landed = landRaid(locked, { id: raid.id, tribe: raid.tribe, startedAt: raid.startedAt ?? now, outcome }, now);
+      let landed = landRaid(locked, { id: raid.id, tribe: raid.tribe, startedAt: raid.startedAt ?? now, outcome }, now);
+      // A wave event's wave: counted, and its prizes paid, with the landing (`events/waves/waveLanding.ts`).
+      if (isWaveTribe(raid.tribe)) landed = { ...landed, wave: await landWave(tx, locked, user.userid, raid.plan, outcome) };
       // Quests: a wild monster raid held off (the raid's own good defence, the
       // one that pays Shiny; not the Trojan Horse or Moloch) is a held defence
       // for the weekly Fighting quest, on the locked main row.
-      if (landed.defended && raid.tribe !== TROJAN_TRIBE && raid.tribe !== MOLOCH_TRIBE) {
+      if (landed.defended && raid.tribe !== TROJAN_TRIBE && raid.tribe !== MOLOCH_TRIBE && !isWaveTribe(raid.tribe)) {
         recordQuests(locked, now, { defenceWin: 1 });
       }
       // Moloch's stage is played once its raid lands: the next load stops

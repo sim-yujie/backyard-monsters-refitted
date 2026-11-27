@@ -12,6 +12,7 @@ import { landHousingLoss, lostCount } from "../base/combat/housingLoss.js";
 import { storedDamage } from "../base/storedDamage.js";
 import { damagedBuildings } from "../yard/repair.js";
 import { MOLOCH_TRIBE } from "../inferno/emergenceRaid.js";
+import { isWaveTribe, type WaveResult } from "../events/waves/waveTribe.js";
 import type { RaidFightOutcome } from "./raidFight.js";
 import {
   readSchedule,
@@ -116,6 +117,8 @@ export interface RaidResult {
   readonly damaged: readonly number[];
   /** Housed monsters lost with fallen Housings. */
   readonly housedLost: number;
+  /** A wave event's wave: its own result (`events/waves/waveLanding.ts`). */
+  readonly wave?: WaveResult;
 }
 
 /** The raid being landed. */
@@ -169,6 +172,8 @@ export const landRaid = (save: RaidLandingSave, raid: RaidLandingInput, now: num
   const { outcome } = raid;
   const isTrojan = raid.tribe === TROJAN_TRIBE;
   const isMoloch = raid.tribe === MOLOCH_TRIBE;
+  // A wave event's wave lands as Moloch's does, and steals nothing (owner, 27 Nov 2026).
+  const isWave = isWaveTribe(raid.tribe);
   const healthBefore = save.buildinghealthdata;
 
   buildingDataHandler(buildingDataWithout(save.buildingdata as JsonObject, outcome.firedTraps), save as Save);
@@ -191,7 +196,7 @@ export const landRaid = (save: RaidLandingSave, raid: RaidLandingInput, now: num
 
   const keyOfId = new Map(Object.entries(buildingdata).map(([key, building]) => [String(building?.id ?? key), key]));
   const stolen: Record<ResourceKey, number> = { r1: 0, r2: 0, r3: 0, r4: 0 };
-  for (const [id, gave] of Object.entries(outcome.harvesterLoss)) {
+  for (const [id, gave] of Object.entries(isWave ? {} : outcome.harvesterLoss)) {
     const key = keyOfId.get(id);
     const building = key === undefined ? undefined : buildingdata[key];
     const resource = building ? HARVESTER_RESOURCE[Number(building.t)] : undefined;
@@ -205,7 +210,7 @@ export const landRaid = (save: RaidLandingSave, raid: RaidLandingInput, now: num
   save.buildingdata = buildingdata;
 
   const resources: JsonObject = { ...(save.resources ?? {}) };
-  for (const key of RESOURCES) {
+  for (const key of isWave ? [] : RESOURCES) {
     const held = Math.max(0, amount(resources[key]));
     const taken = Math.min(held, Math.max(0, Math.trunc(outcome.bankLoss[key])));
     if (taken <= 0) continue;
@@ -216,14 +221,14 @@ export const landRaid = (save: RaidLandingSave, raid: RaidLandingInput, now: num
   if (isTrojan) save.buildingdata = withoutTrojanHorse(save.buildingdata as BuildingDataMap);
 
   const defended = outcome.healthShare >= GOOD_DEFENCE_SHARE;
-  const rewarded = defended && !isTrojan && !isMoloch;
+  const rewarded = defended && !isTrojan && !isMoloch && !isWave;
   const shiny = rewarded ? GOOD_DEFENCE_SHINY : 0;
   if (shiny > 0) save.credits = amount(save.credits) + shiny;
   if (rewarded) save.onboarding = countRaidSurvived(save);
   // Goal D1, "First Blood": one raider killed, as Flash's `kills: 1`
   // (`markRaidSeen`). Not for the Trojan Horse or Moloch, which earn no goal
   // credit (above).
-  if (!isTrojan && !isMoloch && outcome.creepsKilled > 0) {
+  if (!isTrojan && !isMoloch && !isWave && outcome.creepsKilled > 0) {
     const seen = markRaidSeen(save, now);
     if (seen) save.onboarding = seen;
   }
@@ -242,7 +247,7 @@ export const landRaid = (save: RaidLandingSave, raid: RaidLandingInput, now: num
   save.aiattacks = scheduleColumn(
     isTrojan
       ? recordTrojanFinished(schedule, record, now)
-      : isMoloch
+      : isMoloch || isWave
         ? recordEmergenceFinished(schedule, record)
         : recordRaidFinished(schedule, record)
   );

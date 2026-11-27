@@ -103,10 +103,15 @@
  * but beta 9's other changes move its battles, so 8.7's 92ea2dbbfe06531c is
  * not listed.
  *
+ * Beta 10's wave events (Wild Monster Invasion) add `level`, `rank` and
+ * `rage` to a raid wave (`RaidEvent`); a wave without them spawns as before,
+ * and no attack has raid waves, so beta 9's 15bf255b01aafabc still plays the
+ * same.
+ *
  * Add the version a change replaces only when that change moves no battle.
  * A change that moves any battle result must empty this list.
  */
-export const COMPATIBLE_RULES_VERSIONS: readonly string[] = [];
+export const COMPATIBLE_RULES_VERSIONS: readonly string[] = ["15bf255b01aafabc"];
 
 /**
  * Whether a battle stamped with the rules version `stamp` plays to its stored
