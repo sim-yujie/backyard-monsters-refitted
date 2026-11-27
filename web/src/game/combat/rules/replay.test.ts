@@ -206,10 +206,11 @@ describe("golden replays", () => {
   // look and turns only on a defender that reaches or hits her, as in Flash.
   // An attack started under older rules is replayed with `flashKrallen` off
   // and plays as it was fought: these are both Krallen fixtures' digests
-  // under 8.6's rules before that change.
+  // under 8.6's rules before that change, on beta 10's monster numbers (the
+  // stats are not versioned, so they moved with the rebalance).
   it.each([
-    ["mixed-waves", "ace764b2df7d60a0"],
-    ["korath-and-krallen", "ba2e64367ed6247c"],
+    ["mixed-waves", "aa8fbe2ad0f1a0f0"],
+    ["korath-and-krallen", "23d57a6fed691af5"],
   ])("%s replays to its old digest under older rules (flashKrallen off)", (name, digest) => {
     const fixture = read<Fixture>(`${FIXTURE_DIR}${name}.json`);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -221,14 +222,14 @@ describe("golden replays", () => {
   // Whole health (player report, Reii, 25 Nov 2026): Flash keeps a monster's
   // health whole (`SecNum.Set` rounds it). An attack started under older rules
   // is replayed with `wholeHealth` off and plays as it was fought: these are
-  // every fixture's digests under patch 8.6's rules.
+  // every fixture's digests under patch 8.6's rules, on beta 10's numbers.
   it.each([
     ["both-caged-champions", "c07e954543467057"],
-    ["bunker-defence", "2de3cd0499385cea"],
-    ["burrow-rush", "53831507368691ad"],
-    ["caged-champion", "3ed24369a24d4933"],
-    ["caged-korath", "d2e32fb103b3d28f"],
-    ["champion-and-bunkers", "4219b7c8ebcf4bf2"],
+    ["bunker-defence", "1293b7515d7c8c1f"],
+    ["burrow-rush", "03d2b9970bbb1349"],
+    ["caged-champion", "549a5b3aa725dfd8"],
+    ["caged-korath", "7993d392693c1db8"],
+    ["champion-and-bunkers", "484d2f4f3edb4111"],
     ["champion-brain", "1380f0c9edcb5603"],
     ["champion-defensive", "fb4f893d5708a583"],
     ["champion-offensive", "6599382b177c1975"],
@@ -236,16 +237,16 @@ describe("golden replays", () => {
     ["empty-yard", "0541193f927361a1"],
     // Its Fomors at power level 1 since the Monster Madness abilities (27 Nov
     // 2026): the rage of power levels 2 and 3 went with them, so its 8.6
-    // digest at 3 and 2 (6ce49ed9d17d7a57) is no longer reachable.
-    ["fomor-both-sides", "744f6bd6e267995c"],
-    ["korath-and-krallen", "6f9a4e725bdd0bf4"],
-    ["lab-abilities", "51688836711f72f8"],
-    ["lab-split", "b5eda6f428b9952a"],
-    ["maze", "fa958d6ef25e02d4"],
-    ["mixed-waves", "d4e63b47f6788fd5"],
-    ["outpost-core", "6713db87c1fb3e35"],
-    ["pokey-rush", "08c500fd34fe817f"],
-    ["raid-east", "5bad54817e80c9c3"],
+    // digest at 3 and 2 is no longer reachable.
+    ["fomor-both-sides", "7c67c339ff014763"],
+    ["korath-and-krallen", "8f07859395c3ffbd"],
+    ["lab-abilities", "18e1377918d24153"],
+    ["lab-split", "78eab55c3a3ec15a"],
+    ["maze", "9b2c7d49adb568e3"],
+    ["mixed-waves", "7a87141367037525"],
+    ["outpost-core", "8e506eda7be82a60"],
+    ["pokey-rush", "a21f7ba0d231ecaa"],
+    ["raid-east", "7219ada75dae3b11"],
   ])("%s replays to its 8.6 digest with wholeHealth off", (name, digest) => {
     const fixture = read<Fixture>(`${FIXTURE_DIR}${name}.json`);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

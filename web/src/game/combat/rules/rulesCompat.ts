@@ -103,8 +103,15 @@
  * but beta 9's other changes move its battles, so 8.7's 92ea2dbbfe06531c is
  * not listed.
  *
- * Beta 10's champion abilities (Monster Madness, `championAbilities.ts`,
- * 27 Nov 2026) keep it empty, though they move no stored battle: every live
+ * Beta 10's monster rebalance keeps it empty (owner, desk b10-numbers,
+ * 27 Nov 2026): Crabatron, Wormzer, Project X and Fang health, Wormzer's
+ * housing, Zafreeti's speed, Ichi's Thorns (7/10/13%) and the main yard's
+ * Spurtz brood (at most 2 a cannon) move battles, so no replay stamped with
+ * beta 9's 15bf255b01aafabc plays the same any more; the Defences list says
+ * "Recorded before beta 10" instead (`defenceWatch.ts`).
+ *
+ * Its champion abilities (Monster Madness, `championAbilities.ts`,
+ * 27 Nov 2026) keep it empty too, though they move no stored battle: every live
  * Gorgo, Drull and Fomor holds power level 1, which unlocks none of them, and
  * the rage Fomor's power levels 2 and 3 gave, which they replace, was never
  * held. But a page on the older rules would fling a champion with abilities

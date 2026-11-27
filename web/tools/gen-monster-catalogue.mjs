@@ -58,6 +58,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { monsterStats } from "../../server/src/game-data/stats/monsterStats.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, "../..");
@@ -342,6 +343,42 @@ const D7 = {
   C19: { blocked: false, page: 4, order: 4 },
 };
 
+/**
+ * The beta 10 rebalance (owner, desk card b10-numbers, 27 Nov 2026;
+ * `agent-handoffs/reports/beta10-numbers.md` §1), applied on top of the
+ * source like D7. The numbers are not typed here: each listed key is read
+ * from the server's `monsterStats.ts`, the table the attack gate already
+ * checks, so a later change (Crabatron's `CRABATRON_HATCH_SECONDS`) is one
+ * edit there and a regenerate. `monsterCatalogue.test.ts` checks the two agree.
+ */
+const BALANCE_PROPS = {
+  C5: ["cTime"],
+  C6: ["cResource", "cTime"],
+  C7: ["cResource", "cTime"],
+  C8: ["cResource"],
+  C10: ["cResource", "cTime"],
+  C11: ["cTime"],
+  C12: ["cResource", "cTime"],
+  C13: ["cResource", "cTime", "cStorage"],
+  C14: ["cTime"],
+  C17: ["cResource"],
+  C18: ["cResource"],
+  C19: ["cResource", "cTime"],
+};
+/** Unlock price and Academy research ladder, from `monsterStats.ts` too (Zafreeti -30%, Rezghul research -40%). */
+const BALANCE_RESEARCH = ["C15", "C19"];
+
+const balanceOf = (id) => {
+  const stat = monsterStats[id];
+  const out = {};
+  for (const key of BALANCE_PROPS[id] ?? []) out[key] = [...stat.props[key]];
+  if (BALANCE_RESEARCH.includes(id)) {
+    out.resource = stat.resource;
+    out.trainingCosts = stat.trainingCosts.map(([putty, seconds]) => [putty, seconds]);
+  }
+  return out;
+};
+
 const locker = readTable(LOCKER, "_mainCreatures");
 
 const ids = Object.keys(locker.value);
@@ -426,11 +463,14 @@ for (const one of monsters) {
 
 const rows = monsters.map((one) => {
   const override = D7[one.id] ?? {};
+  const balance = balanceOf(one.id);
   return {
     ...one,
     ...override,
+    ...balance,
     spawnedBy: one.id === "C18" ? one.dependent : null,
     overridden: Object.keys(override),
+    rebalanced: Object.keys(balance),
   };
 });
 
@@ -451,7 +491,7 @@ const infernoRows = INFERNO.map((id) => {
   if (one.blocked) fail(LOCKER, one.line, `${id} is newly blocked`);
   if (one.fake || one.dependent !== null) fail(LOCKER, one.line, `${id} is newly a spawn`);
   if (one.page < 1) fail(LOCKER, one.line, `${id} has no locker page`);
-  return { ...one, spawnedBy: null, overridden: [] };
+  return { ...one, spawnedBy: null, overridden: [], rebalanced: [] };
 });
 const infernoSlots = new Map();
 for (const one of infernoRows) {
@@ -538,7 +578,8 @@ const REVAMP_ABILITIES = [
     description: "Ichi reflects part of the damage it takes back at whatever hit it.",
     upgradeDescription: "Ichi reflects more of the damage it takes.",
     costs: [[500000, 108000], [750000, 108000], [1125000, 108000]],
-    effect: [0.1, 0.15, 0.2],
+    // Beta 10 (owner, desk b10-numbers, 27 Nov 2026): 10/15/20% -> 7/10/13%, no refund.
+    effect: [0.07, 0.1, 0.13],
   },
   {
     id: "C10",
@@ -687,6 +728,7 @@ const steps = (values) => `[${values.map(list).join(", ")}]`;
 const monsterRow = (one) => {
   const notes = [`CREATURELOCKER.as:${one.line}`];
   if (one.overridden.length) notes.push(`D7 sets ${one.overridden.join(", ")}`);
+  if (one.rebalanced.length) notes.push(`beta 10 sets ${one.rebalanced.join(", ")}`);
   return [
     `  // ${one.id} ${one.name} — ${notes.join("; ")}`,
     `  {`,
