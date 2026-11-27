@@ -7,8 +7,17 @@ import {
   krampusAuraSlow,
   krampusSlowPercent,
 } from "./champions.js";
-import { createBattle, type BattleVisualEvent, type CreepSnapshot } from "./engine.js";
-import { championByType, championIds, championStat, isWildChampion } from "./stats.js";
+import {
+  createBattle,
+  type BattleVisualEvent,
+  type CreepSnapshot,
+} from "./engine.js";
+import {
+  championByType,
+  championIds,
+  championStat,
+  isWildChampion,
+} from "./stats.js";
 import { buildEngineYard } from "./yard.js";
 import type { CombatBuildingDataMap, Roster } from "./types.js";
 
@@ -39,7 +48,12 @@ const watch = (
   }
 };
 
-const fling = (battle: Battle, at: number, monsters: Roster, champion?: { t: number; l: number }) =>
+const fling = (
+  battle: Battle,
+  at: number,
+  monsters: Roster,
+  champion?: { t: number; l: number },
+) =>
   battle.apply({
     kind: "fling",
     t: battle.tick,
@@ -70,13 +84,15 @@ describe("Krampus's numbers (proposed, wildChampions.ts)", () => {
   });
 
   it("grows from level 1 to 6", () => {
-    expect([1, 6].map((level) => championStat(KRAMPUS_ID, "health", level))).toEqual([
-      20_000, 110_000,
-    ]);
-    expect([1, 6].map((level) => championStat(KRAMPUS_ID, "damage", level))).toEqual([
-      1_200, 4_000,
-    ]);
-    expect([1, 6].map((level) => championStat(KRAMPUS_ID, "speed", level))).toEqual([2, 3]);
+    expect(
+      [1, 6].map((level) => championStat(KRAMPUS_ID, "health", level)),
+    ).toEqual([20_000, 110_000]);
+    expect(
+      [1, 6].map((level) => championStat(KRAMPUS_ID, "damage", level)),
+    ).toEqual([1_200, 4_000]);
+    expect(
+      [1, 6].map((level) => championStat(KRAMPUS_ID, "speed", level)),
+    ).toEqual([2, 3]);
     expect([1, 6].map(krampusAuraSlow)).toEqual([0.15, 0.4]);
     expect([1, 6].map(krampusAuraRadius)).toEqual([200, 300]);
     expect([1, 3, 6].map(krampusSlowPercent)).toEqual([15, 25, 40]);
@@ -91,7 +107,7 @@ describe("Krampus in a fight", () => {
     expect(krampusOf(battle)).toBeUndefined();
   });
 
-  it("chills the towers and the defending monsters inside its aura once it first looks, never its own side", () => {
+  it("chills towers and defenders in its aura from its first look, never its own side", () => {
     const battle = createBattle(frostYard(), {
       seed: 3,
       wildChampions: true,
@@ -105,9 +121,12 @@ describe("Krampus in a fight", () => {
     expect(battle.chilledTowers()).toEqual([2]);
     let chilledDefender = false;
     watch(battle, 300, () => {
-      if (battle.creeps().some((creep) => creep.friendly && creep.chilled)) chilledDefender = true;
+      if (battle.creeps().some((creep) => creep.friendly && creep.chilled))
+        chilledDefender = true;
       // Its own side, the attackers, never.
-      expect(battle.creeps().some((creep) => !creep.friendly && creep.chilled)).toBe(false);
+      expect(
+        battle.creeps().some((creep) => !creep.friendly && creep.chilled),
+      ).toBe(false);
     });
     expect(chilledDefender).toBe(true);
   });
@@ -121,10 +140,19 @@ describe("Krampus in a fight", () => {
         "2": { id: 2, t: 20, l: 10, X: 0, Y: 200 },
       });
       const battle = createBattle(yard, { seed: 5, wildChampions: true });
-      fling(battle, -40, { C6: 40 }, krampusLevel === null ? undefined : { t: 6, l: krampusLevel });
+      fling(
+        battle,
+        -40,
+        { C6: 40 },
+        krampusLevel === null ? undefined : { t: 6, l: krampusLevel },
+      );
       const ticks: number[] = [];
       watch(battle, 900, (event) => {
-        if (event.kind === "shot" && event.towerId === 2 && event.tick > KRAMPUS_AURA_INTERVAL * 2)
+        if (
+          event.kind === "shot" &&
+          event.towerId === 2 &&
+          event.tick > KRAMPUS_AURA_INTERVAL * 2
+        )
           ticks.push(event.tick);
       });
       expect(ticks.length).toBeGreaterThan(4);
@@ -137,18 +165,81 @@ describe("Krampus in a fight", () => {
     expect(chilled / plain).toBeLessThan(1.85);
   });
 
-  it("slows a chilled defender's walk", () => {
-    const battle = createBattle(frostYard(), {
-      seed: 3,
-      wildChampions: true,
-      bunkers: { 3: { C1: 6 } },
+  it("slows a chilled defender's walk to its level's share", () => {
+    /** Mean step of the bunker's walking Pokeys, the chilled ones only when `chilledOnly`. */
+    const meanStep = (
+      champion: { t: number; l: number },
+      chilledOnly: boolean,
+    ): number => {
+      const battle = createBattle(frostYard(), {
+        seed: 3,
+        wildChampions: true,
+        bunkers: { 3: { C1: 6 } },
+      });
+      fling(battle, 40, { C2: 3 }, champion);
+      const last = new Map<number, CreepSnapshot>();
+      const steps: number[] = [];
+      watch(battle, 400, () => {
+        for (const creep of battle.creeps()) {
+          const before = last.get(creep.id);
+          last.set(creep.id, creep);
+          if (
+            !creep.friendly ||
+            creep.champion ||
+            creep.state !== "walking" ||
+            !before
+          )
+            continue;
+          if (
+            before.state !== "walking" ||
+            (chilledOnly && !(creep.chilled && before.chilled))
+          )
+            continue;
+          const step = Math.hypot(creep.ix - before.ix, creep.iy - before.iy);
+          if (step > 0) steps.push(step);
+        }
+      });
+      expect(steps.length).toBeGreaterThan(10);
+      return steps.reduce((sum, one) => sum + one, 0) / steps.length;
+    };
+    // Beside a Gorgo nothing is chilled; beside a level 6 Krampus they walk 40% slower.
+    const ratio =
+      meanStep({ t: 6, l: 6 }, true) / meanStep({ t: 1, l: 6 }, false);
+    expect(ratio).toBeGreaterThan(0.5);
+    expect(ratio).toBeLessThan(0.7);
+  });
+
+  it("thaws everything when it falls", () => {
+    // Six level 10 Cannon Towers round a harvester: a level 1 Krampus (20,000 health) falls.
+    const yard = yardOf({
+      "1": { id: 1, t: 1, l: 1, X: 0, Y: 0, st: 1_000_000 },
+      ...Object.fromEntries(
+        [
+          [200, 0],
+          [-200, 0],
+          [0, 200],
+          [0, -200],
+          [150, 150],
+          [-150, -150],
+        ].map(([x, y], n) => [
+          String(n + 2),
+          { id: n + 2, t: 20, l: 10, X: x, Y: y },
+        ]),
+      ),
     });
-    fling(battle, 40, { C2: 3 }, { t: 6, l: 6 });
-    let seen = false;
-    watch(battle, 400, () => {
-      for (const creep of battle.creeps()) if (creep.friendly && creep.chilled) seen = true;
+    const battle = createBattle(yard, { seed: 3, wildChampions: true });
+    fling(battle, -20, {}, { t: 6, l: 1 });
+    let chilledWhileAlive = 0;
+    watch(battle, 8000, () => {
+      if ((krampusOf(battle)?.hp ?? 0) > 0)
+        chilledWhileAlive = Math.max(
+          chilledWhileAlive,
+          battle.chilledTowers().length,
+        );
     });
-    expect(seen).toBe(true);
+    expect(chilledWhileAlive).toBeGreaterThan(0);
+    expect(krampusOf(battle)?.hp ?? 0).toBeLessThanOrEqual(0);
+    expect(battle.chilledTowers()).toEqual([]);
   });
 
   it("lets everything go when it is called back", () => {
@@ -176,7 +267,9 @@ describe("Krampus in a fight", () => {
       fling(battle, 40, { C2: 3 }, { t: 6, l: 4 });
       watch(battle, 600);
       return JSON.stringify(
-        battle.creeps().map((creep) => [creep.id, creep.ix, creep.iy, creep.hp]),
+        battle
+          .creeps()
+          .map((creep) => [creep.id, creep.ix, creep.iy, creep.hp]),
       );
     };
     expect(play()).toBe(play());

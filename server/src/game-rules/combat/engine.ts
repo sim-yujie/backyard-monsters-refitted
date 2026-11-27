@@ -3063,6 +3063,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * splits into nothing.
    */
   const onDeath = (creep: Creep): void => {
+    // Krampus's frost thaws the moment it falls (beta 10).
+    if (creep.monsterId === KRAMPUS_ID && creep.aura) releaseFrost(creep, creep.aura);
     // `dieFinish` files every dead creep but a champion or a disposable one as
     // a corpse where it fell (`MonsterBase.as:1206-1217`).
     if (!creep.champion && !creep.disposable) {
