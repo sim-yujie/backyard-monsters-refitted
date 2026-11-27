@@ -73,7 +73,7 @@ const penaltyOf = (progress: EventProgress): { from: number; to: number } | null
 };
 
 /** A player with nothing known: may take part, no Krallen. */
-const ANYONE: EventPlayer = { townHall: Number.POSITIVE_INFINITY, tutorialDone: true, krallenLevel: 0 };
+const ANYONE: EventPlayer = { townHall: Number.POSITIVE_INFINITY, tutorialDone: true, krallenLevel: 0, mapRoom2: true };
 
 /** The calendar as the player stands in it at `now`. */
 export const calendarView = (

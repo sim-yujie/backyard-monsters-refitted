@@ -718,6 +718,12 @@ export class EventsPanel {
       if (view.refusal?.key === key) list.append(refusalNote(view.refusal.message));
     });
     section.append(head);
+    // Why the player cannot take part ("Move to Map Room 2 to take part."), above the goals.
+    if (event.locked !== null) {
+      const note = el("p", "events-ladder__locked");
+      note.append(eventsArt("lock", 18, "events-ladder__lock"), el("span", "", event.locked));
+      section.append(note);
+    }
     if (goalBar) section.append(goalsBar(ladder));
     section.append(list);
     return section;

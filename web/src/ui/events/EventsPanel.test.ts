@@ -764,6 +764,15 @@ describe("EventsPanel: Monster Madness goals", () => {
     panel.render(list([madness(50_000_000)]));
     expect(panel.element.querySelector(".events-ladder--goals .events-goals__bar")).not.toBeNull();
     expect(panel.element.querySelectorAll(".events-tier__claim")).toHaveLength(1);
+    expect(panel.element.querySelector(".events-ladder__locked")).toBeNull();
+  });
+
+  it("on Map Room 1: says to move to Map Room 2, above the goals", () => {
+    const { panel } = mounted();
+    panel.render(list([{ ...madness(0), locked: "Move to Map Room 2 to take part." }]));
+    const note = panel.element.querySelector(".events-ladder--goals .events-ladder__locked");
+    expect(note?.textContent).toBe("Move to Map Room 2 to take part.");
+    expect(note?.nextElementSibling?.classList.contains("events-goals")).toBe(true);
   });
 });
 

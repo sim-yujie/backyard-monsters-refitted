@@ -70,7 +70,8 @@ export const monsterMadnessRun = (startsAt: number, id = `${MONSTER_MADNESS_ID}-
   endsAt: iso(Math.floor(startsAt) + MONSTER_MADNESS_DAYS * 24 * 60 * 60),
   banner: "/events/monster-madness-banner.jpg",
   ladder: { label: "Takeover points", source: "takeovers", tiers: MONSTER_MADNESS_LADDER },
-  requires: { tutorial: true },
+  // Only Map Room 2 outposts score, so a player on Map Room 1 is told to move first.
+  requires: { tutorial: true, mapRoom2: true },
   claimDays: MONSTER_MADNESS_CLAIM_DAYS,
 });
 

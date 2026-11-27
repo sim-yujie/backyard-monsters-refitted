@@ -4,6 +4,7 @@ import type { BuildingDataMap } from "../../types/BuildingData.js";
 import { TUTORIAL_DONE_STAGE } from "../onboarding/guidedStart.js";
 import { townHallLevel } from "../yardplanner/costs.js";
 import { krallenAuraUntilOf, krallenLevelOf } from "./krallenReward.js";
+import { onMapRoom2 } from "./mr2Welcome.js";
 import { readChampions } from "../yard/champion.js";
 import { KRALLEN_TYPE } from "../../game-data/events/eventRewards.js";
 
@@ -20,6 +21,8 @@ export interface EventPlayer {
   readonly tutorialDone: boolean;
   /** Krallen's level, 0 for none. */
   readonly krallenLevel: number;
+  /** Whether the main yard is on Map Room 2 (`onMapRoom2`). */
+  readonly mapRoom2: boolean;
   /** When Krallen's loot aura runs out (unix s), 0 or absent for none. */
   readonly krallenAuraUntil?: number;
 }
@@ -29,6 +32,8 @@ export interface EventPlayerSave {
   buildingdata?: BuildingDataMap | null;
   tutorialstage?: unknown;
   champion?: unknown;
+  mr2upgraded?: boolean | null;
+  mapversion?: number | null;
 }
 
 export const eventPlayerOf = (
@@ -38,6 +43,7 @@ export const eventPlayerOf = (
   townHall: townHallLevel(save?.buildingdata),
   tutorialDone: skipTutorial || (Number(save?.tutorialstage) || 0) >= TUTORIAL_DONE_STAGE,
   krallenLevel: krallenLevelOf(save?.champion),
+  mapRoom2: onMapRoom2(save),
   krallenAuraUntil: krallenAuraUntilOf(
     readChampions(save?.champion).find((one) => Math.trunc(Number(one.t)) === KRALLEN_TYPE)
   ),
@@ -51,5 +57,6 @@ export const lockedReason = (event: EventDefinition, player: EventPlayer): strin
     return `Reach Town Hall ${needs.townHall} to take part.`;
   }
   if (needs.tutorial && !player.tutorialDone) return "Finish the guided start to take part.";
+  if (needs.mapRoom2 && !player.mapRoom2) return "Move to Map Room 2 to take part.";
   return null;
 };

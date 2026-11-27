@@ -593,6 +593,8 @@ describe("takeoverCell: Monster Madness points", () => {
     progress = memoryProgressStore();
     useTakeoverStore(progress);
     takerSave.tutorialstage = 205;
+    // Only a player on Map Room 2 takes part (`requires.mapRoom2`).
+    takerSave.mapversion = 2;
   });
 
   afterEach(() => {
