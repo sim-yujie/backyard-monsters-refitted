@@ -328,5 +328,5 @@
   .smart-move .attack-window__body--more-below {
     -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent);
     mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent);
-  }}
+  }
 }
