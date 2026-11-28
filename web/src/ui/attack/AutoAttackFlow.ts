@@ -37,6 +37,7 @@ import { armyParts, campHead, movesPart, roomParts, shortageList, watchMoreRows 
 import { resultView } from "./autoAttackResultView";
 import { RepeatBar } from "./RepeatBar";
 import { REAL_TIMERS, type BarTimers } from "./repeatBarTiming";
+import { repeatFreeze, repeatLook } from "./repeatLook";
 import { watchQueuePlace } from "./repeatQueue";
 import { artUrl } from "@/artUrl";
 import "@/ui/styles/autoattack.css";
@@ -114,7 +115,9 @@ const sheet = (title: string, className: string): { backdrop: HTMLElement; panel
   // the confirm and refusal ones since the lead's vetting, 16 Nov 2026).
   backdrop.className = `popup-backdrop attack-end__backdrop${
     className.includes("auto-attack--bar") ? " auto-attack__backdrop--bar" : ""
-  }${/auto-attack--(confirm|failed|result)/.test(className) ? " auto-attack__backdrop--card" : ""}`;
+  }${/auto-attack--(confirm|failed|result)/.test(className) ? " auto-attack__backdrop--card" : ""}${
+    className.includes("auto-attack--look-c") ? " auto-attack__backdrop--banner" : ""
+  }`;
   const panel = new Panel({ title, closable: false, className: `map-panel attack-end auto-attack ${className}` });
   panel.element.setAttribute("role", "dialog");
   panel.element.setAttribute("aria-modal", "true");
@@ -522,14 +525,22 @@ export class AutoAttackFlow {
    */
   private async runWithBar(): Promise<void> {
     const timers = this.options.barTimers ?? REAL_TIMERS;
+    const look = repeatLook();
     const bar = new RepeatBar({
       plan: this.plan,
       timers,
+      look,
+      freeze: repeatFreeze,
       ...(this.options.barReducedMotion === undefined ? {} : { reducedMotion: this.options.barReducedMotion }),
     });
     this.bar = bar;
     const line = workingLine();
-    this.show("Repeat attack", "auto-attack--running auto-attack--bar", [bar.element, line.element], []);
+    this.show(
+      "Repeat attack",
+      `auto-attack--running auto-attack--bar${look === "today" ? "" : ` auto-attack--look auto-attack--look-${look}`}`,
+      [bar.element, line.element],
+      [],
+    );
     bar.start();
     const ask = this.calls.queue;
     const stopWatching = ask
@@ -538,6 +549,7 @@ export class AutoAttackFlow {
           if (place === null) bar.resume();
           else bar.hold();
           line.show(place);
+          bar.showPlace(place);
         }, timers)
       : () => {};
     try {
@@ -546,6 +558,7 @@ export class AutoAttackFlow {
       // The answer came before the next ask saw the turn: march on now.
       bar.resume();
       line.show(null);
+      bar.showPlace(null);
       for (let left = bar.remainingMs(); left > 0; left = bar.remainingMs()) await timers.wait(left);
       // Before the closed check: a landed attack is always reported.
       this.options.onAttacked?.(result);

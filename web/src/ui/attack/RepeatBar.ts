@@ -14,6 +14,8 @@ import {
   waitingProgress,
   type BarTimers,
 } from "./repeatBarTiming";
+import type { RepeatLook } from "./repeatLook";
+import { FIGHT_AT, buildRepeatLook, showLookPlace } from "./repeatLooks";
 import "@/ui/styles/repeat-bar.css";
 
 /**
@@ -49,6 +51,8 @@ export interface Marcher {
   /** How many of the kind; null for a champion. */
   readonly count: number | null;
   readonly name: string;
+  /** A champion's level. */
+  readonly level?: number;
 }
 
 /**
@@ -64,7 +68,7 @@ export const marchersOf = (plan: Pick<PlanSummary, "monsters" | "champions"> | n
     .map(([id, count]): Marcher => ({ picture: monsterPortrait(id, "icon"), count, name: monsterName(id) }));
   const champions = plan.champions.map((champion): Marcher => {
     const id = championByType(champion.t) ?? `G${champion.t}`;
-    return { picture: championPortrait(id, champion.l, "icon"), count: null, name: championName(champion.t) };
+    return { picture: championPortrait(id, champion.l, "icon"), count: null, name: championName(champion.t), level: champion.l };
   });
   return [...kinds, ...champions];
 };
@@ -90,10 +94,14 @@ const picture = (className: string, src: string): HTMLImageElement => {
 
 export interface RepeatBarOptions {
   /** The attack being repeated: who marches, and to which tribe. */
-  readonly plan: Pick<PlanSummary, "monsters" | "champions" | "tribe"> | null;
+  readonly plan: (Pick<PlanSummary, "monsters" | "champions" | "tribe"> & { readonly level?: number }) | null;
+  /** Today's bar, or one of the prototype looks (`?repeatLook=`, Review Desk 28 Nov 2026). */
+  readonly look?: RepeatLook;
   readonly timers?: BarTimers;
   readonly reducedMotion?: boolean;
   readonly minMs?: number;
+  /** Holds the march at this point (the desk's pictures, `?repeatFreeze=`). */
+  readonly freeze?: number | null | (() => number | null);
 }
 
 export class RepeatBar {
@@ -111,9 +119,12 @@ export class RepeatBar {
   private heldAt: number | null = null;
   /** Time spent in the line so far. */
   private heldMs = 0;
+  private readonly freeze: number | null | (() => number | null);
+  private readonly look: RepeatLook;
 
   constructor(options: RepeatBarOptions) {
     this.timers = options.timers ?? REAL_TIMERS;
+    this.freeze = options.freeze ?? null;
     this.minMs = options.minMs ?? REPEAT_BAR_MIN_MS;
     const reduced = options.reducedMotion ?? prefersReducedMotion();
 
@@ -122,9 +133,14 @@ export class RepeatBar {
     root.setAttribute("aria-label", "Attacking");
     root.setAttribute("aria-valuemin", "0");
     root.setAttribute("aria-valuemax", "100");
-    const track = part("repeat-bar__track");
-    root.append(track);
-    this.buildArmy(root, track, options.plan);
+    this.look = options.look ?? "today";
+    if (this.look === "today") {
+      const track = part("repeat-bar__track");
+      root.append(track);
+      this.buildArmy(root, track, options.plan);
+    } else {
+      buildRepeatLook(this.look, root, options.plan);
+    }
     this.element = root;
     this.paint(0);
   }
@@ -217,6 +233,11 @@ export class RepeatBar {
   /** Moves the bar to where it should be now. Called each frame; the tests call it by hand. */
   update(): void {
     if (this.state !== "running" || this.heldAt !== null) return;
+    const frozen = typeof this.freeze === "function" ? this.freeze() : this.freeze;
+    if (frozen !== null) {
+      this.paint(frozen);
+      return;
+    }
     this.paint(waitingProgress(this.timers.now() - this.startedAt, this.minMs));
   }
 
@@ -246,6 +267,16 @@ export class RepeatBar {
     this.progress = Math.max(this.progress, Math.min(1, value));
     this.element.style.setProperty("--repeat-progress", this.progress.toFixed(4));
     this.element.setAttribute("aria-valuenow", String(Math.round(this.progress * 100)));
+    if (this.look !== "today") {
+      // The prototype looks: the march, then the fight at the camp's gate.
+      this.element.style.setProperty("--march", Math.min(1, this.progress / FIGHT_AT).toFixed(4));
+      this.element.classList.toggle("repeat-bar--fighting", this.progress >= FIGHT_AT);
+    }
+  }
+
+  /** The place in the server's battle line, for the looks that show it on the bar. */
+  showPlace(place: number | null): void {
+    if (this.look !== "today") showLookPlace(this.element, place);
   }
 
   /* ── The army ──────────────────────────────────────────────────────────── */
