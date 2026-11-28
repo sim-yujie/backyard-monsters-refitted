@@ -5,6 +5,11 @@
  * the light theme follow.
  */
 
+/* The Classic banners are Flash strips (718x89), much wider than the Modern band: shown whole. */
+.events-card__banner--yards.events-card__banner--classic {
+  aspect-ratio: 718 / 89;
+}
+
 /* Brukkarg War: the wave part (wave track, "Start wave N") above the yards. */
 .yard-card-parts {
   display: flex;
