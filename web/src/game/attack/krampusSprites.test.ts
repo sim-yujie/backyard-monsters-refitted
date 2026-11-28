@@ -39,7 +39,7 @@ describe("Krampus's battle sheets (G6, beta 10)", () => {
     return [head.readUInt32BE(0), head.readUInt32BE(4)];
   };
 
-  it("has every sheet the size its table row says: 8 headings by 23 rows, Classic at 1x, Modern at 2x", () => {
+  it("has every sheet the size its table row says: 8 headings by 24 rows, Classic at 1x, Modern at 2x", () => {
     for (const sheet of Object.values(KRAMPUS_SPRITES)) {
       expect(sheet.rows).toBe(KRAMPUS_ROWS);
       expect(pngSize(sheet.file)).toEqual([sheet.width, sheet.height]);

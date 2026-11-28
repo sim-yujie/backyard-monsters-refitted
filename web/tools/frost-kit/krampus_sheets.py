@@ -7,13 +7,19 @@ Inputs, 5 columns (headings: front, front-left, left, back-left, back) x 4 rows 
 kid (levels 1-2), beast (3-4), armour (5-6), like Krallen's three looks over her levels:
   Modern   art-samples/frost-tribe/kb-<look>-walk/sheet.png
   Classic  art-samples/frost-tribe/classic/cl-<look>-walk/sheet.png (the Modern sheet redrawn in the Flash render look)
-The attack (10 frames) and stomp (9 frames) are each heading's idle pose bent by `krampus_motion.py` (owner,
+Stand (his idle), painted (Codex) to match the walk (owner, 28 Nov 2026, desk Krampus: "Paint him a true standing
+pose"; the idle had been a walk pass, a hind hoof lifted in one heading):
+  Modern   art-samples/frost-tribe/stand/m-<look>/sheet.png
+  Classic  art-samples/frost-tribe/stand/c-<look>/sheet.png
+Each holds the walk's grid: row 1 the stand, rows 2-4 the walk's rows 2-4 beside it (Codex kept them as they were,
+so `stand_scale` comes out 1.0; it is kept as a guard should a sheet ever be repainted at another size).
+The attack (10 frames) and stomp (9 frames) are each heading's stand bent by `krampus_motion.py` (owner,
 28 Nov 2026: the painted attack frames were "horrendous"; one body in every frame now).
 
 Sheet layout (`krampusSprites.ts`): 8 headings, `directionOffset` -22.5, so column 0 faces right (E), 1 SE, 2 S
 (towards the viewer), 3 SW, 4 W, 5 NW, 6 N, 7 NE; columns 2-6 are painted, 0, 1 and 7 are 4, 3 and 5 mirrored about
-the anchor (a goat is left/right symmetric). Rows 0-3 the walk (row 0 a pass, his hooves under him: the idle;
-the strides narrowed, `narrow`), 4-13 the attack, 14-22 the stomp. The body is scaled
+the anchor (a goat is left/right symmetric). Row 0 the stand (the idle), rows 1-4 the walk (starting on a pass,
+the strides narrowed, `narrow`), 5-14 the attack, 15-23 the stomp. The body is scaled
 so its front-left idle stands BODY_H[level] px tall at 1x (Gorgo L1 35, L3 55, L6 67; Korath L3 54; Drull L6 82),
 its hooves on the anchor, with a soft ground shadow baked in as Korath's and Krallen's repaints have. Both looks share
 one frame size and anchor, so one table row serves both.
@@ -101,23 +107,62 @@ SOURCES = {
     "modern": lambda look: ART / f"kb-{look}-walk" / "sheet.png",
     "classic": lambda look: ART / "classic" / f"cl-{look}-walk" / "sheet.png",
 }
+STANDS = {
+    "modern": lambda look: ART / "stand" / f"m-{look}" / "sheet.png",
+    "classic": lambda look: ART / "stand" / f"c-{look}" / "sheet.png",
+}
+
+
+def stand_scale(stand_grid, walk_grid):
+    """The stand sheet's size against the walk's: its repainted walk rows (1-3) against the walk's own, by body
+    height, the median over every heading and row (both painted at one scale per sheet)."""
+    ratios = []
+    for r in range(1, 4):
+        for h in range(5):
+            a, b = body(walk_grid[r][h]), body(stand_grid[r][h])
+            ratios.append((a[3] - a[1]) / max(1, b[3] - b[1]))
+    return float(np.median(ratios))
+
+
+def scaled(cell, k):
+    return cell.resize((max(1, round(cell.width * k)), max(1, round(cell.height * k))), Image.LANCZOS)
 
 
 def build(style, look):
-    """Every cell of one look: [kind rows][painted heading], and the front-left idle's height."""
+    """Every cell of one look: [kind rows][painted heading], each row's ground point source ("walk" or "stand"),
+    and the front-left walk's height (the level's size)."""
     # room round each painted cell for the lunge and the rear-up to move into
-    walk = [[pad(cell) for cell in row] for row in cells(SOURCES[style](look))]
+    painted = cells(SOURCES[style](look))
+    stand_grid = cells(STANDS[style](look))
+    k = stand_scale(stand_grid, painted)
+    stand = [pad(scaled(cell, k)) for cell in stand_grid[0]]
+    print(style, look, "stand scale", round(k, 3))
+    walk = [[pad(cell) for cell in row] for row in painted]
     # Owner, 28 Nov 2026 (desk frost-abil2): "standing quite awkwardly ... his legs are far apart". The painted
     # cycle is stride, pass, stride, pass; the strides are drawn closer under him (STRIDE_NARROW) and the cycle
     # starts on a pass, so his stand (row 0, the idle) and the attack and stomp moved from it stand square.
     walk = [[narrow(cell, STRIDE_NARROW) if r % 2 == 0 else cell for cell in row] for r, row in enumerate(walk)]
     walk = walk[1:] + walk[:1]
-    rows = [list(row) for row in walk]
+    rows = [stand] + [list(row) for row in walk]
+    feet = ["stand"] + ["walk"] * WALK_FRAMES
     for kind, count in (("attack", ATTACK_FRAMES), ("stomp", STOMP_FRAMES)):
         for f in range(count):
-            rows.append([motion(walk[0][h], h, kind, f) for h in range(5)])
+            rows.append([motion(stand[h], h, kind, f) for h in range(5)])
+            feet.append("stand")
     h_idle = np.median([body(walk[r][1])[3] - body(walk[r][1])[1] for r in range(WALK_FRAMES)])
-    return rows, h_idle
+    return rows, feet, h_idle
+
+
+def ground_points(grid, feet, pcol):
+    """Where each row stands for one painted heading: the walk's frames share their median foot; the stand (and
+    the attack and stomp moved from it) stands on its own hooves, its body over the pass's (row 1), so going from
+    walk to stand never shifts him sideways (the hooves' middle moves with the pose: a side-on stand's legs are
+    square under him, a pass's are not)."""
+    walk = [body(grid[1 + r][pcol]) for r in range(WALK_FRAMES)]
+    walk_foot = (float(np.median([f[4] for f in walk])), float(np.median([f[3] for f in walk])))
+    s, p = body(grid[0][pcol]), walk[0]
+    stand_foot = ((s[0] + s[2]) / 2 - ((p[0] + p[2]) / 2 - walk_foot[0]), float(s[3]))
+    return [walk_foot if src == "walk" else stand_foot for src in feet]
 
 
 def place(cell, scale, foot, fw, fh, ax, ay, flip=False):
@@ -156,18 +201,22 @@ def save(im, path):
 def main():
     rows = {}
     looks = {(style, look): build(style, look) for style in SOURCES for look in ("kid", "beast", "armour")}
+    for (style, look), (grid, _, h_walk) in looks.items():
+        # the stand against the walk's pass, per heading: height and width (1.0 = the same)
+        stats = []
+        for h in range(5):
+            a, b = body(grid[0][h]), body(grid[1][h])
+            stats.append(f"{(a[3] - a[1]) / (b[3] - b[1]):.2f}/{(a[2] - a[0]) / (b[2] - b[0]):.2f}")
+        print(style, look, "stand/pass height/width per heading", " ".join(stats))
     for level in range(1, 7):
         built = {style: looks[(style, LOOK[level])] for style in SOURCES}
-        scales = {style: BODY_H[level] * UP / h_idle for style, (_, h_idle) in built.items()}
+        scales = {style: BODY_H[level] * UP / h_idle for style, (_, _, h_idle) in built.items()}
         # frame size: the largest scaled body of either look (every cell), measured from the ground point
         # each cell is placed on (its heading's walk foot), so a lunge that moves the whole body stays inside
         reach_x = up = down = 0.0
-        for style, (grid, _) in built.items():
+        for style, (grid, feet, _) in built.items():
             for pcol in range(5):
-                feet = [body(grid[r][pcol]) for r in range(WALK_FRAMES)]
-                fx = float(np.median([f[4] for f in feet]))
-                fy = float(np.median([f[3] for f in feet]))
-                for row in grid:
+                for row, (fx, fy) in zip(grid, ground_points(grid, feet, pcol)):
                     bx0, by0, bx1, by1, _ = body(row[pcol])
                     reach_x = max(reach_x, max(bx1 - fx, fx - bx0) * scales[style])
                     up = max(up, (fy - by0) * scales[style])
@@ -178,19 +227,17 @@ def main():
         # 8 px under the hooves at least, for the baked shadow (as before)
         fh = ay + max(8 * UP, int(np.ceil((max(down, 0) + 6 * UP) / (2 * UP))) * 2 * UP)
         ax = fw // 2
-        for style, (grid, _) in built.items():
+        for style, (grid, feet, _) in built.items():
             scale = scales[style]
             nrows = len(grid)
             sheet = Image.new("RGBA", (fw * 8, fh * nrows), (0, 0, 0, 0))
-            idle = body(grid[0][1])
+            idle = body(grid[1][1])
             idle_w = float(idle[2] - idle[0]) * float(scale)
             for pcol in range(5):
-                # one ground point per heading, from its walk frames, so the moved frames stand where the walk does
-                feet = [body(grid[r][pcol]) for r in range(WALK_FRAMES)]
-                foot = (float(np.median([f[4] for f in feet])), float(np.median([f[3] for f in feet])))
+                points = ground_points(grid, feet, pcol)
                 for r in range(nrows):
                     frame = shadow(fw, fh, ax, ay, idle_w * 0.85)
-                    frame.alpha_composite(place(grid[r][pcol], scale, foot, fw, fh, ax, ay))
+                    frame.alpha_composite(place(grid[r][pcol], scale, points[r], fw, fh, ax, ay))
                     for col, painted in PAINTED.items():
                         if painted == pcol:
                             sheet.alpha_composite(frame, (col * fw, r * fh))
