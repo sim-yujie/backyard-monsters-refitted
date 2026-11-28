@@ -708,6 +708,13 @@
   outline-color: #5c3317;
 }
 
+/* "Works from Korath level N": Modern's pale amber vanished on Classic's cream (owner, 28 Nov 2026).
+   A burnt orange still reads as a hint, about 5.6:1 on the cream. */
+:root[data-skin="flash"] .crystal-abilities__note,
+:root[data-skin="flash"] .crystal-dialog__note {
+  color: #a34100;
+}
+
 /* A phone on its side: the list keeps every pixel; the description stays one line. */
 @media (max-height: 500px) {
   .crystal-abilities__inspector {

@@ -1,0 +1,13 @@
+Generate an image using your image generation tool (one image only). Then save the final PNG as sheet.png in the current working directory.
+
+Reference 1 is the APPROVED icon set (eleven premium skill icons the owner accepted). A new icon must look like it belongs to the same set: same painterly high-end finish, same lighting (one dark main mass, a crisp cold silver-white rim light tracing its edges, glossy detail), same full-bleed square painting with the same thin dark bronze bevelled frame, same smooth glowing single-colour background field behind the subject. Reference 2 shows the four champions of the game "Backyard Monsters"; number 3 is Fomor (purple winged spiky beast).
+
+The icon is BUBBLE (Fomor shields the most hurt monster near him in a protective energy bubble). The owner liked the earlier bubble but said the monster inside has a CARTOON FACE (big round yellow eyes, open grinning mouth, cute expression). So: NO visible face, NO eyes, NO mouth, NO teeth, nothing cute or goofy. The creature inside is a dark menacing SILHOUETTE: shape, spikes, wings and claws only, lit by the cold rim light. NO white outline, NO sticker border, NO cartoon gloss.
+
+THE KEY RULE: shown at only 30 x 30 pixels, so ONE large simple shape built from two or three value blocks: the big glowing aqua-cyan sphere, the dark creature mass inside it, and the deep navy field. No small particles, no tiny sparks, no busy background.
+
+Layout: 1536 x 1024, three equal squares side by side in one row, each about 460 x 460, centred vertically, separated by flat pure black (#000000) gaps of at least 40 px. Each square is a full-bleed painting with the thin dark bronze bevelled frame of Reference 1, on a smooth deep navy-blue glow background.
+(1) A large translucent glowing aqua-cyan energy sphere filling most of the square, glassy with one bright curved highlight; inside it a dark spiky winged monster curled up tight, seen from BEHIND / above: back spikes, folded bat wings and tail only, head tucked away so no face shows; cold silver rim light on the spikes.
+(2) The same large aqua-cyan sphere, with a dark spiky monster inside as a near-black SILHOUETTE in side view, crouched and protected, wings half-spread against the inner wall of the sphere; the head is a dark horned shape with no eyes and no mouth visible; the sphere's hexagonal energy shimmer faintly on its surface.
+(3) Fomor's huge dark purple-black bat wing curving around from the left, cradling a large glowing aqua-cyan energy sphere; inside the sphere a small dark spiky monster silhouette with no visible face; cold silver rim light on the wing's edge.
+No text, letters or numbers.
