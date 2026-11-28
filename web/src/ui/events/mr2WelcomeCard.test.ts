@@ -13,6 +13,7 @@ import {
   welcomeDay,
   welcomeDaysText,
   welcomeLeftText,
+  welcomeStartsText,
 } from "./mr2WelcomeCard";
 
 const DAY = 86_400;
@@ -56,14 +57,46 @@ describe("the pass's numbers", () => {
     expect(welcomeLeftText(0, 7)).toBe("0/7 left");
   });
 
-  it("counts the day of the 10 from the player's own start, kept inside 1 to 10", () => {
-    const start = 1_000_000;
+  it("counts the day in daily resets (00:00 UTC) from the start's day, kept inside 1 to 10 (owner, 28 Nov)", () => {
+    const start = 11 * DAY;
     expect(welcomeDay(start, start)).toBe(1);
     expect(welcomeDay(start, start + DAY - 1)).toBe(1);
     expect(welcomeDay(start, start + 3 * DAY + 5)).toBe(4);
     expect(welcomeDay(start, start + 10 * DAY - 1)).toBe(10);
     expect(welcomeDay(start, start + 12 * DAY)).toBe(10);
     expect(welcomeDay(start, start - 5)).toBe(1);
+    // A start off a reset (an older server): still the UTC day, not 24 hours from it.
+    expect(welcomeDay(start + DAY - 60, start + DAY + 30)).toBe(2);
+  });
+
+  it("Rygnus (live, 28 Nov): 7 uses on 7 resets land on days 1-7, today is day 8 of 10", () => {
+    // His pass from before patch 9.1: joined 21 Nov 2026 03:56 UTC; the server now sends day 1's 00:00
+    // and the old end rounded up to the next reset (2 Dec 00:00).
+    const joined = 1_795_233_362;
+    const startsAt = Math.floor(joined / DAY) * DAY;
+    const endsAt = Date.parse("2026-12-02T00:00:00Z") / 1000;
+    const kitUses = [1_795_233_733, 1_795_307_246, 1_795_397_401, 1_795_486_975, 1_795_575_899, 1_795_651_994, 1_795_744_345];
+    const takeoverUses = [1_795_233_713, 1_795_307_238, 1_795_397_396, 1_795_486_969, 1_795_575_892, 1_795_651_989, 1_795_744_340];
+    const now = Date.parse("2026-11-28T03:02:48Z") / 1000;
+    // Against a server before 9.1 (raw start) the days come out the same.
+    for (const start of [startsAt, joined]) expect(kitUses.map((at) => welcomeDay(start, at))).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    const card = mr2WelcomeCard(
+      status({ startsAt, endsAt, daysLeft: 4, takeoverLeft: 0, kitLeft: 0, takeover: false, kit: false, takeoverUses, kitUses }),
+      now,
+      vi.fn(),
+    );
+    const all = marks(card);
+    expect(all).toHaveLength(10);
+    expect(all.map((mark) => mark.querySelectorAll("[data-used-reward]").length)).toEqual([2, 2, 2, 2, 2, 2, 2, 0, 0, 0]);
+    expect(all.map(stateOfMark).slice(6, 9)).toEqual(["gone", "today", "left"]);
+    expect(card.querySelector(".events-welcome__timeline")?.getAttribute("aria-label")).toBe("Day 8 of 10");
+    // The days left count his extra day: 28, 29, 30 Nov and 1 Dec.
+    expect(card.querySelector("[data-welcome-ends]")?.textContent).toBe("4 days left");
+    // His extra day (1 Dec) shows as a longer day 10, still lit as today.
+    const timeline = card.querySelector<HTMLElement>(".events-welcome__timeline")!;
+    paintWelcomeTimeline(timeline, Date.parse("2026-12-01T12:00:00Z") / 1000);
+    expect(all.map(stateOfMark).slice(8)).toEqual(["gone", "today"]);
+    expect(welcomeDaysText(endsAt, Date.parse("2026-12-01T12:00:00Z") / 1000)).toBe("1 day left");
   });
 });
 
@@ -74,7 +107,7 @@ const stateOfMark = (mark: HTMLElement) =>
 describe("the day timeline", () => {
   it("draws 10 marks: the days gone, today lit, the days left", () => {
     // A player who joined Map Room 2 after launch: their own start, day 4 of 10.
-    const start = 5_000_000;
+    const start = 57 * DAY;
     const card = mr2WelcomeCard(status({ startsAt: start, endsAt: start + 10 * DAY, daysLeft: 7 }), start + 3 * DAY + 60, vi.fn());
     const all = marks(card);
     expect(all.map((mark) => mark.textContent)).toEqual(["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]);
@@ -109,6 +142,45 @@ describe("the day timeline", () => {
     paintWelcomeTimeline(timeline, 9 * DAY + 1);
     expect(marks(card).map(stateOfMark).slice(8)).toEqual(["gone", "today"]);
     expect(marks(card)[0]?.hasAttribute("aria-current")).toBe(false);
+  });
+});
+
+describe("before the first reset (owner, 28 Nov: the pass starts at the next 00:00 UTC)", () => {
+  // Joined at 17:48 UTC; the pass starts at the next midnight.
+  const startsAt = 30 * DAY;
+  const now = startsAt - 6 * 3_600 - 12 * 60;
+  const ahead = () =>
+    mr2WelcomeCard(status({ startsAt, endsAt: startsAt + 10 * DAY, takeover: false, kit: false, nextDayAt: startsAt }), now, vi.fn());
+
+  it("says when it starts instead of the days left, kept for the tick", () => {
+    expect(welcomeStartsText(startsAt, now)).toBe("Starts in 6h 12m");
+    const line = ahead().querySelector<HTMLElement>(".events-welcome__days-text");
+    expect(line?.textContent).toBe("Starts in 6h 12m");
+    expect(line?.dataset["welcomeStarts"]).toBe(String(startsAt));
+    expect(line?.dataset["welcomeEnds"]).toBeUndefined();
+  });
+
+  it("lights no day, nothing ready, no Go button", () => {
+    const card = ahead();
+    expect(marks(card).map(stateOfMark)).toEqual(Array(10).fill("left"));
+    expect(card.querySelector(".events-welcome__timeline")?.getAttribute("aria-label")).toBe("Starts in 6h 12m");
+    for (const key of ["takeover", "kit"]) {
+      expect(stateOf(card, key)?.textContent).toBe(WELCOME_STATE_TEXT.soon);
+      expect(leftOf(card, key)).toBe("7/7 left");
+    }
+    expect(card.querySelector(".events-welcome__go")).toBeNull();
+    // Nothing used: no empty stamp row.
+    expect(card.querySelector(".events-welcome__timeline--unused")).not.toBeNull();
+  });
+
+  it("at the reset: day 1 lit and both rewards Ready today", () => {
+    const card = ahead();
+    paintWelcomeTimeline(card.querySelector<HTMLElement>(".events-welcome__timeline")!, startsAt);
+    expect(marks(card).map(stateOfMark)[0]).toBe("today");
+    for (const key of ["takeover", "kit"]) {
+      paintWelcomeReward(rowOf(card, key)!, startsAt);
+      expect(stateOf(card, key)?.textContent).toBe(WELCOME_STATE_TEXT.ready);
+    }
   });
 });
 
@@ -198,7 +270,7 @@ describe("mr2WelcomeCard", () => {
     expect(text).toContain("10%");
     // The numbers come from WELCOME_SETS and WELCOME_DAYS, never typed.
     expect(WELCOME_HELP.lead).toBe("Frontier Pass: 7 sets over your first 10 days in Map Room 2.");
-    expect(WELCOME_HELP.days).toBe("1 set a day, on any 7 of the 10 days. New day at 00:00 UTC.");
+    expect(WELCOME_HELP.days).toBe("Starts at the next 00:00 UTC. 1 set a day, on any 7 of the 10 days.");
 
     help?.click();
     expect(note?.hidden).toBe(true);

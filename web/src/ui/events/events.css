@@ -1263,7 +1263,8 @@
   opacity: 0.6;
 }
 
-.events-welcome__reward--today {
+.events-welcome__reward--today,
+.events-welcome__reward--soon {
   border-color: var(--colour-border-subtle);
 }
 
@@ -1350,6 +1351,11 @@
   color: var(--colour-success);
 }
 
+/* Before the pass's first reset: waiting, like a reward used today. */
+.events-welcome__state--soon {
+  color: var(--colour-text-muted);
+}
+
 .events-welcome__go {
   align-self: center;
   min-width: 220px;
@@ -1397,7 +1403,13 @@
    Equal columns, so the 10 fit the narrowest phone. */
 .events-welcome__timeline {
   --mark-size: 26px;
-  --mark-used: 22px;
+  /* A day's stamp: the takeover over the kit, one narrow column centred on
+     its dot (neon, 28 Nov: side by side, the pairs ran together on a phone). */
+  --stamp-width: 20px;
+  --stamp-top: 16px;
+  --stamp-kit-height: 12px;
+  --stamp-kit-edge: rgb(255 255 255 / 15%);
+  --stamp-shadow: rgb(0 0 0 / 50%);
 
   display: grid;
   grid-template-columns: repeat(10, minmax(0, 1fr));
@@ -1433,23 +1445,46 @@
   background: var(--events-welcome-ready);
 }
 
+/* Always as tall as a two-picture stamp, so the track never moves; a single
+   picture sits down by its dot. */
 .events-welcome__mark-used {
   display: flex;
-  justify-content: center;
-  height: var(--mark-used);
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1px;
+  width: var(--stamp-width);
+  height: calc(var(--stamp-top) + var(--stamp-kit-height) + 1px);
 }
 
 .events-welcome__mark-picture {
   flex: none;
-  width: var(--mark-used);
-  height: var(--mark-used);
-  object-fit: contain;
-  filter: drop-shadow(0 1px 2px var(--colour-art-shadow));
 }
 
-/* Both used the same day: the two pictures overlap a little to fit the mark. */
-.events-welcome__mark-picture + .events-welcome__mark-picture {
-  margin-left: calc(var(--mark-used) * -0.35);
+.events-welcome__mark-picture[data-used-reward="takeover"] {
+  width: var(--stamp-top);
+  height: var(--stamp-top);
+  object-fit: contain;
+  filter: drop-shadow(0 1px 1px var(--stamp-shadow));
+}
+
+.events-welcome__mark-picture[data-used-reward="kit"] {
+  width: var(--stamp-width);
+  height: var(--stamp-kit-height);
+  box-sizing: border-box;
+  border: 1px solid var(--stamp-kit-edge);
+  border-radius: 2px;
+  object-fit: cover;
+  box-shadow: 0 1px 2px var(--stamp-shadow);
+}
+
+.events-welcome__timeline--unused .events-welcome__mark-used {
+  display: none;
+}
+
+:root[data-skin="flash"] .events-welcome__timeline {
+  --stamp-kit-edge: rgb(90 58 22 / 35%);
+  --stamp-shadow: rgb(60 35 10 / 25%);
 }
 
 .events-welcome__mark-dot {
@@ -1520,7 +1555,9 @@
 
   .events-welcome__timeline {
     --mark-size: 34px;
-    --mark-used: 30px;
+    --stamp-width: 28px;
+    --stamp-top: 22px;
+    --stamp-kit-height: 17px;
   }
 
   .events-welcome__mark-dot {

@@ -318,7 +318,7 @@ describe("takeoverQuote: New to Map Room 2", () => {
     expect((await quote(CAMP)).welcome).toBeUndefined();
     welcome.rows.set(TAKER, { ...newWelcome(now() - 8 * 86_400), takeoverUses: [1, 2, 3, 4, 5, 6, 7], takeoverDay: "2000-01-01" });
     expect((await quote(CAMP)).welcome).toBeUndefined();
-    welcome.rows.set(TAKER, newWelcome(now() - MR2_WELCOME_SECONDS - 1));
+    welcome.rows.set(TAKER, newWelcome(now() - MR2_WELCOME_SECONDS - 86_400));
     expect((await quote(CAMP)).welcome).toBeUndefined();
   });
 
@@ -327,6 +327,7 @@ describe("takeoverQuote: New to Map Room 2", () => {
     const launch = now() - 3600;
     welcome.launch = launch;
     expect((await quote(CAMP)).welcome).toBe(true);
-    expect(welcome.rows.get(TAKER)?.start).toBe(launch);
+    // Kept as the launch day's 00:00 UTC: the days are daily resets (owner, 28 Nov).
+    expect(welcome.rows.get(TAKER)?.start).toBe(Math.floor(launch / 86_400) * 86_400);
   });
 });
