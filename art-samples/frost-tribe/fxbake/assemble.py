@@ -20,11 +20,11 @@ WHO = {
     "astra": ("astra", "designed and painted by Codex (gpt-6-astra)"),
     "neon": ("neon", "designed by Antigravity (Gemini 4 Neon), painted by its image generator"),
 }
-# ability: title, line, real-speed take prefix and frame range (30 fps), slow take prefix
+# ability: title, line, take prefix, real-speed frame range (30 fps), which slow window of the take
 ABILITY = {
-    "aura": ("Krampus: Frost aura", "Always on: towers inside see 10-20% less far", "a", (20, 200), "sa"),
-    "stomp": ("Krampus: Blizzard Stomp", "Rears up, slams: towers inside work 30% slower for 3 s", "a", (352, 430), "ss"),
-    "shards": ("Krampus: Ice Shards", "Flings ice at a flyer every 0.7 s: chills it 30% for 2 s", "sh", None, "ssh"),
+    "aura": ("Krampus: Frost aura", "Always on: towers inside see 10-20% less far", "a", (20, 190), 0),
+    "stomp": ("Krampus: Blizzard Stomp", "Rears up, slams: towers inside work 30% slower for 3 s", "a", (200, 275), 1),
+    "shards": ("Krampus: Ice Shards", "Flings ice at a flyer every 0.7 s: chills it 30% for 2 s", "sh", None, 0),
 }
 
 
@@ -55,7 +55,7 @@ def main():
             run(["bash", f"{HERE}/card.sh", part(f"{fx}-card"), name, who, "1.6"])
             run(["bash", f"{HERE}/caption.sh", f"{FRAMES}/{real}-{look}-{fx}", str(span[0]), str(span[1]),
                  part(f"{fx}-real"), f"{name} ({look_word}): real speed"])
-            sdir = f"{FRAMES}/{slow}-{look}-{fx}"
+            sdir = f"{FRAMES}/{real}-{look}-{fx}-slow{slow}"
             count = len([f for f in os.listdir(sdir) if f.endswith(".jpg")])
             run(["bash", f"{HERE}/caption.sh", sdir, "0", str(count - 1), part(f"{fx}-slow"),
                  f"{name} ({look_word}): 4x slower"])

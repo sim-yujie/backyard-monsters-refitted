@@ -1,4 +1,4 @@
-import { Assets, Container, Rectangle, Sprite, Texture } from "pixi.js";
+import { Assets, type Container, Rectangle, Sprite, Texture } from "pixi.js";
 import type { Point } from "@/game/yard/YardGrid";
 import { artUrl } from "../../../artUrl";
 import astraSet from "./astra.json";

@@ -6,7 +6,7 @@
 //         crop:{x,y,w,h}, probe, dsf, pan:{dx,dy} }
 import { createRequire } from "node:module";
 import { execSync } from "node:child_process";
-import { mkdirSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 const require = createRequire("/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/frost-prod/web/package.json");
 const { chromium } = require("playwright");
 
@@ -23,20 +23,26 @@ const browser = await chromium.launch({
 });
 const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: DSF });
 // The same fight every take (krampus-fx: current, astra and neon side by side): the battle's seed is
-// minted from crypto.getRandomValues, and drawing uses Math.random; both from one fixed sequence.
+// minted from crypto.getRandomValues, drawing uses Math.random; each from its own fixed sequence, so how
+// often the page draws (or which effect set it draws) never changes the seed.
 await context.addInitScript(() => {
-  let state = 0x2f6b9d11;
-  const next = () => {
-    state ^= state << 13; state >>>= 0;
-    state ^= state >>> 17;
-    state ^= state << 5; state >>>= 0;
-    return state;
+  const gen = (seed) => {
+    let state = seed;
+    return () => {
+      state ^= state << 13; state >>>= 0;
+      state ^= state >>> 17;
+      state ^= state << 5; state >>>= 0;
+      return state;
+    };
   };
+  const forCrypto = gen(0x2f6b9d11);
+  const forMath = gen(0x51ed2701);
   crypto.getRandomValues = (array) => {
-    for (let i = 0; i < array.length; i += 1) array[i] = next() & (array.BYTES_PER_ELEMENT === 1 ? 0xff : array.BYTES_PER_ELEMENT === 2 ? 0xffff : 0xffffffff);
+    const mask = array.BYTES_PER_ELEMENT === 1 ? 0xff : array.BYTES_PER_ELEMENT === 2 ? 0xffff : 0xffffffff;
+    for (let i = 0; i < array.length; i += 1) array[i] = forCrypto() & mask;
     return array;
   };
-  Math.random = () => next() / 4294967296;
+  Math.random = () => forMath() / 4294967296;
 });
 await context.addInitScript((look) => {
   try {
@@ -113,14 +119,21 @@ try {
     await page.clock.pauseAt(Date.now() + 1000);
     await page.clock.runFor(1000);
     const names = spec.army.map((one) => one.name);
-    // `fps` (default 30) and `window` [from, to] seconds: only frames inside the window are shot (a slow-motion
-    // take at 120 fps plays 4x slower at 30), numbered from 0; the clock still runs through the rest.
+    // `fps` (default 30); `every` (default 1): every nth frame goes to the real-speed take (f00000...);
+    // `slow`: a list of [from, to] seconds, each shot at every frame into <name>-slow<i>/ (filmed at 120 fps
+    // with every 4, the same fight gives a real-speed take and 4x slower ones).
     const fps = spec.fps ?? 30;
-    const win = spec.window ?? [0, Infinity];
-    let shotN = 0;
+    const every = spec.every ?? 1;
+    const slow = spec.slow ?? [];
+    const slowN = slow.map(() => 0);
+    slow.forEach((_, i) => {
+      rmSync(`${dir}-slow${i}`, { recursive: true, force: true });
+      mkdirSync(`${dir}-slow${i}`, { recursive: true });
+    });
     const frames = Math.round((spec.seconds ?? 12) * fps);
     const drops = [...spec.drops].sort((a, b) => (a.at ?? 0) - (b.at ?? 0));
     let next = 0;
+    const c = spec.crop;
     for (let f = 0; f < frames; f += 1) {
       const t = f / fps;
       while (next < drops.length && (drops[next].at ?? 0) <= t) {
@@ -130,20 +143,16 @@ try {
         next += 1;
       }
       await page.clock.runFor(1000 / fps);
-      if (f % 5 === 4 && !(await page.getByRole("button", { name: "Stop" }).isVisible())) {
-        // The fight is over and the yard is back: drop the last frames.
-        for (let k = Math.max(0, f - 9); k < f; k += 1) rmSync(`${dir}/f${String(k).padStart(5, "0")}.jpg`, { force: true });
+      if (f % (5 * every) === 5 * every - 1 && !(await page.getByRole("button", { name: "Stop" }).isVisible())) {
         console.log("fight over at frame", f);
         break;
       }
-      if (t < win[0] || t > win[1]) continue;
-      const c = spec.crop;
-      await page.screenshot({
-        path: `${dir}/f${String(spec.window ? shotN++ : f).padStart(5, "0")}.jpg`,
-        type: "jpeg",
-        quality: 92,
-        ...(c ? { clip: c } : {}),
-      });
+      const real = f % every === 0;
+      const inSlow = slow.findIndex(([from, to]) => t >= from && t <= to);
+      if (!real && inSlow < 0) continue;
+      const buffer = await page.screenshot({ type: "jpeg", quality: 92, ...(c ? { clip: c } : {}) });
+      if (real) writeFileSync(`${dir}/f${String(f / every).padStart(5, "0")}.jpg`, buffer);
+      if (inSlow >= 0) writeFileSync(`${dir}-slow${inSlow}/f${String(slowN[inSlow]++).padStart(5, "0")}.jpg`, buffer);
     }
   }
 } catch (e) {
