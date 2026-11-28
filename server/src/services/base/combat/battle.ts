@@ -68,13 +68,15 @@ export interface BattleAttacker extends LootAttacker {
  * live, `15bf255b01aafabc`, keeps both too: an attack started on it and
  * landed after patch 9.1's twig and pebble blast or beta 10's rebalance moved
  * the version. Patch 9.1 as it went live, `90eed38ba0369a60`, keeps both:
- * an attack started on it and landed after beta 10 went live.
+ * an attack started on it and landed after beta 10 went live. Beta 10
+ * before main's 9.1 was merged back, `a332754d0da35501`, keeps both too.
  */
 const WHOLE_HEALTH_RULES_SINCE_8_7: readonly string[] = [
   "92ea2dbbfe06531c",
   "723a6cab98c42278",
   "15bf255b01aafabc",
   "90eed38ba0369a60",
+  "a332754d0da35501",
 ];
 
 /**
