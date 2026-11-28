@@ -8,7 +8,11 @@ import { champ, creep, type WaveTable } from "../waveTypes.js";
  * bearing (`WaveObj.DIR`) before the wave's random quarter turn, its level
  * and Monster Lab rank (`powerLevel`). A `G<n>` WaveObj is champion `n`
  * (Flash `WMATTACK.SpawnCreep` -> `CREEPS.SpawnGuardian`, one per count),
- * at full health (Flash passed `int.MAX_VALUE`) and no food bonus.
+ * at full health (Flash passed `int.MAX_VALUE`) and no food bonus
+ * (`ChampionBase` health, foodBonus). Not carried: Flash's champion power
+ * level 3 (the engine's champion groups have no power level yet), and Flash
+ * spawned these creeps without their level (`CREEPS.Spawn`); the table's
+ * level 6 is kept as the wave engine reads it.
  *
  * Every 5 waves beaten opens the next Brukkarg yard
  * (`BRUKWAR_WAVES_PER_YARD`, `game-data/events/yardEvents.ts`).

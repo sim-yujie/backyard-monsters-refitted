@@ -336,3 +336,30 @@ describe("surrender's cut-off fight (RaidFightInput.stopAt)", () => {
     expect(past.digest).toBe(whole.digest);
   });
 });
+
+describe("Brukkarg War's waves (bruk-port, Flash BrukkargWarEvent.as)", () => {
+  const SANDBOX = JSON.parse(
+    readFileSync(fileURLToPath(new URL("../../../../../web/test/fixtures/baseload-sandbox-yard.json", import.meta.url)), "utf8"),
+  ) as { buildingdata: Parameters<typeof fightRaid>[0]["buildingdata"]; resources: Record<string, number> };
+  const WAR = waveEventByKey("brukwar")!;
+
+  test("every one of the 25 plans and fights to an end; its champions (Gorgo to Krallen, Krallen at the table's level 6) land", () => {
+    const guardians = new Set<number>();
+    for (let wave = 1; wave <= WAR.waves.length; wave++) {
+      const plan = planWave({ event: WAR, wave, quarter: wave % 4 })!;
+      expect(plan.championsSkipped).toBe(0);
+      for (const event of plan.events) if (event.champion) guardians.add(event.champion.t);
+      const fight = fightRaid({
+        buildingdata: SANDBOX.buildingdata,
+        resources: SANDBOX.resources,
+        log: { v: 1 as const, seed: wave, events: plan.events },
+        raidSpawnsUntil: plan.lastSpawnTick,
+      });
+      expect(fight.ticks).toBeGreaterThan(0);
+      expect(fight.ticks).toBeLessThanOrEqual(ticks(RAID_MAX_SECONDS) + 1);
+      expect(Number.isFinite(fight.damage)).toBe(true);
+      expect(fight.creepsFlung).toBeGreaterThan(0);
+    }
+    expect([...guardians].sort()).toEqual([1, 2, 3, 4, 5]);
+  }, 120_000);
+});
