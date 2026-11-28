@@ -1864,3 +1864,63 @@
 .hcc-housing__adding--over {
   background: var(--colour-warning);
 }
+/* The batch's space as a number beside the queue's blue "+N", in the batch's
+   colour on the bar (owner, desk card hatch-preview B, 28 Nov 2026). Where the
+   numbers row is full (a phone), it stands at the bar's right end instead
+   (neon round 1: beside the orange part it explains, the strip no taller). */
+.hcc-housing__track {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.hcc-housing__track > .hcc-housing__bar {
+  flex: 1 1 auto;
+  min-width: 64px;
+}
+.hcc-housing__batch {
+  flex: none;
+  color: var(--colour-accent);
+  font-size: var(--text-sm);
+}
+/* With an empty queue there is no blue "+N": the batch takes its place at the right end. */
+.hcc-housing__batch--row {
+  margin-left: auto;
+}
+.hcc-housing__coming + .hcc-housing__batch--row {
+  margin-left: 0;
+}
+.hcc-housing__batch--over {
+  color: var(--colour-warning);
+}
+.hcc-housing__batch--track {
+  display: none;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 11px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  /* The display font's figures sit low in their line: level with the bar. */
+  transform: translateY(-1px);
+}
+@container hatch (max-width: 559px) {
+  .hcc-housing__batch--row {
+    display: none;
+  }
+  .hcc-housing__batch--track {
+    display: inline;
+  }
+}
+/* A phone: the numbers row is ~126 px, and "2,080/2,160" with the queue's "+17K" pill
+   needed ~149, so the pill stuck out of the housing box. While the queue's "+N"
+   shows, the house icon makes room for it (the bar and the numbers still say
+   housing); with an empty queue the icon stays. */
+@container hatch (max-width: 559px) {
+  .hcc-housing__numbers:has(> .hcc-housing__coming) > .hcc-housing__icon {
+    display: none;
+  }
+  .hcc-housing--over .hcc-housing__coming {
+    padding: 0 4px;
+  }
+}

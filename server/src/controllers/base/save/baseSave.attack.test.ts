@@ -687,7 +687,7 @@ describe("attack loot through the save", () => {
 
 describe("points for the loot through the save (patch 7.7.2, Flash's `BASE.PointsAdd`)", () => {
   /** What the attack takes: the replay's credit, with a wild tribe's Goo bonus. */
-  const taken = () => withTribeGooBonus(replayCap(), true);
+  const taken = () => withTribeGooBonus(replayCap(), true, Math.floor(Date.now() / 1000));
 
   test("the save that ends the attack adds one point per resource looted to the attacker's main save", async () => {
     attackerSave.points = "1000";

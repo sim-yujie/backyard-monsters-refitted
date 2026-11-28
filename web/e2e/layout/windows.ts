@@ -10,6 +10,7 @@ import {
   openShop,
   openSmartMove,
   openWaveIntro,
+  openYardCard,
   pressDock,
 } from "./game";
 
@@ -352,6 +353,18 @@ export const WINDOWS: readonly WindowCase[] = [
     closeButton: ".raid-alert__prepare",
     inSight: ".raid-alert__stats, .raid-alert__champion, .raid-alert__actions > .btn",
     open: openRaidAlert,
+  },
+  {
+    // The world map's "Your outpost" card (bug 73, 27 Nov 2026): a stray } in
+    // another sheet dropped its width and height cap in the build, and it ran
+    // off every screen under about 850 px tall. Every action in sight.
+    id: "yard-card",
+    label: "Your outpost card",
+    panel: ".yard-card",
+    items: ".yard-card__monster",
+    tabs: false,
+    inSight: ".yard-card__foot button",
+    open: openYardCard,
   },
 ];
 

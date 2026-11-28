@@ -34,6 +34,18 @@ export const KNOWN_FAILURES: Readonly<Record<string, string>> = {
     "account menu 94..561 on a 551px screen (own yard the same); no fix branch yet",
   "ipad-side-short/friend-account-menu":
     "account menu 94..570 on a 560px screen (own yard the same); no fix branch yet",
+  // The "Your outpost" card (bug 73, 27 Nov 2026). With its width and height
+  // cap back it fits every screen with every button in sight, as in beta 8.
+  // Two older choices remain, for the owner (bug 73 option B): it may cover
+  // the top bar (the check opens it over the yard, whose bar is taller than
+  // the map's), and an upright phone scrolls to the monsters under the chips.
+  "desktop/yard-card": "covers the yard's top bar by 25px (beta 8 design); owner decides (bug 73 option B)",
+  "ipad-split/yard-card": "covers the yard's top bar by 25px (beta 8 design); owner decides (bug 73 option B)",
+  "odd-980/yard-card": "covers the yard's top bar by 25px (beta 8 design); owner decides (bug 73 option B)",
+  "ipad-side-bars/yard-card": "covers the yard's top bar by 25px (beta 8 design); owner decides (bug 73 option B)",
+  "ipad-side-short/yard-card": "covers the yard's top bar by 25px (beta 8 design); owner decides (bug 73 option B)",
+  "phone-upright/yard-card": "monsters below the chips, the body scrolls (beta 7 design B); owner decides",
+  "phone-upright-bars/yard-card": "monsters below the chips, the body scrolls (beta 7 design B); owner decides",
 };
 
 export const knownFailure = (profileId: string, windowId: string): string | undefined =>
