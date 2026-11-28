@@ -328,7 +328,9 @@ const scenarios: Scenario[] = [
   { name: "burrow-rush-on-a-wild-camp", fixture: "burrow-rush", kind: "wild", end: "auto" },
   { name: "maze-on-a-map-room-1-tribe", fixture: "maze", kind: "tribe", end: "auto" },
   { name: "mixed-waves-own-academy-behind", fixture: "mixed-waves", staleAcademy: true, end: "auto" },
-  { name: "pokey-rush-declare-war", fixture: "pokey-rush", declareWar: true, end: "auto" },
+  // The maze, whose Spurtz Cannons never fire, so a change to them cannot end
+  // it before the plain attack's longest end (the Pokey rush's did, beta 10).
+  { name: "maze-declare-war", fixture: "maze", declareWar: true, end: "auto" },
 ];
 
 /** One line per key, each value compact: small diffs, small files. */
