@@ -875,11 +875,6 @@
   .attack-end__backdrop.auto-attack__backdrop--banner {
     padding-right: 384px;
   }
-
-  /* A and B: centred over the map, clear of the camp's drawer (neon round 1). */
-  .attack-end__backdrop.auto-attack__backdrop--look:not(.auto-attack__backdrop--banner) {
-    padding-right: 384px;
-  }
 }
 
 .attack-end.auto-attack--look-c {
