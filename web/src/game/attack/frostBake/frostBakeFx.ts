@@ -306,13 +306,17 @@ export class FrostBakeFx {
     return this.set.plan;
   }
 
+  /** Loads the set's atlas once (a failed load is not retried: the effect is drawing only). */
   private load(): void {
     if (this.sheet || this.loading) return;
     this.loading = true;
     const url = artUrl(`/assets/fx/frostbake/${this.set.name}.${this.host.classic ? "classic" : "modern"}.webp`);
-    void Assets.load<Texture>(url).then((texture) => {
-      this.sheet = texture;
-    });
+    Assets.load<Texture>(url).then(
+      (texture) => {
+        this.sheet = texture;
+      },
+      (error: unknown) => console.warn("Krampus frost effects did not load.", error),
+    );
   }
 
   private texture(cell: string): Texture | null {
@@ -763,10 +767,11 @@ export class FrostBakeFx {
   /* ── Every frame ──────────────────────────────────────────────────────── */
 
   update(tick: number): void {
-    this.load();
+    const standing = this.host.krampus();
+    // The atlas only once a Krampus is in the fight, ready for his first shard or stomp.
+    if (standing.length > 0) this.load();
     // The aura: held round each Krampus standing; on each tower it starts to blind, and held there while it does.
     const aura = this.plan.frostAura;
-    const standing = this.host.krampus();
     if (aura) {
       const alive = new Set<string>();
       for (const k of standing) {

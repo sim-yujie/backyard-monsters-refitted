@@ -2,7 +2,8 @@
 key moment 4x slower (filmed at 120 fps), Modern, then the same in Classic. Title cards name the model.
 
 python3 assemble.py <ability>      (aura | shards | stomp; frames from film.mjs in $FRAMES)
-Writes fxbake/video/krampus-<ability>.mp4.
+Writes fxbake/video/krampus-<ability>.mp4; ROUND=2 names the models' round-2 entries and writes
+krampus-<ability>-r2.mp4.
 """
 import os
 import subprocess
@@ -20,6 +21,10 @@ WHO = {
     "astra": ("astra", "designed and painted by Codex (gpt-6-astra)"),
     "neon": ("neon", "designed by Antigravity (Gemini 4 Neon), painted by its image generator"),
 }
+ROUND = os.environ.get("ROUND", "1")
+if ROUND != "1":
+    WHO = {k: (v[0] if k == "current" else f"{v[0]} round {ROUND}", v[1]) for k, v in WHO.items()}
+    WHO["current"] = ("Today's version", "what the game has now: no aura drawn")
 # ability: title, line, take prefix, real-speed frame range (30 fps), which slow window of the take
 ABILITY = {
     "aura": ("Krampus: Frost aura", "Always on: towers inside see 10-20% less far", "a", (20, 190), 0),
@@ -48,7 +53,7 @@ def main():
     run(["bash", f"{HERE}/card.sh", part("title"), title, line, "2.5"])
     for look in ("modern", "classic"):
         if look == "classic":
-            run(["bash", f"{HERE}/card.sh", part("classic"), "Classic look", "the same three, in the Classic (Flash) look", "2"])
+            run(["bash", f"{HERE}/card.sh", part("classic"), "Classic look", "the same, in the Classic (Flash) look", "2"])
         for fx in ("current", "astra", "neon"):
             name, who = WHO[fx]
             look_word = "Modern" if look == "modern" else "Classic"
@@ -63,7 +68,7 @@ def main():
     with open(listing, "w") as f:
         for p in parts:
             f.write(f"file '{p}'\n")
-    out = os.path.join(OUT, f"krampus-{ability}.mp4")
+    out = os.path.join(OUT, f"krampus-{ability}{'' if ROUND == '1' else '-r' + ROUND}.mp4")
     run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", listing, "-c:v", "libx264",
          "-crf", "24", "-preset", "slow", "-pix_fmt", "yuv420p", "-r", "30", out])
     print(out, os.path.getsize(out))

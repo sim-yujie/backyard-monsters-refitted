@@ -11,7 +11,8 @@ const require = createRequire("/home/yujiesim/Coding/backyard-monsters-refitted/
 const { chromium } = require("playwright");
 
 const spec = JSON.parse(readFileSync(process.argv[2], "utf8"));
-const OUT = process.env.FRAMES ?? "/tmp/claude-1000/-home-yujiesim-Coding-backyard-monsters-refitted/8693e50e-0911-4064-befe-7adf899be621/scratchpad/kfx/frames";
+const OUT = process.env.FRAMES;
+if (!OUT) throw new Error("set FRAMES to a frames folder in your scratchpad");
 const dir = `${OUT}/${spec.name}`;
 rmSync(dir, { recursive: true, force: true });
 mkdirSync(dir, { recursive: true });
@@ -133,6 +134,7 @@ try {
     const frames = Math.round((spec.seconds ?? 12) * fps);
     const drops = [...spec.drops].sort((a, b) => (a.at ?? 0) - (b.at ?? 0));
     let next = 0;
+    let misses = 0;
     const c = spec.crop;
     for (let f = 0; f < frames; f += 1) {
       const t = f / fps;
@@ -143,9 +145,14 @@ try {
         next += 1;
       }
       await page.clock.runFor(1000 / fps);
-      if (f % (5 * every) === 5 * every - 1 && !(await page.getByRole("button", { name: "Stop" }).isVisible())) {
-        console.log("fight over at frame", f);
-        break;
+      if (f % (5 * every) === 5 * every - 1) {
+        // Over only when the Stop button is gone on two checks in a row (a single miss happened mid-fight).
+        misses = (await page.getByRole("button", { name: "Stop" }).isVisible()) ? 0 : misses + 1;
+        if (misses >= 2) {
+          console.log("fight over at frame", f);
+          await shot("over");
+          break;
+        }
       }
       const real = f % every === 0;
       const inSlow = slow.findIndex(([from, to]) => t >= from && t <= to);

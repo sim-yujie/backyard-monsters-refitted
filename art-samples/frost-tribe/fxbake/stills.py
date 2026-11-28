@@ -11,7 +11,9 @@ FRAMES = os.environ.get(
     "FRAMES", "/tmp/claude-1000/-home-yujiesim-Coding-backyard-monsters-refitted/8693e50e-0911-4064-befe-7adf899be621/scratchpad/kfx/frames")
 out, take, frame, box = sys.argv[1], sys.argv[2], int(sys.argv[3]), tuple(int(v) for v in sys.argv[4].split(","))
 title = sys.argv[5] if len(sys.argv) > 5 else ""
-LABEL = {"current": "Today's version", "astra": "astra (Codex gpt-6-astra)", "neon": "neon (Antigravity Gemini 4 Neon)"}
+R = os.environ.get("ROUND", "1")
+SUFFIX = "" if R == "1" else f", round {R}"
+LABEL = {"current": "Today's version", "astra": f"astra (Codex gpt-6-astra){SUFFIX}", "neon": f"neon (Antigravity Gemini 4 Neon){SUFFIX}"}
 B = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 34)
 tiles = []
 for fx in ("current", "astra", "neon"):

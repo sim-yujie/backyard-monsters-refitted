@@ -14,6 +14,10 @@ motion.json, and writes:
 `abilities` (comma list, default all) keeps only those abilities of the plan, and only their cells in the atlas.
 `motion file` (default motion.json) names the plan in the round folder; keys starting with "_" (notes) are dropped.
 
+A sheet whose pieces cross its grid lines (neon round 2's Modern sheet) is cut by pieces instead: give it
+"cut": "pieces" in sheets.json; each connected piece (big ones only) is named in reading order, its row the grid row
+its middle falls in, then left to right. The art itself is never changed.
+
 Solid sheets: magenta keyed off (artlib.key + clean). Light sheets: black is see-through, brightness is alpha,
 drawn white (the game tints). Every single piece is cropped to what it holds and fitted to 176 px, centred.
 Flipbook frames (every `flipbook` list in motion.json) keep their place in their cell and share one scale.
@@ -43,6 +47,44 @@ def light(c):
     white = Image.new("RGBA", c.size, (255, 255, 255, 0))
     white.putalpha(alpha)
     return white
+
+
+def pieces_of(im, columns, rows, count):
+    """The `count` biggest connected pieces of a keyed sheet, in reading order (grid row of the middle, then x),
+    each on its own canvas the sheet's size (so fit_one crops it)."""
+    step = 2
+    small = im.getchannel("A").resize((im.width // step, im.height // step))
+    w, h = small.size
+    a = small.load()
+    seen = [[False] * w for _ in range(h)]
+    found = []
+    for y0 in range(h):
+        for x0 in range(w):
+            if seen[y0][x0] or a[x0, y0] < 40:
+                continue
+            stack, box, n = [(x0, y0)], [x0, y0, x0, y0], 0
+            seen[y0][x0] = True
+            while stack:
+                x, y = stack.pop()
+                n += 1
+                box = [min(box[0], x), min(box[1], y), max(box[2], x), max(box[3], y)]
+                for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                    if 0 <= nx < w and 0 <= ny < h and not seen[ny][nx] and a[nx, ny] >= 40:
+                        seen[ny][nx] = True
+                        stack.append((nx, ny))
+            found.append((n, [v * step for v in box]))
+    big = sorted(found, key=lambda f: -f[0])[:count]
+    # small specks near a big piece (snow crumbs) go with it
+    out = []
+    for n, (x0, y0, x1, y1) in big:
+        pad = 12
+        box = (max(0, x0 - pad), max(0, y0 - pad), min(im.width, x1 + step + pad), min(im.height, y1 + step + pad))
+        piece = Image.new("RGBA", im.size)
+        piece.paste(im.crop(box), box[:2])
+        out.append(((y0 + y1) / 2, (x0 + x1) / 2, piece))
+    cell_h = im.height / rows
+    out.sort(key=lambda o: (int(o[0] // cell_h), o[1]))
+    return [o[2] for o in out]
 
 
 def fit_one(piece):
@@ -95,7 +137,10 @@ for sheet in spec["sheets"]:
     im = Image.open(os.path.join(SRC, sheet["file"]))
     if sheet["kind"] == "solid":
         im = key(im.convert("RGBA"))
-    pieces = grid_cells(im.convert("RGBA") if sheet["kind"] == "solid" else im.convert("RGB"), sheet["columns"], sheet["rows"])
+    if sheet.get("cut") == "pieces":
+        pieces = pieces_of(im.convert("RGBA"), sheet["columns"], sheet["rows"], len([c for c in sheet["cells"] if c]))
+    else:
+        pieces = grid_cells(im.convert("RGBA") if sheet["kind"] == "solid" else im.convert("RGB"), sheet["columns"], sheet["rows"])
     looks = ["modern", "classic"] if sheet["look"] == "both" else [sheet["look"]]
     for name, piece in zip(sheet["cells"], pieces):
         if not name:
