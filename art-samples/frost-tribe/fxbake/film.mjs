@@ -61,14 +61,15 @@ const unseason = (node) => {
     Object.values(node).forEach(unseason);
   }
 };
-await page.route(/\/base\/load|\/bm\/(yard\/)?events/, async (route) => {
+await page.route(/\/base\/load|\/bm\/(yard\/)?events|\/bm\/yard\/state/, async (route) => {
   const response = await route.fetch();
   let body = await response.text();
   try {
     const json = JSON.parse(body);
     unseason(json);
     // The yard's grass is seeded from its save time, which every login moves: pin it so each take lays the
-    // same ground (Classic's dry patches differed between takes).
+    // same ground (Classic's dry patches differed between takes). /bm/yard/state sends the save time too, and
+    // the yard re-lays its ground from it.
     if (typeof json.savetime === "number") json.savetime = spec.savetime ?? 1795000000;
     body = JSON.stringify(json);
   } catch {}
