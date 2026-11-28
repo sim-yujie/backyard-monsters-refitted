@@ -203,6 +203,11 @@ export class YardGround {
     return this.season === "christmas" && this.terrain === "grass" && GROUNDS[this.ground].grass === true;
   }
 
+  /** Whether the yard stands on the season's snow now (Christmas on a grass ground), for what else dresses for it. */
+  get seasonSnow(): boolean {
+    return this.winterEdge();
+  }
+
   /** Thanksgiving's leaves and recolour, on a grass ground only. */
   private autumn(): boolean {
     return this.season === "thanksgiving" && this.terrain === "grass" && GROUNDS[this.ground].grass === true;

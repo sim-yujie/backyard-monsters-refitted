@@ -320,7 +320,10 @@ export class YardRenderer {
       this.unwatchSeason = onSeasonChange((season) => this.setSeason(season));
     }
     // And the ground the player picks, at once (owner, 12 Nov 2026).
-    this.unwatchGround ??= onGroundChange((ground) => this.ground.setGround(ground));
+    this.unwatchGround ??= onGroundChange((ground) => {
+      this.ground.setGround(ground);
+      this.refreshSnowContact();
+    });
   }
 
   /**
@@ -378,10 +381,23 @@ export class YardRenderer {
     }
     this.dressYard();
     this.redrawMushrooms();
-    // The snow's contact patches (`snowContact.ts`) are laid when buildings are shown: a yard already
-    // on screen when Christmas arrives (or ends) is shown again, once.
+    this.refreshSnowContact();
+  }
+
+  /**
+   * The snow's contact patches (`snowContact.ts`) are laid when buildings are
+   * shown: when the snow comes or goes under a yard already on screen (the
+   * season, or the player's ground), the yard is shown again, once, keeping
+   * what the planner stored and what the scene conceals (an enemy's traps).
+   */
+  private refreshSnowContact(): void {
     const yard = this.yard;
-    if (yard && this.buildings.snowContact !== (season === "christmas" && yard.kind !== "inferno")) this.show(yard);
+    if (!yard || this.buildings.snowContact === this.ground.seasonSnow) return;
+    const stored = [...this.stored];
+    const concealed = [...this.concealed];
+    this.show(yard);
+    for (const id of stored) this.setBuildingStored(id, true);
+    for (const id of concealed) this.setConcealed(id, true);
   }
 
   /**
@@ -497,7 +513,7 @@ export class YardRenderer {
     // to empty, and back in once it has refilled them.
     this.life.detach();
     // Christmas: a dark patch on the snow under each building (`snowContact.ts`, neon 28 Nov 2026).
-    this.buildings.snowContact = this.season === "christmas" && yard.kind !== "inferno";
+    this.buildings.snowContact = this.ground.seasonSnow;
     this.buildings.show(yard, atlas, this.work ? readWork(this.work.save()) : undefined);
     this.mountLife();
     this.jobBars.show(yard);
