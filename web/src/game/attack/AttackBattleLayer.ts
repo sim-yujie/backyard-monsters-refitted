@@ -3081,9 +3081,9 @@ export class AttackBattleLayer {
     }
     if (look.punchy) {
       // The painted dust and shockwave stand in for the blast's own ring: its flash stays, and the shake.
-      const painted = this.painter.ready && look.punchy === "full";
+      const painted = this.painter.ready;
       this.punchy(event.tick, ground, Math.max(40, event.radius * 0.6), painted ? "flash" : look.punchy);
-      if (painted && !this.classic) this.blastFx.jolt(event.tick, 5, 24);
+      if (painted && look.punchy === "full" && !this.classic) this.blastFx.jolt(event.tick, 5, 24);
     }
     // A Pounce shows its word as he takes off, not again as he lands.
     if (!look.word || (event.ability === "pounce" && !to)) return;

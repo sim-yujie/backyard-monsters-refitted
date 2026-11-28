@@ -529,7 +529,7 @@ export class AbilityPainter {
       rotation: abilityNoise(seed, 1) * Math.PI,
     });
     if (this.glow) {
-      this.emit(tick, { cell: "glow", at: chest, life: 26, size0: 70, size1: 150, colours: [palette.poundGlow], peak: 0.8, add: true, easeOut: true });
+      this.emit(tick, { cell: "glow", at: chest, life: 22, size0: 40, size1: 90, colours: [palette.poundGlow], peak: 0.55, add: true, easeOut: true });
     }
     // Two shockwaves out to its reach, the second a beat later.
     const wide = (radius * 2) / GROUND_FILL;
@@ -551,7 +551,7 @@ export class AbilityPainter {
     for (let n = 0; n < puffs; n += 1) {
       const angle = (n / puffs) * Math.PI * 2 + abilityNoise(seed, n, 3);
       this.emit(tick, {
-        cell: "smoke",
+        cell: "mist",
         at: { x: caster.x + Math.cos(angle) * 14, y: caster.y + Math.sin(angle) * 7 },
         vx: Math.cos(angle) * 1.4,
         vy: Math.sin(angle) * 0.7,
@@ -599,7 +599,7 @@ export class AbilityPainter {
       const angle = (n / puffs) * Math.PI * 2 + abilityNoise(seed, n) * 0.4;
       const speed = (radius / DUST_TICKS) * (1.6 + abilityNoise(seed, n, 1) * 0.5);
       this.emit(tick, {
-        cell: "smoke",
+        cell: "mist",
         at: { x: at.x + Math.cos(angle) * 10, y: at.y + Math.sin(angle) * 5 },
         z: 4,
         vx: Math.cos(angle) * speed,
@@ -607,10 +607,10 @@ export class AbilityPainter {
         vz: 0.25,
         drag: 0.035,
         life: DUST_TICKS,
-        size0: 28,
-        size1: 70,
-        squash: 0.75,
-        peak: 0.85,
+        size0: 40,
+        size1: 96,
+        squash: 0.6,
+        peak: 0.9,
         colours: palette.dust,
         easeOut: true,
       });
@@ -700,16 +700,31 @@ export class AbilityPainter {
         cell: "blood",
         at: { x: from.x + (abilityNoise(seed, n) - 0.5) * 20, y: from.y + (abilityNoise(seed, n, 1) - 0.5) * 14 },
         to: mid,
-        arc: 24 + abilityNoise(seed, n, 2) * 20,
+        arc: 40 + abilityNoise(seed, n, 2) * 24,
         delay: n * 4,
-        life: 26,
-        size0: 15,
-        size1: 10,
+        life: 30,
+        size0: 18,
+        size1: 12,
         fadeIn: 2,
         hold: 0.85,
         // The drop's point trails behind it as it flies.
         rotation: -Math.PI / 2,
         colours: [palette.blood],
+      });
+      // A red wisp along with each drop, so the stream reads against his red hide.
+      this.emit(tick, {
+        cell: "mist",
+        at: { x: from.x, y: from.y },
+        to: mid,
+        arc: 40 + abilityNoise(seed, n, 2) * 24,
+        delay: n * 4 + 1,
+        life: 30,
+        size0: 30,
+        size1: 18,
+        peak: this.glow ? 0.7 : 0.45,
+        hold: 0.7,
+        colours: [palette.blood],
+        add: this.glow,
       });
     }
     this.emit(tick + 18, {
@@ -728,10 +743,10 @@ export class AbilityPainter {
 
   private twinBite(tick: number, at: Point, seed: number): void {
     const palette = this.palette;
-    const bite = { x: at.x, y: at.y - 16 };
+    const bite = { x: at.x, y: at.y + 6 };
     // The jaws open, then snap shut.
-    this.emit(tick, { cell: "fangs", at: bite, life: 8, size0: 54, size1: 46, fadeIn: 2, hold: 0.9, squash: 1 });
-    this.emit(tick + 8, { cell: "fangs", at: bite, life: 20, size0: 46, size1: 42, squash: 0.55, hold: 0.5 });
+    this.emit(tick, { cell: "fangs", at: bite, life: 9, size0: 74, size1: 64, fadeIn: 2, hold: 0.9, squash: 1 });
+    this.emit(tick + 9, { cell: "fangs", at: bite, life: 24, size0: 64, size1: 60, squash: 0.55, hold: 0.55 });
     for (let n = 0; n < 2; n += 1) {
       this.emit(tick + 8, {
         cell: "slash",
@@ -770,7 +785,7 @@ export class AbilityPainter {
     for (let n = 0; n < puffs; n += 1) {
       const angle = (n / puffs) * Math.PI * 2 + abilityNoise(seed, n);
       this.emit(tick, {
-        cell: "smoke",
+        cell: "mist",
         at: { x: caster.x, y: caster.y },
         vx: Math.cos(angle) * 1.2,
         vy: Math.sin(angle) * 0.6,
@@ -819,7 +834,7 @@ export class AbilityPainter {
     for (let n = 0; n < puffs; n += 1) {
       const angle = (n / puffs) * Math.PI * 2 + abilityNoise(seed, n);
       this.emit(tick, {
-        cell: "smoke",
+        cell: "mist",
         at: { x: at.x + Math.cos(angle) * 8, y: at.y + Math.sin(angle) * 4 },
         vx: Math.cos(angle) * 1.6,
         vy: Math.sin(angle) * 0.8,
@@ -860,7 +875,7 @@ export class AbilityPainter {
       const start = radius * (0.12 + abilityNoise(seed, n, 1) * 0.5);
       const speed = (radius * (0.15 + abilityNoise(seed, n, 2) * 0.15)) / MIST_DRIFT_TICKS;
       this.emit(tick, {
-        cell: n % 4 === 0 ? "wisp" : "mist",
+        cell: "mist",
         at: { x: caster.x + Math.cos(angle) * start, y: caster.y + Math.sin(angle) * start * 0.5 },
         z: 10 + abilityNoise(seed, n, 3) * 16,
         vx: Math.cos(angle) * speed,
@@ -872,7 +887,7 @@ export class AbilityPainter {
         size1: 150,
         squash: 0.55,
         fadeIn: 30,
-        peak: this.glow ? 0.4 : 0.32,
+        peak: this.glow ? 0.34 : 0.3,
         hold: 0.3,
         colours: [palette.mist],
         add: this.glow,
