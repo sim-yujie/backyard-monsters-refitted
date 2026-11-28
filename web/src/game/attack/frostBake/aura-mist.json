@@ -1,0 +1,117 @@
+{
+ "name": "aura-mist",
+ "model": "mist",
+ "round": "round-3",
+ "cells": [
+  "fomor_mist"
+ ],
+ "columns": 6,
+ "bounds": {
+  "fomor_mist": [
+   0.9167,
+   0.8542
+  ]
+ },
+ "plan": {
+  "frostAura": {
+   "held": [
+    {
+     "cell": "fomor_mist",
+     "anchor": "caster_feet",
+     "follow": true,
+     "loop_ms": 5200,
+     "count": 4,
+     "ring": {
+      "radius": "reach*0.09",
+      "jitter": 0.7
+     },
+     "radial_speed": 10,
+     "phase_stagger": 0.37,
+     "orbit_deg_s": 3,
+     "size": [
+      "reach*0.20",
+      "reach*0.27"
+     ],
+     "squash": 0.55,
+     "fade_in_ms": 1500,
+     "hold": 0.55,
+     "peak": 0.34,
+     "tint": [
+      "#9cbcff",
+      "#7aa4ff"
+     ],
+     "tint_classic": [
+      "#9cb2dc",
+      "#7f98cc"
+     ],
+     "blend": "normal",
+     "layer": "ground"
+    },
+    {
+     "cell": "fomor_mist",
+     "anchor": "caster_feet",
+     "follow": true,
+     "loop_ms": 4600,
+     "count": 7,
+     "ring": {
+      "radius": "reach*0.22",
+      "jitter": 0.8
+     },
+     "radial_speed": 12,
+     "phase_stagger": 0.41,
+     "orbit_deg_s": -2.5,
+     "size": [
+      "reach*0.15",
+      "reach*0.21"
+     ],
+     "squash": 0.55,
+     "fade_in_ms": 1300,
+     "hold": 0.5,
+     "peak": 0.28,
+     "tint": [
+      "#9cbcff",
+      "#7aa4ff"
+     ],
+     "tint_classic": [
+      "#9cb2dc",
+      "#7f98cc"
+     ],
+     "blend": "normal",
+     "layer": "ground"
+    },
+    {
+     "cell": "fomor_mist",
+     "anchor": "caster_feet",
+     "follow": true,
+     "loop_ms": 4000,
+     "count": 8,
+     "ring": {
+      "radius": "reach*0.36",
+      "jitter": 0.8
+     },
+     "radial_speed": 8,
+     "phase_stagger": 0.29,
+     "orbit_deg_s": 2,
+     "size": [
+      "reach*0.10",
+      "reach*0.14"
+     ],
+     "squash": 0.55,
+     "fade_in_ms": 1100,
+     "hold": 0.45,
+     "peak": 0.22,
+     "tint": [
+      "#9cbcff",
+      "#7aa4ff"
+     ],
+     "tint_classic": [
+      "#9cb2dc",
+      "#7f98cc"
+     ],
+     "blend": "normal",
+     "layer": "ground"
+    }
+   ]
+  }
+ }
+}

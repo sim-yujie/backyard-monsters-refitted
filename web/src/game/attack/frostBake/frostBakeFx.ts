@@ -2,6 +2,7 @@ import { Assets, type Container, Rectangle, Sprite, Texture } from "pixi.js";
 import type { Point } from "@/game/yard/YardGrid";
 import { artUrl } from "../../../artUrl";
 import auraAstraSet from "./aura-astra.json";
+import auraMistSet from "./aura-mist.json";
 import auraNeonSet from "./aura-neon.json";
 import krampusNeonSet from "./krampus-neon.json";
 
@@ -19,16 +20,20 @@ import krampusNeonSet from "./krampus-neon.json";
  * - Frost aura: round 2 of the bake-off (round 1: "Neither: try again"),
  *   astra's and neon's behind the DEV-only switch `?frostFx=astra|neon`
  *   (`aura-astra.json`, `aura-neon.json`, from `fxbake/<model>/round-2/`);
- *   `current`, the default, draws no aura, as today.
+ *   round 3 (owner, 28 Nov 2026: "something similar to Fomor's 'mist', which
+ *   is less obvious and distracting but still present") behind
+ *   `?frostFx=mist`: Fomor's Healing Mist cell as a faint ice-blue haze
+ *   (`aura-mist.json`, from `fxbake/mist/round-3/`); `current`, the default,
+ *   draws no aura, as today.
  */
 
-export type FrostFxId = "current" | "astra" | "neon";
+export type FrostFxId = "current" | "astra" | "neon" | "mist";
 
-/** The DEV switch for the aura bake-off; "current" (no aura drawn) unless it names a model. */
+/** The DEV switch for the aura bake-off; "current" (no aura drawn) unless it names a set. */
 export const frostFxFromUrl = (): FrostFxId => {
   if (typeof location === "undefined") return "current";
   const wanted = new URLSearchParams(location.search).get("frostFx");
-  return wanted === "astra" || wanted === "neon" ? wanted : "current";
+  return wanted === "astra" || wanted === "neon" || wanted === "mist" ? wanted : "current";
 };
 
 /* ── The plan's form (the shared brief) ───────────────────────────────────── */
@@ -127,9 +132,10 @@ export const KRAMPUS_ABILITY_SET = krampusNeonSet as unknown as FrostSet;
 const AURA_SETS: Record<Exclude<FrostFxId, "current">, FrostSet> = {
   astra: auraAstraSet as unknown as FrostSet,
   neon: auraNeonSet as unknown as FrostSet,
+  mist: auraMistSet as unknown as FrostSet,
 };
 
-/** A round-2 aura set for the DEV switch, or null for today's (no aura drawn). */
+/** A round-2 or round-3 aura set for the DEV switch, or null for today's (no aura drawn). */
 export const frostAuraSet = (id: FrostFxId): FrostSet | null => (id === "current" ? null : AURA_SETS[id]);
 
 const CELL = 192;
@@ -684,6 +690,9 @@ export class FrostBakeFx {
       const tint = colours(this.host.classic && piece.tint_classic ? piece.tint_classic : piece.tint);
       const ring = piece.ring === undefined ? undefined : typeof piece.ring === "object" ? piece.ring : { radius: piece.ring };
       const radius = ring ? sizeOf(ring.radius, hold.reach, 0) : 0;
+      // A ring piece may drift out over its loop (px a second) and land somewhere new each loop (`jitter`).
+      const drift = ring ? (ring.radial_speed ?? piece.radial_speed ?? 0) : 0;
+      const jitter = ring ? (ring.jitter ?? piece.jitter ?? 0) : 0;
       const count = Math.max(1, ring ? this.many(piece.count ?? 1) : piece.count ?? 1);
       const orbit = (((piece.orbit_deg_s ?? 0) * Math.PI) / 180) * (age / TPS);
       const offset = piece.offset ?? [0, 0];
@@ -691,9 +700,11 @@ export class FrostBakeFx {
         const local = age + Math.round((piece.phase_stagger ?? 0) * n * loop);
         const phase = (((local % loop) + loop) % loop) / loop;
         const shape = piece.pulse ? 1 - Math.abs(phase * 2 - 1) : phase;
-        const angle = (n / count) * Math.PI * 2 + orbit;
-        const ox = ring ? Math.cos(angle) * radius : 0;
-        const oy = ring ? Math.sin(angle) * radius * 0.5 : 0;
+        const cycle = Math.floor(local / loop);
+        const angle = ((n + (jitter ? (noise(n + 1, cycle, 3) - 0.5) * jitter : 0)) / count) * Math.PI * 2 + orbit;
+        const away = radius * (jitter ? 1 + (noise(n + 1, cycle, 4) - 0.5) * jitter * 0.6 : 1) + (drift * phase * loop) / TPS;
+        const ox = ring ? Math.cos(angle) * away : 0;
+        const oy = ring ? Math.sin(angle) * away * 0.5 : 0;
         // Opacity over one loop follows the one-shot fields when a `hold` is given:
         // in over `fade_in_ms`, full to `hold`, out by the loop's end.
         let envelope = 1;

@@ -526,19 +526,19 @@
      "squash": 0.5,
      "spin_deg_s": 150,
      "fade_in_ms": 120,
-     "peak": 0.68,
+     "peak": 0.55,
      "hold": 0.65,
      "tint": [
-      "#7ee2ff",
-      "#ccf7ff",
-      "#ffffff"
+      "#6f96f0",
+      "#94b6ff",
+      "#b4ceff"
      ],
      "tint_classic": [
-      "#7a9eb6",
-      "#a8c6da",
-      "#dce8f0"
+      "#6a84bc",
+      "#8aa2d2",
+      "#a8bce0"
      ],
-     "blend": "add",
+     "blend": "normal",
      "layer": "ground"
     },
     {
@@ -624,16 +624,16 @@
      "peak": 0.95,
      "hold": 0.15,
      "tint": [
-      "#ffffff",
-      "#9ef0ff",
-      "#38b2ff"
+      "#f2f6ff",
+      "#94b6ff",
+      "#5c8ae8"
      ],
      "tint_classic": [
-      "#eaf4fa",
-      "#a8c8dc",
-      "#7296b0"
+      "#e2eaf6",
+      "#8aa2d2",
+      "#6a84bc"
      ],
-     "blend": "add",
+     "blend": "normal",
      "layer": "ground"
     },
     {
@@ -652,16 +652,16 @@
      "peak": 0.9,
      "hold": 0.25,
      "tint": [
-      "#ffffff",
-      "#88e6ff",
-      "#2ca4f2"
+      "#f2f6ff",
+      "#94b6ff",
+      "#5c8ae8"
      ],
      "tint_classic": [
-      "#e4f0f6",
-      "#9cbcd0",
-      "#688ca6"
+      "#e2eaf6",
+      "#8aa2d2",
+      "#6a84bc"
      ],
-     "blend": "add",
+     "blend": "normal",
      "layer": "ground"
     },
     {
@@ -682,19 +682,19 @@
      "squash": 0.55,
      "spin_deg_s": 45,
      "fade_in_ms": 25,
-     "peak": 0.78,
+     "peak": 0.62,
      "hold": 0.35,
      "tint": [
-      "#eefcff",
-      "#90e4ff",
-      "#46b2f2"
+      "#b4ceff",
+      "#86acff",
+      "#5c8ae8"
      ],
      "tint_classic": [
-      "#dce8f0",
-      "#9ebed2",
-      "#6e92ac"
+      "#a8bce0",
+      "#8aa2d2",
+      "#6a84bc"
      ],
-     "blend": "add",
+     "blend": "normal",
      "layer": "air"
     },
     {
@@ -787,16 +787,16 @@
      "peak": 0.62,
      "hold": 0.25,
      "tint": [
-      "#e8fbff",
-      "#8ee2ff",
-      "#48b2f0"
+      "#a4c2ff",
+      "#7aa4ff",
+      "#5c8ae8"
      ],
      "tint_classic": [
-      "#d6e4ee",
-      "#98b8cc",
-      "#7092aa"
+      "#9ab0dc",
+      "#7f98cc",
+      "#6a84bc"
      ],
-     "blend": "add",
+     "blend": "normal",
      "layer": "air"
     },
     {
@@ -910,16 +910,16 @@
      "peak": 0.48,
      "hold": 0.45,
      "tint": [
-      "#dcf8ff",
-      "#88dfff",
-      "#50b8f0"
+      "#a4c2ff",
+      "#7aa4ff",
+      "#5c8ae8"
      ],
      "tint_classic": [
-      "#cedee8",
-      "#94b4c8",
-      "#7090a6"
+      "#9ab0dc",
+      "#7f98cc",
+      "#6a84bc"
      ],
-     "blend": "add",
+     "blend": "normal",
      "layer": "air"
     }
    ],

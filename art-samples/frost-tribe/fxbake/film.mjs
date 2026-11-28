@@ -75,7 +75,7 @@ await page.clock.install();
 const shot = (name) => page.screenshot({ path: `${dir}/${name}.png` });
 try {
   const fxq = spec.fx && spec.fx !== "current" ? `${spec.params ? "&" : "?"}frostFx=${spec.fx}` : "";
-  await page.goto(`http://localhost:5461/${spec.params ?? ""}${fxq}`);
+  await page.goto(`http://localhost:${process.env.GAME_PORT ?? 5461}/${spec.params ?? ""}${fxq}`);
   await page.getByRole("textbox", { name: "Email" }).fill("yardtester@test.com");
   await page.getByRole("textbox", { name: "Password" }).fill("Dev12345!");
   await page.getByRole("button", { name: "Play", exact: true }).click();
@@ -83,12 +83,13 @@ try {
   await page.waitForTimeout(7000);
   await page.mouse.click(1205, 368); // zoom out once: the Baiter comes into view
   await page.waitForTimeout(800);
-  await page.mouse.click(187, 385); // the Baiter
+  const [bx, by] = spec.baiter ?? [187, 385]; // the Baiter, after one zoom out
+  await page.mouse.click(bx, by);
   await page.waitForTimeout(1200);
   if (!(await page.getByRole("button", { name: "Test attack" }).isVisible())) {
     await page.mouse.click(1205, 368);
     await page.waitForTimeout(1500);
-    await page.mouse.click(187, 385);
+    await page.mouse.click(bx, by);
     await page.waitForTimeout(1200);
   }
   await page.getByRole("button", { name: "Test attack" }).click();

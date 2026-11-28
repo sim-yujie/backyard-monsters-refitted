@@ -3,7 +3,7 @@
 cd /home/yujiesim/Coding/backyard-monsters-refitted/worktrees/frost-prod/art-samples/frost-tribe/fxbake
 for n in "$@"; do
   while [ "$(pgrep -af chrome-headless-shell | grep -vc -- '--type=')" -ge 3 ]; do sleep 10; done
-  timeout 1200 node film.mjs specs/$n.json 2>&1 | grep -v "^\s*'" | tail -3 > /home/yujiesim/Coding/backyard-monsters-refitted/archive/logs/krampus-fx-film-$n.log
-  echo "$n: $(cat /home/yujiesim/Coding/backyard-monsters-refitted/archive/logs/krampus-fx-film-$n.log | tr '\n' ' ')"
+  GAME_PORT=${GAME_PORT:-5461} timeout 1200 node film.mjs specs/$n.json 2>&1 | grep -v "^\s*'" | tail -3 > /home/yujiesim/Coding/backyard-monsters-refitted/archive/logs/${LOGP:-krampus-fx}-film-$n.log
+  echo "$n: $(cat /home/yujiesim/Coding/backyard-monsters-refitted/archive/logs/${LOGP:-krampus-fx}-film-$n.log | tr '\n' ' ')"
 done
 echo ALLDONE

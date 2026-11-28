@@ -1,0 +1,8 @@
+{
+ "_source": "fomor-mist-<look>.png: the 'mist' cell (row 2, column 2) of feat/mm-crystal's server/public/assets/fx/ability-fx.<look>.webp (commit 4b8719423, Fomor's Healing Mist), laid on black so it cuts as a light cell. frost_air_motes: neon round 2's lights sheet.",
+ "sheets": [
+  {"file": "fomor-mist-modern.png", "look": "modern", "kind": "light", "columns": 1, "rows": 1, "cells": ["fomor_mist"]},
+  {"file": "fomor-mist-classic.png", "look": "classic", "kind": "light", "columns": 1, "rows": 1, "cells": ["fomor_mist"]},
+  {"file": "../../neon/round-2/lights-sheet.jpg", "look": "both", "kind": "light", "columns": 2, "rows": 2, "cells": ["frost_fern_frame", "frost_snap_burst", "frost_air_motes", "frost_zone_ring"]}
+ ]
+}

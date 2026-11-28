@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { Container } from "pixi.js";
+import { Assets, Container, type Sprite, Texture } from "pixi.js";
 import { FrostBakeFx, type FrostBakeHost, type FrostSet, frostAuraSet, frostFxFromUrl, KRAMPUS_ABILITY_SET, sizeOf } from "./frostBakeFx";
 
 /** Every cell name a plan uses (pieces and flipbooks). */
@@ -57,6 +57,70 @@ describe("Krampus's frost ability sets", () => {
     expect(set.round).toBe("round-2");
     expect(Object.keys(set.plan)).toEqual(["frostAura"]);
     checkAtlas(set);
+  });
+
+  it("mist round-3 aura: Fomor's mist, faint and ice-blue, under everything", () => {
+    const set = frostAuraSet("mist")!;
+    expect(set.model).toBe("mist");
+    expect(set.round).toBe("round-3");
+    expect(Object.keys(set.plan)).toEqual(["frostAura"]);
+    checkAtlas(set);
+    const held = set.plan.frostAura?.held ?? [];
+    expect(held.length).toBeGreaterThan(0);
+    for (const piece of held) {
+      expect(piece.blend).toBe("normal");
+      expect(piece.layer).toBe("ground");
+      expect(piece.peak ?? 1).toBeLessThanOrEqual(0.35);
+    }
+  });
+
+  it("draws every held piece at no more than its peak, ring or not", async () => {
+    const load = vi.spyOn(Assets, "load").mockResolvedValue(Texture.WHITE as never);
+    for (const id of ["mist", "neon"] as const) {
+      const set = frostAuraSet(id)!;
+      const layer = new Container();
+      const host: FrostBakeHost = {
+        air: () => layer,
+        ground: () => layer,
+        krampus: () => [{ id: 1, level: 6, feet: { x: 0, y: 0 }, top: -80, heading: 0 }],
+        creep: () => null,
+        tower: () => null,
+        blinded: () => [],
+        towerPoints: () => [],
+        jolt: () => {},
+        auraRadius: () => 300,
+        classic: false,
+        low: false,
+      };
+      const fx = new FrostBakeFx(set, host);
+      fx.update(0);
+      await new Promise((done) => setTimeout(done, 0));
+      const top = Math.max(...(set.plan.frostAura?.held ?? []).map((one) => one.peak ?? 1));
+      for (const tick of [100, 400, 800, 1600]) {
+        fx.update(tick);
+        const shown = layer.children.filter((one) => one.visible) as Sprite[];
+        expect(shown.length).toBeGreaterThan(0);
+        for (const sprite of shown) expect(sprite.alpha).toBeLessThanOrEqual(top + 1e-9);
+      }
+      fx.destroy();
+    }
+    load.mockRestore();
+  });
+
+  it("paints the stomp's mist in ice-blue over the grass, never added mint", () => {
+    const blue = (hex: string): boolean => {
+      const value = Number.parseInt(hex.slice(1), 16);
+      return (value & 255) > ((value >> 8) & 255) && ((value >> 8) & 255) > (value >> 16);
+    };
+    const stomp = KRAMPUS_ABILITY_SET.plan.blizzardStomp!;
+    const mist = [...(stomp.pieces ?? []), ...(stomp.held ?? [])].filter((one) =>
+      ["frost_wisp_puff", "gathering_frost_vortex", "blizzard_swirl_1"].includes(one.cell ?? one.flipbook?.[0] ?? ""),
+    );
+    expect(mist.length).toBe(4);
+    for (const piece of mist) {
+      expect(piece.blend).toBe("normal");
+      for (const tint of [piece.tint, piece.tint_classic].flat()) expect(blue(tint as string)).toBe(true);
+    }
   });
 
   it("says when its atlas fails to load, so the battle draws the plain shard and rings", async () => {
