@@ -496,10 +496,10 @@ export class AutoAttackFlow {
    * at once. The map hears of the landed attack when the bar lands, so the
    * camp behind the sheet does not change before the bar is done.
    *
-   * While the Repeat waits in the server's battle line (patch 9.1), the army
-   * halts and the line under the bar shows an hourglass and the place
-   * ("#3 in line"); when the turn comes it marches on (neon's direction A,
-   * 26 Nov 2026). There is no Leave button: a wait is short and bounded, and
+   * While the Repeat waits in the server's battle line (patch 9.1), the
+   * scene shows the hourglass and the place ("Waiting in line · #3") over a
+   * darkened field, and a hidden line tells a screen reader; when the turn
+   * comes the army marches on (RepeatBar). There is no Leave button: a wait is short and bounded, and
    * a leave that crossed the turn could not stop the attack.
    */
   private async runWithBar(): Promise<void> {

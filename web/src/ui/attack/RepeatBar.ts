@@ -33,9 +33,11 @@ import "@/ui/styles/repeat-bar.css";
  * `--full`, `--stopped` and `--still` on the element drive the CSS
  * (repeat-bar.css).
  *
- * In the server's battle line (patch 9.1) the army halts where it is
- * ({@link RepeatBar.hold}) and marches on when the turn comes
- * ({@link RepeatBar.resume}); a badge over the scene shows the place. Time
+ * In the server's battle line (patch 9.1) the bar's clock halts
+ * ({@link RepeatBar.hold}) and runs on when the turn comes
+ * ({@link RepeatBar.resume}). Meanwhile the field goes dark with the place
+ * on it, and the army waits at the start with the rail empty, since nothing
+ * is spent yet (neon round 2); it glides back to where it was. Time
  * in line does not count towards the bar's minimum, and after a wait of
  * {@link REPEAT_BAR_AFTER_LINE_MS} or more the march from there is at most
  * that long (neon, 26 Nov 2026).
@@ -328,7 +330,7 @@ export class RepeatBar {
     return this.startedAt;
   }
 
-  /** In the battle line: the army halts where it is. */
+  /** In the battle line: the clock halts (the CSS parks the army at the start). */
   hold(): void {
     if (this.state !== "running" || this.heldAt !== null) return;
     this.heldAt = this.timers.now();
