@@ -5,7 +5,7 @@ import { Assets, RenderTexture, Sprite, Texture, type ColorMatrixFilter, type Re
 import { creepZIndex } from "@/game/attack/AttackBattleLayer";
 import type { BaseLoadResponse } from "@/api/types";
 import type { YardArtAtlas } from "./yardAtlas";
-import { HIGHLIGHT_MATRIX, UPGRADE_FADE_ALPHA, YardBuildings } from "./YardBuildings";
+import { HIGHLIGHT_MATRIX, UPGRADE_FADE_ALPHA, YardBuildings, frozenTint } from "./YardBuildings";
 import { readWork } from "./buildingWork";
 import { litTint } from "./helpGlow";
 import { rowOf } from "./buildingCosts";
@@ -82,6 +82,29 @@ describe("YardBuildings.setAnimFrame", () => {
     buildings.setAnimFrame(2, 0, 9);
     buildings.show(readYard(yardResponse()), fakeAtlas());
     expect(buildings.animFrameOf(2, 0)).toBe(9);
+    buildings.destroy();
+  });
+});
+
+describe("YardBuildings.setFrozen (beta 10, Krampus's freeze)", () => {
+  it("blues a tint channel by channel, and only darkens", () => {
+    expect(frozenTint(0xffffff)).toBe(0x8fd4ff);
+    expect(frozenTint(0x000000)).toBe(0);
+    // A battered building's grey stays darker than a whole one's ice.
+    expect(frozenTint(0x808080) & 0xff).toBe(0x80);
+  });
+
+  it("tints the tower's picture and its gun strip icy blue, and puts them back on a thaw", () => {
+    const buildings = new YardBuildings();
+    buildings.show(readYard(yardResponse()), fakeAtlas());
+    const tints = () => buildings.tops.children.map((child) => (child as Sprite).tint);
+    const before = tints();
+    buildings.setFrozen(2, true);
+    const frozen = tints();
+    expect(frozen).not.toEqual(before);
+    expect(frozen.some((tint) => tint === 0x8fd4ff)).toBe(true);
+    buildings.setFrozen(2, false);
+    expect(tints()).toEqual(before);
     buildings.destroy();
   });
 });

@@ -18,10 +18,10 @@
  * - Gorgo 40k-200k health, 1,000-3,000 damage, speed 1-2;
  * - Drull 12k-60k, 3,000-8,000, speed 2-3.6;
  * - Korath 28k-175k, 2,000-6,500, speed 1.4-2.5;
- * - Krampus 20k-110k, 1,200-4,000, speed 2-3: a fast raider, tougher than
- *   Drull and softer than Gorgo or Korath, hitting less hard than either,
- *   because its frost aura (`champions.ts`, `krampusAuraSlow`) is half its
- *   worth.
+ * - Krampus 17k-62k, 800-1,700, speed 1.3-2.4: softer and weaker-hitting
+ *   than any of them, because its frost aura (`champions.ts`: towers near it
+ *   see less far, defenders near it are slower) and its blows' frost are
+ *   half its worth.
  */
 
 /** `combatStatsData.ts`'s `ChampionCombatStat`, repeated so this file imports nothing. */
@@ -55,14 +55,18 @@ export const WILD_CHAMPION_PROPS: Readonly<Record<string, WildChampionStat>> = {
     name: "Krampus",
     props: {
       // Between Fomor and Korath (owner, 27 Nov 2026: "closer to Fomor and
-      // Korath, more hybrid-ish"): health and speed their midpoint, damage
-      // about 55% of Korath's (his frost does the rest), Korath's melee reach.
+      // Korath, more hybrid-ish"). Retuned 28 Nov 2026 with the aura's sight
+      // cut (`champions.ts`, `krampusSightCut`): towers near him see less far,
+      // so he takes far fewer shots than his health suggests. Alone on the
+      // sandbox test yard he wrecks about 11/17/23% at levels 1/3/6 (Fomor
+      // 6/9/12%, Korath 17/24/29%; `art-samples/frost-tribe/abilities/specs/
+      // krampus-tune.mjs`). Korath's melee reach.
       speed: [1.3, 1.5, 1.9, 2, 2.2, 2.4],
-      health: [21500, 40000, 58000, 71000, 84500, 107500],
-      damage: [1100, 1300, 1650, 2100, 2750, 3600],
+      health: [17000, 30000, 42000, 50000, 56000, 62000],
+      damage: [800, 950, 1150, 1400, 1600, 1700],
       range: [35, 45, 55, 60, 65, 65],
-      // The frost aura's slow, as a share (0.15 = 15% slower), and its radius in the
-      // engine's range space (Fomor's enrage reaches 250 in it), per level.
+      // The frost aura's slow on defending monsters, as a share (0.15 = 15% slower),
+      // and its radius in the engine's range space (Fomor's enrage reaches 250 in it), per level.
       buffs: [0.15, 0.2, 0.25, 0.3, 0.35, 0.4],
       buffRadius: [200, 220, 240, 260, 280, 300],
       bucket: [200],

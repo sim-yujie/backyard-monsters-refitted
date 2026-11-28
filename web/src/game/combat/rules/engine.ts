@@ -23,6 +23,9 @@ import {
   KRAMPUS_SHARD_SLOW,
   KRAMPUS_ID,
   krampusAuraRadius,
+  krampusFreezeChance,
+  krampusFreezeTicks,
+  krampusSightCut,
   krampusSlowPercent,
   LOOT_AURA_FRAMES,
   QUAKE_END_FRAME,
@@ -1500,8 +1503,15 @@ export interface Battle {
    * Ooze"), by building id, ascending. Drawing only. A fresh copy per call.
    */
   weakenedTowers(): readonly number[];
-  /** Ids of the towers Krampus's frost aura is slowing now, ascending (beta 10). */
+  /**
+   * Ids of the towers frost is slowing now, ascending (beta 10): a frost
+   * Eye-ra's area, a frostball, Krampus's Blizzard Stomp.
+   */
   chilledTowers(): readonly number[];
+  /** Ids of the towers Krampus's blows froze solid, ascending (beta 10). */
+  frozenTowers(): readonly number[];
+  /** Ids of the towers Krampus's aura holds, seeing less far, ascending (beta 10). */
+  blindedTowers(): readonly number[];
   /**
    * The frost areas frost Eye-ras left where they burst (`frost.ts`), still
    * on the ground: yard point, radius in yard units, the tick they melt on.
@@ -1941,8 +1951,13 @@ interface Tower {
   targets: number[];
   /** Its `_frameNumber`, counted every tick from the start of the battle. */
   frame: number;
-  /** Krampus's frost aura: the share of ticks it loses, whole percent; 0 when not chilled. */
-  chill: number;
+  /**
+   * Krampus's frost aura: how much shorter it sees, whole percent of
+   * {@link range}; 0 when no aura holds it (`krampusSightCut`).
+   */
+  sightCut: number;
+  /** Frozen solid by Krampus's blow: the tick it thaws on; 0 when it is not frozen. */
+  frozenUntil: number;
   /** Its chilled ticks' count, in percent: it acts once this reaches 100. */
   chillCount: number;
   /** A frost Eye-ra's area or a frostball (`frost.ts`): whole percent until {@link frostUntil}. */
@@ -2650,7 +2665,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       fireTick: stats.rate ?? 0,
       targets: [],
       frame: 0,
-      chill: 0,
+      sightCut: 0,
+      frozenUntil: 0,
       chillCount: 0,
       chilledBy: -1,
       frostChill: 0,
@@ -2674,6 +2690,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   /** Each tower by its report, for the blows that reach a creep with only the report in hand. */
   const towerOfReport = new Map<TowerReport, Tower>();
   for (const tower of towers) towerOfReport.set(tower.report, tower);
+  const towerOfBuilding = new Map<number, Tower>();
+  for (const tower of towers) towerOfBuilding.set(tower.building.id, tower);
 
   /** Laser beams still sweeping, oldest first; each outlives its tower (`LASERS.as`). */
   const laserBeams: LaserBeam[] = [];
@@ -2868,6 +2886,20 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const towerWeakShare = (tower: Tower): number =>
     tower.weakUntil > tick ? tower.weakShare : 0;
   /** Whether a Crabatron's blow is a critical hit: one draw, for a ranked Crabatron only. */
+  /**
+   * Krampus's blow may freeze the tower it hit solid (beta 10, owner 28 Nov
+   * 2026, `krampusFreezeChance`): one draw per blow on a standing tower, and
+   * none on anything else, so no other battle's draws move. A frozen tower
+   * stays frozen to the later of its two thaws.
+   */
+  const freezeRoll = (krampus: Creep, building: EngineBuilding): void => {
+    if (krampus.friendly || building.hp <= 0 || building.kind !== "tower") return;
+    const tower = towerOfBuilding.get(building.id);
+    if (!tower) return;
+    if (rng.int(100) >= krampusFreezeChance(krampus.level)) return;
+    tower.frozenUntil = Math.max(tower.frozenUntil, tick + krampusFreezeTicks(krampus.level));
+  };
+
   const critRoll = (creep: Creep): boolean =>
     creep.rank > 0 && creep.monsterId === CRABATRON_ID && rng.float() < critChance(creep.rank);
   /** Whether Pokeys can swarm at all this battle: a side has them ranked. */
@@ -4394,7 +4426,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (!hose || !shootsHose(building.type)) return false;
     const x = hose.target.sx - building.sx;
     const y = vacuumHoseY(hose.target.sy, tick - hose.droppedAt) - building.sy;
-    return Math.sqrt(x * x + y * y) <= tower.range;
+    return Math.sqrt(x * x + y * y) <= sightOf(tower);
   };
 
   /**
@@ -5163,6 +5195,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     // Krampus's Frostbite (beta 10, `champions.ts`).
     if (creep.champion && creep.monsterId === KRAMPUS_ID) {
       frostbite(creep, creep.damage * KRAMPUS_FROSTBITE_SHARE, null, target);
+      freezeRoll(creep, target);
     }
     if (creep.monsterId === KING_WORMZER_ID) {
       kingWormzerSplash(creep, creep.damage * multiplier, null, target);
@@ -6732,8 +6765,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     aura.towers = (aura.towers ?? []).filter((tower) => {
       if (kept.has(tower)) return true;
       if (tower.chilledBy === owner.id) {
-        tower.chill = 0;
-        tower.chillCount = 0;
+        tower.sightCut = 0;
         tower.chilledBy = -1;
       }
       return false;
@@ -6760,6 +6792,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (inBattle(krampus)) {
       const radius = krampusAuraRadius(krampus.level);
       const percent = krampusSlowPercent(krampus.level);
+      const cut = krampusSightCut(krampus.level);
       const side = krampus.friendly ? TARGETS_ATTACKERS : TARGETS_DEFENDERS;
       const flags = side | TARGETS_GROUND | TARGETS_FLYING | TARGETS_INVISIBLE;
       for (const { creep: other } of index.inRange(
@@ -6789,8 +6822,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
           if (dx * dx + dy * dy > reach) continue;
           keptTowers.add(tower);
           if (tower.chilledBy === krampus.id) continue;
-          tower.chill = percent;
-          tower.chillCount = 0;
+          tower.sightCut = cut;
           tower.chilledBy = krampus.id;
           (aura.towers ??= []).push(tower);
         }
@@ -7514,13 +7546,21 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     readonly reach: number;
   }
 
+  /**
+   * How far a tower sees: its range, cut while Krampus's frost aura holds it
+   * (`krampusSightCut`), a whole number. What it finds and keeps in its
+   * sights; a Quake Tower's blast still reaches its full {@link Tower.range}.
+   */
+  const sightOf = (tower: Tower): number =>
+    tower.sightCut > 0 ? Math.trunc((tower.range * (100 - tower.sightCut)) / 100) : tower.range;
+
   const scanOf = (tower: Tower): TowerScan => {
     const scan = towerScanPoint(tower.building);
     return {
       flags: towerTargets(tower.building.type),
       x: scan.x,
       y: scan.y,
-      reach: tower.range * tower.range,
+      reach: sightOf(tower) * sightOf(tower),
     };
   };
 
@@ -7535,7 +7575,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       const creep = byCreepId.get(id);
       if (!creep || creep.hp <= 0 || !creep.targetable) continue;
       if (!canHit(scan.flags, creep.flags)) continue;
-      if (!towerHolds(creep, tower.building, tower.range)) continue;
+      if (!towerHolds(creep, tower.building, sightOf(tower))) continue;
       live.push(creep);
     }
     return live;
@@ -7543,7 +7583,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
 
   /** `FindTargets(count, 1)`: the nearest `count` in range (`BTOWER.as:382-427`). */
   const findTowerTargets = (tower: Tower, scan: TowerScan, count: number): void => {
-    const found = index.inRange(tower.range, scan.x, scan.y, scan.flags);
+    const found = index.inRange(sightOf(tower), scan.x, scan.y, scan.flags);
     tower.targets = found.slice(0, count).map((hit) => hit.creep.id);
   };
 
@@ -7555,10 +7595,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
 
   const tickTower = (tower: Tower): void => {
     const building = tower.building;
-    // Krampus's frost aura (beta 10): a chilled tower sits out its share of ticks.
-    // A frost Eye-ra's area or a frostball chills it the same way; the stronger holds.
-    const chill =
-      tower.frostUntil > tick ? Math.max(tower.chill, tower.frostChill) : tower.chill;
+    // Frozen solid by Krampus's blow (beta 10): nothing at all till it thaws.
+    if (tower.frozenUntil > tick) return;
+    // A frost Eye-ra's area, a frostball or Krampus's Blizzard Stomp: a chilled
+    // tower sits out its share of ticks; the stronger chill holds.
+    const chill = tower.frostUntil > tick ? tower.frostChill : 0;
     if (chill > 0) {
       tower.chillCount += 100 - chill;
       if (tower.chillCount < 100) return;
@@ -7882,7 +7923,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       const scan = scanOf(tower);
       const live = liveTargets(tower, scan).length > 0;
       // `FindTargets` keeps the list it had when it finds nobody (`BTOWER.as:395-426`).
-      const found = index.inRange(tower.range, scan.x, scan.y, scan.flags);
+      const found = index.inRange(sightOf(tower), scan.x, scan.y, scan.flags);
       if (found.length > 0) {
         gun.targets = found.slice(0, SPURTZ_MAX_TARGETS).map((hit) => hit.creep);
         tower.targets = gun.targets.map((creep) => creep.id);
@@ -9002,9 +9043,19 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
 
   const chilledTowers = (): number[] =>
     towers
-      .filter(
-        (tower) => (tower.chilledBy >= 0 || tower.frostUntil > tick) && tower.building.hp > 0,
-      )
+      .filter((tower) => tower.frostUntil > tick && tower.building.hp > 0)
+      .map((tower) => tower.building.id)
+      .sort((one, other) => one - other);
+
+  const frozenTowers = (): number[] =>
+    towers
+      .filter((tower) => tower.frozenUntil > tick && tower.building.hp > 0)
+      .map((tower) => tower.building.id)
+      .sort((one, other) => one - other);
+
+  const blindedTowers = (): number[] =>
+    towers
+      .filter((tower) => tower.sightCut > 0 && tower.building.hp > 0)
       .map((tower) => tower.building.id)
       .sort((one, other) => one - other);
 
@@ -9212,6 +9263,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     bunkerPools,
     weakenedTowers,
     chilledTowers,
+    frozenTowers,
+    blindedTowers,
     frostAreas: (): FrostArea[] => {
       // Melted areas leave the list as they are read; drawing only.
       for (let at = frostAreaList.length - 1; at >= 0; at -= 1) {

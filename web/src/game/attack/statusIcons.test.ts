@@ -279,6 +279,17 @@ describe("a tower's stickers (owner, beta 6)", () => {
     towers.destroy();
   });
 
+  it('shows the ice cube ("frozen") on a tower Krampus froze, beside its other stickers (beta 10)', async () => {
+    const towers = new TowerStatusIcons(() => ({ x: 100, y: 50 }), await towerTextures());
+    towers.sync([], [], [4]);
+    expect(towers.shown).toEqual({ 4: ["frozen"] });
+    towers.sync([4], [4], [4]);
+    expect(towers.shown).toEqual({ 4: ["weakened", "slowed", "frozen"] });
+    towers.sync([], [], []);
+    expect(towers.shown).toEqual({});
+    towers.destroy();
+  });
+
   it("sits centred just above the bar, a tower-sized sticker", async () => {
     const towers = new TowerStatusIcons(() => ({ x: 100, y: 50 }), await towerTextures());
     towers.sync([3]);

@@ -1646,6 +1646,11 @@ export class YardRenderer {
     this.buildings.setFlash(id, on);
   }
 
+  /** Draws a tower frozen solid by Krampus (beta 10), or puts it back; see `YardBuildings.setFrozen`. */
+  frostBuilding(id: number, on: boolean): void {
+    this.buildings.setFrozen(id, on);
+  }
+
   /**
    * Lights a building up, or puts it back, for the drop an armed bomb or the
    * bucket would make (#88); see `YardBuildings.setHighlight`. The isometric

@@ -4,9 +4,13 @@ import {
   hasFireball,
   hasQuake,
   KRAMPUS_AURA_INTERVAL,
+  KRAMPUS_BLIZZARD_SLOW,
   KRAMPUS_ID,
   krampusAuraRadius,
   krampusAuraSlow,
+  krampusFreezeChance,
+  krampusFreezeTicks,
+  krampusSightCut,
   krampusSlowPercent,
 } from "./champions.js";
 import {
@@ -25,8 +29,8 @@ import type { CombatBuildingDataMap, Roster } from "./types.js";
 
 /**
  * Krampus, the frost tribe's champion (beta 10, owner 27 Nov 2026): a wild
- * champion no player owns, whose frost aura slows the towers and the
- * defending monsters near it.
+ * champion no player owns, whose frost aura (invisible, owner 28 Nov 2026)
+ * cuts how far the towers near it see and slows the defending monsters.
  */
 
 const yardOf = (buildings: CombatBuildingDataMap) =>
@@ -88,16 +92,22 @@ describe("Krampus's numbers (proposed, wildChampions.ts)", () => {
   it("grows from level 1 to 6", () => {
     expect(
       [1, 6].map((level) => championStat(KRAMPUS_ID, "health", level)),
-    ).toEqual([21_500, 107_500]);
+    ).toEqual([17_000, 62_000]);
     expect(
       [1, 6].map((level) => championStat(KRAMPUS_ID, "damage", level)),
-    ).toEqual([1_100, 3_600]);
+    ).toEqual([800, 1_700]);
     expect(
       [1, 6].map((level) => championStat(KRAMPUS_ID, "speed", level)),
     ).toEqual([1.3, 2.4]);
     expect([1, 6].map(krampusAuraSlow)).toEqual([0.15, 0.4]);
     expect([1, 6].map(krampusAuraRadius)).toEqual([200, 300]);
     expect([1, 3, 6].map(krampusSlowPercent)).toEqual([15, 25, 40]);
+    expect([1, 3, 6].map(krampusSightCut)).toEqual([10, 14, 20]);
+    expect([1, 3, 6].map(krampusFreezeChance)).toEqual([10, 14, 20]);
+    // 80 ticks a second: 1.5 s, 2 s, 2.5 s.
+    expect([1, 3, 6].map(krampusFreezeTicks)).toEqual([120, 160, 200]);
+    // Owner, 28 Nov 2026: Blizzard Stomp "reduce to 30%".
+    expect(KRAMPUS_BLIZZARD_SLOW).toBe(30);
   });
 });
 
@@ -109,7 +119,7 @@ describe("Krampus in a fight", () => {
     expect(krampusOf(battle)).toBeUndefined();
   });
 
-  it("chills towers and defenders in its aura from its first look, never its own side", () => {
+  it("holds towers (shorter sight) and chills defenders in its aura from its first look, never its own side", () => {
     const battle = createBattle(frostYard(), {
       seed: 3,
       wildChampions: true,
@@ -118,9 +128,11 @@ describe("Krampus in a fight", () => {
     fling(battle, 40, { C2: 3 }, { t: 6, l: 6 });
     expect(krampusOf(battle)).toBeDefined();
     watch(battle, KRAMPUS_AURA_INTERVAL - 1);
-    expect(battle.chilledTowers()).toEqual([]);
+    expect(battle.blindedTowers()).toEqual([]);
     watch(battle, 1);
-    expect(battle.chilledTowers()).toEqual([2]);
+    expect(battle.blindedTowers()).toEqual([2]);
+    // The aura no longer slows a tower (owner, 28 Nov 2026): it is not "Slowed".
+    expect(battle.chilledTowers()).toEqual([]);
     let chilledDefender = false;
     watch(battle, 300, () => {
       if (battle.creeps().some((creep) => creep.friendly && creep.chilled))
@@ -133,39 +145,67 @@ describe("Krampus in a fight", () => {
     expect(chilledDefender).toBe(true);
   });
 
-  it("makes a chilled tower fire slower, by its level's share", () => {
-    /** Mean ticks between the Cannon Tower's shots over a fight. */
+  /**
+   * A level 10 Cannon Tower (range 250) 230 to the side of a harvester the
+   * attackers swarm: in its sight without Krampus; past a level 6 Krampus's
+   * cut sight (250 less 20% = 200) with him there, though inside his aura (300).
+   */
+  const sideTower = (krampusLevel: number | null) => {
+    const yard = yardOf({
+      "1": { id: 1, t: 1, l: 1, X: 0, Y: 0, st: 1_000_000 },
+      "2": { id: 2, t: 20, l: 10, X: 0, Y: 230 },
+    });
+    const battle = createBattle(yard, { seed: 5, wildChampions: true });
+    fling(
+      battle,
+      -40,
+      { C6: 40 },
+      krampusLevel === null ? undefined : { t: 6, l: krampusLevel },
+    );
+    return battle;
+  };
+
+  it("makes a tower in its aura see less far: it opens fire only once they come closer", () => {
+    /** The tick of the tower's first shot, and how far from it that target stood. */
+    const firstShot = (krampusLevel: number | null) => {
+      const battle = sideTower(krampusLevel);
+      let first: { tick: number; far: number } | null = null;
+      watch(battle, 900, (event) => {
+        if (first || event.kind !== "shot" || event.towerId !== 2) return;
+        first = { tick: event.tick, far: Math.hypot(event.ix, event.iy - 230) };
+      });
+      expect(first).not.toBeNull();
+      return first as unknown as { tick: number; far: number };
+    };
+    const plain = firstShot(null);
+    const held = firstShot(6);
+    // Without him it shoots the swarm at the harvester; with him it waits till
+    // they walk well inside its cut sight (its scan point is its middle).
+    expect(held.tick).toBeGreaterThan(plain.tick + 80);
+    expect(held.far).toBeLessThan(plain.far - 30);
+  });
+
+  it("no longer slows a tower that still sees its target", () => {
+    /** The median ticks between the Cannon Tower's shots, the swarm well inside its cut sight. */
     const meanGap = (krampusLevel: number | null): number => {
-      // The tower stands off to the side, inside the aura, while everything fights the harvester.
       const yard = yardOf({
         "1": { id: 1, t: 1, l: 1, X: 0, Y: 0, st: 1_000_000 },
-        "2": { id: 2, t: 20, l: 10, X: 0, Y: 200 },
+        "2": { id: 2, t: 20, l: 10, X: 0, Y: 110 },
       });
       const battle = createBattle(yard, { seed: 5, wildChampions: true });
-      fling(
-        battle,
-        -40,
-        { C6: 40 },
-        krampusLevel === null ? undefined : { t: 6, l: krampusLevel },
-      );
+      fling(battle, -40, { C6: 40 }, krampusLevel === null ? undefined : { t: 6, l: krampusLevel });
       const ticks: number[] = [];
       watch(battle, 900, (event) => {
-        if (
-          event.kind === "shot" &&
-          event.towerId === 2 &&
-          event.tick > KRAMPUS_AURA_INTERVAL * 2
-        )
+        if (event.kind === "shot" && event.towerId === 2 && event.tick > KRAMPUS_AURA_INTERVAL * 2)
           ticks.push(event.tick);
       });
       expect(ticks.length).toBeGreaterThan(4);
-      return ((ticks.at(-1) ?? 0) - (ticks[0] ?? 0)) / (ticks.length - 1);
+      const gaps = ticks.slice(1).map((at, n) => at - (ticks[n] ?? 0)).sort((a, b) => a - b);
+      return gaps[Math.floor(gaps.length / 2)] ?? 0;
     };
-    const plain = meanGap(null);
-    // Level 4: the aura alone (his Blizzard Stomp, from level 5, freezes harder).
-    const chilled = meanGap(4);
-    // 30% of its ticks lost: each gap about 1 / 0.7 of the plain one.
-    expect(chilled / plain).toBeGreaterThan(1.3);
-    expect(chilled / plain).toBeLessThan(1.6);
+    // Level 4: the aura alone (his Blizzard Stomp, from level 5, slows towers).
+    // The median gap: his blows' freezes make a few long ones.
+    expect(meanGap(4)).toBe(meanGap(null));
   });
 
   it("slows a chilled defender's walk to its level's share", () => {
@@ -233,17 +273,14 @@ describe("Krampus in a fight", () => {
     });
     const battle = createBattle(yard, { seed: 3, wildChampions: true });
     fling(battle, -20, {}, { t: 6, l: 1 });
-    let chilledWhileAlive = 0;
+    let heldWhileAlive = 0;
     watch(battle, 8000, () => {
       if ((krampusOf(battle)?.hp ?? 0) > 0)
-        chilledWhileAlive = Math.max(
-          chilledWhileAlive,
-          battle.chilledTowers().length,
-        );
+        heldWhileAlive = Math.max(heldWhileAlive, battle.blindedTowers().length);
     });
-    expect(chilledWhileAlive).toBeGreaterThan(0);
+    expect(heldWhileAlive).toBeGreaterThan(0);
     expect(krampusOf(battle)?.hp ?? 0).toBeLessThanOrEqual(0);
-    expect(battle.chilledTowers()).toEqual([]);
+    expect(battle.blindedTowers()).toEqual([]);
   });
 
   it("lets everything go when it is called back", () => {
@@ -254,14 +291,14 @@ describe("Krampus in a fight", () => {
     });
     fling(battle, 40, { C2: 3 }, { t: 6, l: 6 });
     watch(battle, KRAMPUS_AURA_INTERVAL + 1);
-    expect(battle.chilledTowers()).toEqual([2]);
+    expect(battle.blindedTowers()).toEqual([2]);
     battle.apply({ kind: "championRetreat", t: battle.tick, c: 6 });
     watch(battle, KRAMPUS_AURA_INTERVAL * 2 + 1);
-    expect(battle.chilledTowers()).toEqual([]);
+    expect(battle.blindedTowers()).toEqual([]);
     expect(battle.creeps().some((creep) => creep.chilled)).toBe(false);
   });
 
-  it("is the same fight twice from the same seed (no random draws of its own)", () => {
+  it("is the same fight twice from the same seed (its freeze draws come from the seed)", () => {
     const play = (): string => {
       const battle = createBattle(frostYard(), {
         seed: 9,
@@ -317,5 +354,65 @@ describe("Krampus's three abilities (beta 10, level-gated, champions.ts)", () =>
   it("stomps (Blizzard Stomp) only from level 5", () => {
     expect(stomps(4)).toBe(0);
     expect(stomps(5)).toBeGreaterThan(0);
+  });
+
+  it("slows the towers in his Blizzard Stomp (30%)", () => {
+    const yard = yardOf({
+      "1": { id: 1, t: 1, l: 1, X: 0, Y: 0, st: 1_000_000 },
+      "2": { id: 2, t: 20, l: 10, X: 100, Y: 0 },
+    });
+    const battle = createBattle(yard, { seed: 3, wildChampions: true });
+    fling(battle, -60, {}, { t: 6, l: 5 });
+    let chilledAfterQuake = false;
+    let quaked = false;
+    watch(battle, 40 * 80, (event) => {
+      if (event.kind === "quake") quaked = true;
+      if (quaked && battle.chilledTowers().includes(2)) chilledAfterQuake = true;
+    });
+    expect(quaked).toBe(true);
+    expect(chilledAfterQuake).toBe(true);
+  });
+
+  /** A level 6 Krampus on a lone level 10 Cannon Tower: the ticks it was frozen, and its shots then. */
+  const freezes = (seed: number) => {
+    const yard = () =>
+      yardOf({
+        "1": { id: 1, t: 1, l: 1, X: -300, Y: -300, st: 1_000_000 },
+        "2": { id: 2, t: 20, l: 10, X: 0, Y: 0 },
+      });
+    const battle = createBattle(yard(), { seed, wildChampions: true });
+    fling(battle, 60, {}, { t: 6, l: 6 });
+    let frozenTicks = 0;
+    let shotsWhileFrozen = 0;
+    let longest = 0;
+    let run = 0;
+    watch(battle, 30 * 80, (event) => {
+      if (event.kind === "shot" && event.towerId === 2 && battle.frozenTowers().includes(2))
+        shotsWhileFrozen += 1;
+    });
+    // Count the frozen ticks over a second run, tick by tick.
+    const again = createBattle(yard(), { seed, wildChampions: true });
+    fling(again, 60, {}, { t: 6, l: 6 });
+    for (let step = 0; step < 30 * 80 && !again.over(); step += 1) {
+      again.step();
+      if (again.frozenTowers().includes(2)) {
+        frozenTicks += 1;
+        run += 1;
+        longest = Math.max(longest, run);
+      } else run = 0;
+    }
+    return { frozenTicks, shotsWhileFrozen, longest };
+  };
+
+  it("freezes a tower he hits solid now and then (Frostbite's freeze): it fires nothing till it thaws", () => {
+    let frozen = 0;
+    for (const seed of [1, 2, 3, 4]) {
+      const run = freezes(seed);
+      frozen += run.frozenTicks;
+      expect(run.shotsWhileFrozen).toBe(0);
+      // One freeze is level 6's 2.5 s; a fresh one while frozen runs on from the blow.
+      if (run.frozenTicks > 0) expect(run.longest).toBeGreaterThanOrEqual(krampusFreezeTicks(6) - 1);
+    }
+    expect(frozen).toBeGreaterThan(0);
   });
 });

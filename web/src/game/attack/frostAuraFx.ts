@@ -1,15 +1,14 @@
 import { Container, Graphics } from "pixi.js";
-import { KRAMPUS_ID, krampusAuraRadius, type CreepSnapshot, type FrostArea } from "@/game/combat/rules";
+import type { FrostArea } from "@/game/combat/rules";
 import type { Point } from "@/game/yard/YardGrid";
 
 /**
- * Krampus's frost aura on the ground (beta 10, owner 27 Nov 2026: "frost aura
- * slows nearby towers AND monsters"): a pale icy disc with a bright frost rim,
- * exactly the aura's reach, following Krampus and breathing slowly. Drawing
- * only; the slow itself is the engine's (`engine.ts`, `tickFrostAura`).
+ * Frost on the ground (beta 10): the frost areas frost Eye-ras leave. Krampus's
+ * own aura draws nothing (owner, 28 Nov 2026: "The aura should be invisible
+ * like fomor"). Drawing only; the slow itself is the engine's.
  *
- * The aura's radius is in yard units (the engine's range space); on screen a
- * yard circle is an ellipse √2 wide and √2/2 tall per unit (`toIso`).
+ * A radius is in yard units (the engine's range space); on screen a yard
+ * circle is an ellipse √2 wide and √2/2 tall per unit (`toIso`).
  */
 const ICE = 0x9fe4ff;
 const RIM = 0xe8fbff;
@@ -20,54 +19,10 @@ export const auraEllipse = (radius: number): { rx: number; ry: number } => ({
   ry: (radius * Math.SQRT2) / 2,
 });
 
-export class FrostAuraFx {
-  private readonly rings = new Map<number, { ring: Graphics; level: number }>();
-  readonly root = new Container();
-
-  constructor(private readonly world: (ix: number, iy: number) => Point) {
-    this.root.eventMode = "none";
-  }
-
-  /** Each live Krampus's ring, placed; the rest dropped. `tick` breathes them. */
-  update(creeps: readonly CreepSnapshot[], tick: number): void {
-    const seen = new Set<number>();
-    for (const creep of creeps) {
-      if (creep.monsterId !== KRAMPUS_ID || creep.hp <= 0) continue;
-      seen.add(creep.id);
-      let entry = this.rings.get(creep.id);
-      if (!entry || entry.level !== creep.level) {
-        entry?.ring.destroy();
-        entry = { ring: drawRing(krampusAuraRadius(creep.level)), level: creep.level };
-        this.rings.set(creep.id, entry);
-        this.root.addChild(entry.ring);
-      }
-      const at = this.world(creep.ix, creep.iy);
-      entry.ring.position.set(at.x, at.y);
-      entry.ring.alpha = 0.8 + 0.2 * Math.sin(tick / 20);
-    }
-    for (const [id, entry] of this.rings) {
-      if (seen.has(id)) continue;
-      entry.ring.destroy();
-      this.rings.delete(id);
-    }
-  }
-
-  /** How many rings are on the ground (for tests). */
-  get count(): number {
-    return this.rings.size;
-  }
-
-  destroy(): void {
-    for (const entry of this.rings.values()) entry.ring.destroy();
-    this.rings.clear();
-    this.root.destroy({ children: true });
-  }
-}
-
 /**
  * The frost areas frost Eye-ras leave where they burst (beta 10, owner 27 Nov
- * 2026: "a frost AOE that slows towers upon exploding"): the same icy disc
- * as Krampus's aura, still on the ground, frosting over in its first half
+ * 2026: "a frost AOE that slows towers upon exploding"): an icy disc
+ * on the ground, frosting over in its first half
  * second and melting away in its last second. Drawing only; the towers it
  * slows are the engine's (`engine.ts`, `frostArea`).
  */

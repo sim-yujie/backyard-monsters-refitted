@@ -254,6 +254,16 @@ const GLOW_BAKES_PER_FRAME = 3;
 const GLOW_CACHE_MAX = 96;
 const NONE_LIT: ReadonlyMap<number, number> = new Map();
 
+/** The icy blue a frozen tower is drawn in, over its own tint (`setFrozen`). */
+const FROZEN_TINT = 0x8fd4ff;
+
+/** `tint` with the frozen blue multiplied in, channel by channel. */
+export const frozenTint = (tint: number): number => {
+  const channel = (shift: number): number =>
+    Math.round((((tint >> shift) & 0xff) * ((FROZEN_TINT >> shift) & 0xff)) / 255) << shift;
+  return channel(16) | channel(8) | channel(0);
+};
+
 export class YardBuildings {
   /** Beneath every building. Add to the scene before `tops`. */
   readonly shadows = new Container();
@@ -294,6 +304,8 @@ export class YardBuildings {
   private plateScale = 1;
   /** How lit each building a visitor can speed up is drawn, by id (`setHelpLit`). */
   private readonly helpLit = new Map<number, number>();
+  /** Towers Krampus froze solid, drawn icy blue (`setFrozen`). */
+  private readonly frozen = new Set<number>();
   /** The glows baked so far, by building, place and picture: kept while a visit redraws the yard. */
   private readonly glowCache = new Map<string, BakedGlow>();
   /** The renderer the glows are baked with (`useRenderer`); no glow without one. */
@@ -1190,6 +1202,28 @@ export class YardBuildings {
     view.top.tint = on ? 0xffffff : this.tintOf(view);
   }
 
+  /* ── Frozen, for a live battle (beta 10) ──────────────────────────── */
+
+  /**
+   * Draws a tower Krampus's blow froze solid in an icy blue, over whatever
+   * damage step it is at, or puts it back. Kept as a set, so the damage
+   * steps and the hit flash put the ice back on too ({@link tintOf}).
+   */
+  setFrozen(id: number, on: boolean): void {
+    if (on === this.frozen.has(id)) return;
+    if (on) this.frozen.add(id);
+    else this.frozen.delete(id);
+    const view = this.byId.get(id);
+    if (!view) return;
+    const tint = this.tintOf(view);
+    if (view.resolved) view.top.tint = tint;
+    for (const layer of view.anims) layer.sprite.tint = tint;
+    if (view.fort) {
+      view.fort.back.tint = tint;
+      view.fort.front.tint = tint;
+    }
+  }
+
   /* ── Lit, for a friend's visit (owner's pick F, 26 Nov 2026) ───────── */
 
   /** The renderer the help glows are baked with; without one a building is only tinted. */
@@ -1238,7 +1272,8 @@ export class YardBuildings {
 
   /** The tint a building is drawn with: its damage step's, warmed while a visitor can help it. */
   private tintOf(view: BuildingView): number {
-    return litTint(DAMAGE_TINTS[view.damageStep] ?? 0xffffff, this.helpLit.get(view.building.id) ?? 0);
+    const tint = litTint(DAMAGE_TINTS[view.damageStep] ?? 0xffffff, this.helpLit.get(view.building.id) ?? 0);
+    return this.frozen.has(view.building.id) ? frozenTint(tint) : tint;
   }
 
   /** Puts a building's help light on its sprites: the tint, and the glow's strength or its going. */

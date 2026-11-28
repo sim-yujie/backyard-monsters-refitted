@@ -1,5 +1,5 @@
 import { creepSkin } from "./monsterSkins";
-import { FrostAreaFx, FrostAuraFx } from "./frostAuraFx";
+import { FrostAreaFx } from "./frostAuraFx";
 import {
   ColorMatrixFilter,
   Container,
@@ -630,6 +630,8 @@ export interface BattleYardHost {
   setConcealed(id: number, concealed: boolean): void;
   /** Puts one of a building's animation layers on a cell: a tower's facing. */
   setAnimFrame(id: number, layer: number, frame: number): void;
+  /** Draws a tower frozen solid (icy tint) or puts it back (beta 10); a host without one shows none. */
+  frostBuilding?(id: number, on: boolean): void;
   /** Switches a building's hit flash on or off (#63); a host without one shows no flash. */
   flashBuilding?(id: number, on: boolean): void;
   /** The camera's zoom, so damage numbers keep their size on screen (#68); 1 when absent. */
@@ -859,8 +861,6 @@ export class AttackBattleLayer {
   private readonly shadows: Container;
   /** In the overlay, in this order. */
   private readonly effects = new Container();
-  /** Krampus's frost aura rings on the ground (beta 10). */
-  private frostAura: FrostAuraFx | null = null;
   /** Frost Eye-ras' frost areas on the ground (beta 10). */
   private frostAreas: FrostAreaFx | null = null;
   /** Drawn explosions, Eye-ra's fiery one (feat/eyera-explosion); inside `effects`. */
@@ -1189,7 +1189,6 @@ export class AttackBattleLayer {
       // its view when its death is read, to stay on screen until the bullet lands.
       const live = battle.creeps();
       const seen = this.syncCreeps(live, tick);
-      this.syncFrostAura(live, tick);
       // A stand-in battle (tests) may not draw frost areas.
       this.syncFrostAreas(battle.frostAreas?.() ?? [], tick);
       for (const event of battle.recentEvents(this.lastEventTick)) {
@@ -1221,7 +1220,11 @@ export class AttackBattleLayer {
     this.siegeFx.update(siege, shown);
     this.lootFx.update(shown);
     this.showBombNumbers(shown);
-    this.towerStatus.sync(battle.weakenedTowers(), battle.chilledTowers?.() ?? []);
+    // Krampus's aura draws nothing (owner, 28 Nov 2026: "invisible like fomor");
+    // a tower his blow froze wears the ice cube and an icy tint till it thaws.
+    const frozen = battle.frozenTowers?.() ?? [];
+    this.towerStatus.sync(battle.weakenedTowers(), battle.chilledTowers?.() ?? [], frozen);
+    this.syncFrozenTowers(frozen);
 
     if (this.damageDirty) {
       this.damageDirty = false;
@@ -1483,8 +1486,6 @@ export class AttackBattleLayer {
     }
     this.splats.length = 0;
     this.ringFx.destroy();
-    this.frostAura?.destroy();
-    this.frostAura = null;
     this.frostAreas?.destroy();
     this.frostAreas = null;
     for (const sprite of this.gibPool) sprite.destroy();
@@ -1597,15 +1598,23 @@ export class AttackBattleLayer {
 
   /* ── Creeps ─────────────────────────────────────────────────────────── */
 
-  /** Krampus's frost aura on the ground, made the first time a Krampus is on the field. */
-  private syncFrostAura(creeps: readonly CreepSnapshot[], tick: number): void {
-    if (!this.frostAura) {
-      if (!creeps.some((creep) => creep.monsterId === "G6")) return;
-      this.frostAura = new FrostAuraFx((ix, iy) => groundWorld(ix, iy, this.origin));
-      // On the ground, under the bodies, where the flyers' shadows go.
-      (this.host.groundShadowLayer?.() ?? this.effects).addChild(this.frostAura.root);
+  /** The towers drawn frozen now, so a thaw puts exactly those back. */
+  private readonly frozenShown = new Set<number>();
+
+  /** Tints each tower Krampus froze icy blue, and puts back each that thawed or fell. */
+  private syncFrozenTowers(frozen: readonly number[]): void {
+    if (frozen.length === 0 && this.frozenShown.size === 0) return;
+    const now = new Set(frozen);
+    for (const id of this.frozenShown) {
+      if (now.has(id)) continue;
+      this.frozenShown.delete(id);
+      this.host.frostBuilding?.(id, false);
     }
-    this.frostAura.update(creeps, tick);
+    for (const id of now) {
+      if (this.frozenShown.has(id)) continue;
+      this.frozenShown.add(id);
+      this.host.frostBuilding?.(id, true);
+    }
   }
 
   /** Frost Eye-ras' frost areas on the ground, made the first time one bursts. */
