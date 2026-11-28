@@ -11,7 +11,10 @@ import {
   EVENT_EXTRAS,
   EventsPanel,
   goalsBar,
+  heroReward,
   nextText,
+  trackFocus,
+  trackShare,
   rewardBadge,
   type EventsPanelView,
 } from "./EventsPanel";
@@ -125,6 +128,55 @@ describe("EventsPanel", () => {
     expect(panel.element.querySelector(".events-card__countdown")?.textContent).toBe(
       "Ends in 9d 22h",
     );
+    panel.close();
+  });
+
+  it("draws Christmas's presents as one prize track and one dock (owner, 28 Nov 2026)", () => {
+    const { panel, options } = mounted();
+    const ladder = {
+      label: "Presents found",
+      counter: 160,
+      tiers: [
+        { need: 25, rewards: [{ kind: "shiny" as const, amount: 10 }, { kind: "eventCoins" as const, amount: 20 }], claimed: true },
+        { need: 50, rewards: [{ kind: "eventCoins" as const, amount: 135 }], claimed: false },
+        { need: 150, rewards: [{ kind: "decoration" as const, type: 235, count: 1 }, { kind: "shiny" as const, amount: 20 }], claimed: false },
+        { need: 200, rewards: [{ kind: "decoration" as const, type: 236, count: 1 }, { kind: "shiny" as const, amount: 30 }], claimed: false },
+      ],
+    };
+    panel.render(list([event({ id: "christmas-2026", kind: "christmas", ladder })]));
+    const section = panel.element.querySelector(".events-ladder--track")!;
+    expect(section.querySelectorAll(".events-tier")).toHaveLength(0);
+    const nodes = [...section.querySelectorAll<HTMLButtonElement>(".events-track__node")];
+    expect(nodes.map((node) => node.className.match(/--(claimed|ready|locked)/)?.[1])).toEqual(["claimed", "ready", "ready", "locked"]);
+    expect(nodes.map((node) => node.style.left)).toEqual(["25%", "50%", "75%", "100%"]);
+    expect(section.querySelector(".events-calendar__count")?.textContent).toBe("160 / 200");
+    // The dock opens on the first goal ready, says two are waiting, and claims it.
+    const dock = section.querySelector<HTMLElement>(".events-track__dock")!;
+    expect(dock.dataset["tier"]).toBe("1");
+    expect(dock.querySelector(".events-track__end .events-track__more")?.textContent).toBe("2 ready");
+    // Each ready goal says so on its tile; one not reached yet shows a lock.
+    expect(section.querySelectorAll(".events-track__badge--ready")).toHaveLength(2);
+    expect(nodes[3]!.querySelector(".events-track__badge--locked")).not.toBeNull();
+    // The hint sits under the title, above the bar.
+    expect(section.querySelector(".events-calendar__head + .events-card__extra")).not.toBeNull();
+    expect(dock.querySelector("[data-claim]")?.textContent).toBe("Claim 50");
+    dock.querySelector<HTMLButtonElement>("[data-claim]")!.click();
+    expect(options.onClaimTier).toHaveBeenCalledWith(expect.objectContaining({ id: "christmas-2026" }), 1);
+    // A tap on the last goal shows how many are left, with no Claim.
+    nodes[3]!.click();
+    expect(dock.dataset["tier"]).toBe("3");
+    expect(dock.querySelector("[data-claim]")).toBeNull();
+    expect(dock.querySelector(".events-track__state")?.textContent).toBe("40 left");
+    expect(nodes[3]!.getAttribute("aria-pressed")).toBe("true");
+    panel.close();
+  });
+
+  it("keeps the turkey hunt's rows: only Christmas draws the track", () => {
+    const { panel } = mounted();
+    const ladder = { label: "Turkeys caught", counter: 0, tiers: [{ need: 25, rewards: [{ kind: "shiny" as const, amount: 10 }], claimed: false }] };
+    panel.render(list([event({ id: "thanksgiving-2026", kind: "thanksgiving", ladder })]));
+    expect(panel.element.querySelector(".events-ladder--track")).toBeNull();
+    expect(panel.element.querySelectorAll(".events-tier")).toHaveLength(1);
     panel.close();
   });
 
@@ -799,6 +851,20 @@ describe("EventsPanel: the weekend event (owner, 13 Nov: in Events, not a banner
     panel.close();
   });
 
+  it("Christmas, while it is on, sits above it (owner, 28 Nov 2026: \"First, while Christmas is on\")", () => {
+    const { panel } = mounted();
+    const christmas = event({ id: "christmas-2026", kind: "christmas", endsAt: 14 * 86_400 });
+    const turkey = event({ id: "thanksgiving-2026", kind: "thanksgiving", endsAt: 5 * 86_400 });
+    panel.render(list([turkey, christmas], { weekend: { on: builders, next: null } }));
+    const cards = [...panel.element.querySelectorAll<HTMLElement>(".events-page__main > .events-card")];
+    expect(cards.map((card) => card.dataset["event"])).toEqual(["christmas-2026", "weekend", "thanksgiving-2026"]);
+    // Over, with presents still to claim: back where any event sits, after the weekend and the ones on.
+    panel.render(list([turkey, { ...christmas, status: "ended" }], { weekend: { on: builders, next: null } }));
+    const after = [...panel.element.querySelectorAll<HTMLElement>(".events-page__main > .events-card")];
+    expect(after.map((card) => card.dataset["event"])).toEqual(["weekend", "thanksgiving-2026", "christmas-2026"]);
+    panel.close();
+  });
+
   it("ticks its time left with the page's other countdowns", () => {
     const { panel } = mounted();
     panel.render(list([], { weekend: { on: builders, next: null } }));
@@ -848,5 +914,30 @@ describe("EventsPanel: the weekend event (owner, 13 Nov: in Events, not a banner
     expect(panel.element.querySelector(".events-upcoming")).toBeNull();
     expect(panel.element.querySelector(".events-status")?.textContent).toBe("No event is on right now.");
     panel.close();
+  });
+});
+
+describe("the prize track's sums", () => {
+  it("spaces the goals evenly and fills straight between them", () => {
+    const needs = [25, 50, 150, 200];
+    expect(trackShare(0, needs)).toBe(0);
+    expect(trackShare(25, needs)).toBe(25);
+    expect(trackShare(100, needs)).toBe(62.5);
+    expect(trackShare(175, needs)).toBe(87.5);
+    expect(trackShare(500, needs)).toBe(100);
+    expect(trackShare(5, [])).toBe(0);
+  });
+
+  it("opens on the first goal ready, else the next to reach, else the last", () => {
+    const tier = (need: number, claimed = false) => ({ need, rewards: [], claimed });
+    expect(trackFocus({ label: "", counter: 60, tiers: [tier(25, true), tier(50), tier(150)] })).toBe(1);
+    expect(trackFocus({ label: "", counter: 60, tiers: [tier(25, true), tier(50, true), tier(150)] })).toBe(2);
+    expect(trackFocus({ label: "", counter: 160, tiers: [tier(25, true), tier(50, true), tier(150, true)] })).toBe(2);
+  });
+
+  it("shows a decoration over the bar first, then Shiny, then Glimmers", () => {
+    expect(heroReward([{ kind: "shiny", amount: 1 }, { kind: "decoration", type: 235, count: 1 }])?.kind).toBe("decoration");
+    expect(heroReward([{ kind: "eventCoins", amount: 1 }, { kind: "shiny", amount: 1 }])?.kind).toBe("shiny");
+    expect(heroReward([])).toBeUndefined();
   });
 });

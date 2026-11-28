@@ -131,6 +131,20 @@ export const REVAMP_DECORATION_ROWS: readonly ArtRow[] = [
   [232, "Rose Bush", "buildings/decorations/plants/", [
     [1, ["rose-bush@2x.png", -24, -14], null, null, ["rose-bush-shadow.jpg", -19, 11], null, null],
   ], [100], 30],
+  // Christmas 2026's winter decorations (owner, 27 Nov 2026: "all 4 as painted"), event prizes only
+  // (`CHRISTMAS_DECOR` in the server's `events.ts`). Codex, `art-samples/christmas/c1` (Classic) and `m1`.
+  [233, "Snowman", "buildings/decorations/winter/", [
+    [1, ["snowman@2x.png", -22, -28], null, null, ["snowman-shadow.jpg", -13, 13], null, null],
+  ], [100], 40],
+  [234, "Present Pile", "buildings/decorations/winter/", [
+    [1, ["present-pile@2x.png", -16, -34], null, null, ["present-pile-shadow.jpg", -14, 5], null, null],
+  ], [100], 30],
+  [235, "Lamp Post with Lights", "buildings/decorations/winter/", [
+    [1, ["lamp-post@2x.png", -10, -54], null, null, ["lamp-post-shadow.jpg", -7, 0], null, null],
+  ], [100], 30],
+  [236, "Christmas Tree", "buildings/decorations/winter/", [
+    [1, ["christmas-tree@2x.png", -20, -42], null, null, ["christmas-tree-shadow.jpg", -11, 9], null, null],
+  ], [100], 40],
 ];
 
 /** One Modern look: its picture and shadow, for every level and state (a decoration has no damage). */
@@ -198,6 +212,11 @@ export const REVAMP_DECORATION_MODERN_ART: Readonly<Record<number, readonly Tier
   230: modern(["bougainvillea.modern@2x.webp", -26, -20], ["bougainvillea.modern-shadow.jpg", -15, 15]),
   231: modern(["trimmed-hedge.modern@2x.webp", -28, 7], ["trimmed-hedge.modern-shadow.jpg", -25, 23]),
   232: modern(["rose-bush.modern@2x.webp", -23, -14], ["rose-bush.modern-shadow.jpg", -18, 11]),
+  // Christmas 2026's winter four.
+  233: modern(["snowman.modern@2x.webp", -21, -28], ["snowman.modern-shadow.jpg", -12, 13]),
+  234: modern(["present-pile.modern@2x.webp", -16, -34], ["present-pile.modern-shadow.jpg", -12, 5]),
+  235: modern(["lamp-post.modern@2x.webp", -9, -54], ["lamp-post.modern-shadow.jpg", -6, 0]),
+  236: modern(["christmas-tree.modern@2x.webp", -21, -42], ["christmas-tree.modern-shadow.jpg", -12, 9]),
 };
 
 const TYPES: ReadonlySet<number> = new Set(REVAMP_DECORATION_ROWS.map((row) => row[0]));

@@ -216,8 +216,8 @@ export const leafSpots = (skin: ThanksgivingSkin, width: number, height: number,
 };
 
 /** One prop by the plot edge: which, and where its base stands (world px). */
-export interface PropSpot {
-  readonly prop: PropName;
+export interface PropSpot<P extends string = PropName> {
+  readonly prop: P;
   readonly x: number;
   readonly y: number;
 }
@@ -228,12 +228,12 @@ export interface PropSpot {
  * `offset` px out from the side, with a little seeded jitter, the look's
  * pattern in turn. Corners get none, so two sides' props never pile up.
  */
-export const propSpots = (
-  skin: ThanksgivingSkin,
+export const propSpots = <P extends string>(
+  skin: { readonly props: { readonly pattern: readonly P[]; readonly spacing: number } },
   corners: readonly { x: number; y: number }[],
   seed: number,
   offset = 34,
-): PropSpot[] => {
+): PropSpot<P>[] => {
   if (corners.length !== 4 || skin.props.pattern.length === 0) return [];
   const random = seeded(seed * 104729 + 3);
   const centre = {
@@ -241,7 +241,7 @@ export const propSpots = (
     y: corners.reduce((sum, point) => sum + point.y, 0) / 4,
   };
   const { pattern, spacing } = skin.props;
-  const spots: PropSpot[] = [];
+  const spots: PropSpot<P>[] = [];
   let turn = 0;
   for (let side = 0; side < 4; side++) {
     const from = corners[side]!;

@@ -1,6 +1,6 @@
 import type { MushroomPickReport } from "@/api/types";
 import type { YardRefusal } from "@/api/yard";
-import { noteHuntCount, PUMPKIN_HUNT_KIND, TURKEY_HUNT_KIND } from "@/game/events/pumpkinHunt";
+import { noteHuntCount, PRESENT_HUNT_KIND, PUMPKIN_HUNT_KIND, TURKEY_HUNT_KIND } from "@/game/events/pumpkinHunt";
 import { freeWorkers } from "./workers";
 import type { YardActionResult, YardStoreAction, YardStoreReader } from "./YardStore";
 import type { YardMushroom } from "./yardModel";
@@ -76,10 +76,17 @@ export const pumpkinsFound = (count: number): string =>
 export const turkeysCaught = (count: number): string =>
   `${count.toLocaleString("en-US")} ${count === 1 ? "turkey" : "turkeys"} caught.`;
 
+/** "12 presents found." for the pick's toast during the present hunt. */
+export const presentsFound = (count: number): string =>
+  `${count.toLocaleString("en-US")} ${count === 1 ? "present" : "presents"} found.`;
+
 /** A pick report's hunt count, with its event kind and toast line, or null outside a hunt. */
 export const huntCountOf = (
-  report: Pick<MushroomPickReport, "pumpkins" | "turkeys">,
+  report: Pick<MushroomPickReport, "pumpkins" | "turkeys" | "presents">,
 ): { kind: string; count: number; line: string } | null => {
+  if (report.presents !== undefined) {
+    return { kind: PRESENT_HUNT_KIND, count: report.presents, line: presentsFound(report.presents) };
+  }
   if (report.turkeys !== undefined) {
     return { kind: TURKEY_HUNT_KIND, count: report.turkeys, line: turkeysCaught(report.turkeys) };
   }

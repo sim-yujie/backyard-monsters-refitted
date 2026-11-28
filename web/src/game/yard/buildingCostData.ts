@@ -969,6 +969,22 @@ export const BUILDING_COST_ROWS: readonly CostRow[] = [
   [232, "bdg_rosebush", "decoration", 4, [
     [0,0,0,0,0,[]],
   ], [0]],
+  // 233 bdg_snowman (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [233, "bdg_snowman", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 234 bdg_presentpile (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [234, "bdg_presentpile", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 235 bdg_lamppostlights (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [235, "bdg_lamppostlights", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 236 bdg_christmastree (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [236, "bdg_christmastree", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
 ];
 
 /* ── Outposts ───────────────────────────────────────────────────────────────── */

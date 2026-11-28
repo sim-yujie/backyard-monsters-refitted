@@ -12,6 +12,7 @@ import {
   MUSHROOM_CLEARANCE,
   MUSHROOM_STORED_CAP,
   moveMushroomsOffBuildings,
+  PRESENT_EDGE_INSET,
   planMushroomPick,
   readMushrooms,
   rollReward,
@@ -176,6 +177,40 @@ describe("spawnMushrooms", () => {
     const [entry] = spawnMushrooms(save, [], 1, spots([-30, 0]));
 
     expect(entry!.slice(1)).toEqual([-30, 0]);
+  });
+});
+
+describe("the present hunt's edge gap (neon, 28 Nov 2026)", () => {
+  const [width, height] = yardSize(0);
+  const inside = ([, x, y]: MushroomEntry): boolean =>
+    x >= -width / 2 + PRESENT_EDGE_INSET &&
+    y >= -height / 2 + PRESENT_EDGE_INSET &&
+    x + 30 <= width / 2 - PRESENT_EDGE_INSET &&
+    y + 30 <= height / 2 - PRESENT_EDGE_INSET;
+
+  test("with the inset, even the plot's corner draws grow inside the gap", () => {
+    const save = yard();
+    const corners = spawnMushrooms(save, [], 2, sequence(0, 0, 0, 0.999999, 0.999999, 0), PRESENT_EDGE_INSET);
+    expect(corners).toHaveLength(2);
+    for (const entry of corners) expect(inside(entry)).toBe(true);
+  });
+
+  test("without it, a corner draw grows on the edge as before", () => {
+    const [entry] = spawnMushrooms(yard(), [], 1, sequence(0, 0, 0));
+    expect(entry!.slice(1)).toEqual([-width / 2, -height / 2]);
+  });
+
+  test("a present already on the edge moves in, keeping its frame", () => {
+    const save = yard({ mushrooms: { l: [[4, -width / 2, 0]], s: 0 } });
+    expect(moveMushroomsOffBuildings(save, Math.random, PRESENT_EDGE_INSET)).toBe(1);
+    const [moved] = readMushrooms(save.mushrooms).l;
+    expect(moved![0]).toBe(4);
+    expect(inside(moved!)).toBe(true);
+  });
+
+  test("an edge find stays put outside the hunt", () => {
+    const save = yard({ mushrooms: { l: [[4, -width / 2, 0]], s: 0 } });
+    expect(moveMushroomsOffBuildings(save, Math.random)).toBe(0);
   });
 });
 

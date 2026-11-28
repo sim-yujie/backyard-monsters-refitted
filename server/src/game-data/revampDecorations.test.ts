@@ -7,7 +7,7 @@ import { REVAMP_DECORATIONS, revampDecoration } from "./revampDecorations.js";
 
 /** This project's own decorations (owner, 10 Nov 2026: the six autumn ones). */
 describe("REVAMP_DECORATIONS", () => {
-  test("types 201 to 232: the autumn six priced 25 to 75 event coins, then the new ones of 24 Nov 2026", () => {
+  test("types 201 to 236: the autumn six priced 25 to 75 event coins, the new ones of 24 Nov 2026, the winter four", () => {
     expect(REVAMP_DECORATIONS.slice(0, 6).map((one) => [one.type, one.name, one.price])).toEqual([
       [201, "Leaf Pile and Rake", 25],
       [202, "Apple Barrel", 30],
@@ -16,7 +16,7 @@ describe("REVAMP_DECORATIONS", () => {
       [205, "Turkey Topiary", 60],
       [206, "Autumn Maple Tree", 75],
     ]);
-    expect(REVAMP_DECORATIONS.map((one) => one.type)).toEqual(Array.from({ length: 32 }, (_, i) => 201 + i));
+    expect(REVAMP_DECORATIONS.map((one) => one.type)).toEqual(Array.from({ length: 36 }, (_, i) => 201 + i));
     for (const one of REVAMP_DECORATIONS) expect(one.price, `${one.type}`).toBeGreaterThan(0);
     // The nine wonders stand on the Statue of Liberty's 70 spot (prices are placeholders until the owner's card).
     for (const one of REVAMP_DECORATIONS.filter((d) => d.type >= 214 && d.type <= 222)) expect(one.size).toBe(70);

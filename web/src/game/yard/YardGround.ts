@@ -3,6 +3,8 @@ import type { Season } from "@/game/season";
 import { noiseMask } from "./groundNoise";
 import { currentGround, GROUNDS, groundUrls, type GroundId, type GroundSpec } from "./groundChoice";
 import { leafSpots, PROP_BOXES, PROP_SCALE, PROPS_ART, recolourGround, thanksgivingSkin } from "./thanksgivingSkin";
+import { CLASSIC_SNOW } from "./winterSkin";
+import { classicLook } from "@/game/classicLook";
 import type { YardBounds } from "./YardGrid";
 import { artUrl } from "../../artUrl";
 
@@ -101,6 +103,16 @@ const EDGE_SHADE = { width: 4, color: 0x1b2418, alpha: 0.5, alignment: 1 } as co
 const EDGE_LIGHT = { width: 2, color: 0xf2f7d8, alpha: 0.3, alignment: 0 } as const;
 
 /**
+ * Christmas on the own yard (neon, 28 Nov 2026: "inside and outside snow
+ * share the exact same value ... only a thin grey hairline marks the plot"):
+ * the snow outside the plot a little darker and cooler, and the edge a
+ * crisper two-tone line, so where building stops reads at a glance.
+ */
+const WINTER_OUTSIDE = { color: 0x24364c, alpha: 0.13 } as const;
+const WINTER_EDGE_SHADE = { width: 5, color: 0x1f2a38, alpha: 0.62, alignment: 1 } as const;
+const WINTER_EDGE_LIGHT = { width: 2.5, color: 0xffffff, alpha: 0.55, alignment: 0 } as const;
+
+/**
  * How far past the world's edge the grass runs, in world pixels, so a view
  * zoomed out to fit a wide window, or panned to the margin, still stands on
  * grass rather than on the page background.
@@ -150,6 +162,8 @@ export class YardGround {
   private readonly surround = new Graphics();
   private readonly plot = new Graphics();
   private readonly clip = new Graphics();
+  /** Christmas: the darker snow outside the plot (own yard only). */
+  private readonly outside = new Graphics();
   private readonly boundary = new Graphics();
   private tiles: TilingSprite | null = null;
   private composite: Texture | null = null;
@@ -168,15 +182,30 @@ export class YardGround {
     // draw when it is assigned as one, so it must NOT be hidden here: a mask
     // that is not visible contributes nothing to the stencil and clips its
     // target down to nothing.
-    this.root.addChild(this.surround, this.plot, this.clip, this.boundary);
+    this.root.addChild(this.surround, this.plot, this.clip, this.outside, this.boundary);
   }
 
-  /** The ground's art now: lava in the Inferno, the event's dress on a grass ground, else the pick. */
+  /**
+   * The ground's art now: lava in the Inferno, the event's dress on a grass
+   * ground (Halloween's dusk; Christmas's snow, each look its own:
+   * `winterSkin.ts`), else the pick.
+   */
   private spec(): GroundSpec {
     if (this.terrain === "lava") return LAVA;
     const picked = GROUNDS[this.ground];
     if (picked.grass && this.season === "halloween") return SPOOKY;
+    if (picked.grass && this.season === "christmas") return classicLook() ? CLASSIC_SNOW : GROUNDS.snow;
     return picked;
+  }
+
+  /** Christmas's darker outside and crisper edge: only where the snow is the season's (a grass ground under it). */
+  private winterEdge(): boolean {
+    return this.season === "christmas" && this.terrain === "grass" && GROUNDS[this.ground].grass === true;
+  }
+
+  /** Whether the yard stands on the season's snow now (Christmas on a grass ground), for what else dresses for it. */
+  get seasonSnow(): boolean {
+    return this.winterEdge();
   }
 
   /** Thanksgiving's leaves and recolour, on a grass ground only. */
@@ -228,10 +257,13 @@ export class YardGround {
     this.plot.clear().poly(world).fill({ color: colour });
     this.clip.clear().poly(world).fill({ color: 0xffffff });
     this.boundary.clear();
+    this.outside.clear();
     if (style === "plot") {
       const edge = corners.flatMap((point) => [point.x, point.y]);
-      this.boundary.poly(edge).stroke(EDGE_SHADE);
-      this.boundary.poly(edge).stroke(EDGE_LIGHT);
+      const winter = this.winterEdge();
+      if (winter) this.outside.poly(world).fill(WINTER_OUTSIDE).poly(edge).cut();
+      this.boundary.poly(edge).stroke(winter ? WINTER_EDGE_SHADE : EDGE_SHADE);
+      this.boundary.poly(edge).stroke(winter ? WINTER_EDGE_LIGHT : EDGE_LIGHT);
     }
 
     if (this.tiles) this.sizeTiles(bounds);

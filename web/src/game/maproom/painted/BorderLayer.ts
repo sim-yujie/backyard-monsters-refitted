@@ -9,6 +9,8 @@ import { BORDER_COLOURS, BorderData, BorderRelation, type BorderViewer } from ".
 import { cellCentre, paintedCellShape, type CellShape } from "./cellShape";
 import { GROUND_VERTEX } from "./groundShader";
 import { BORDER_RIM_ALPHA, BORDER_RIM_COLOUR, PINNED_CENTRE_COLOUR } from "../relationLook";
+import { WINTER_RIM_ALPHA, winterMap } from "./winterLook";
+import { onSeasonChange } from "@/game/season";
 
 /** The borders' program (one per page; `shaderWarmup.ts` compiles it ahead). */
 export const borderProgram = (): GlProgram =>
@@ -52,6 +54,8 @@ export class BorderLayer {
   private readonly shader: Shader;
   private readonly startMs = performance.now();
   private readonly stopQuality: () => void;
+  /** Stops following the season (the rim's strength on snow, `winterLook.ts`). */
+  private readonly stopSeason: () => void;
   private viewer: BorderViewer = { myAlliance: null };
 
   constructor(readonly shape: CellShape = paintedCellShape()) {
@@ -75,7 +79,8 @@ export class BorderLayer {
           uPinned: { value: rgb(BORDER_COLOURS[BorderRelation.PINNED]), type: "vec3<f32>" },
           uPinnedCentre: { value: rgb(PINNED_CENTRE_COLOUR), type: "vec3<f32>" },
           uRim: { value: rgb(BORDER_RIM_COLOUR), type: "vec3<f32>" },
-          uRimAlpha: { value: BORDER_RIM_ALPHA, type: "f32" },
+          // Almost solid on the Christmas snow, so the cyan line keeps its edge (`winterLook.ts`).
+          uRimAlpha: { value: winterMap() ? WINTER_RIM_ALPHA : BORDER_RIM_ALPHA, type: "f32" },
         },
         uData: this.data.source,
       },
@@ -96,6 +101,10 @@ export class BorderLayer {
     this.stopQuality = onQualityChange((level) => {
       this.uniforms.uQuality = QUALITY_LEVEL[level];
       this.uniforms.uPulse = 0.5;
+    });
+    this.stopSeason = onSeasonChange(() => {
+      const uniforms = this.shader.resources.borderUniforms as { uniforms: { uRimAlpha: number } };
+      uniforms.uniforms.uRimAlpha = winterMap() ? WINTER_RIM_ALPHA : BORDER_RIM_ALPHA;
     });
   }
 
@@ -162,6 +171,7 @@ export class BorderLayer {
 
   destroy(): void {
     this.stopQuality();
+    this.stopSeason();
     this.mesh.destroy();
     this.shader.destroy();
     this.data.destroy();

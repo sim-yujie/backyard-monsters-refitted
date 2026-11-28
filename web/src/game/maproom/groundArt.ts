@@ -1,5 +1,6 @@
 import { Assets, Rectangle, Texture } from "pixi.js";
 import { classicLook } from "@/game/classicLook";
+import { currentSeason } from "@/game/season";
 import { mapRoomGrid } from "@/game/HexGrid";
 import { terrainBand } from "./cellVisuals";
 import { timeArt } from "./openMarks";
@@ -26,7 +27,12 @@ import { timeArt } from "./openMarks";
  * Flash's `ground-pointy150` behind it). Each tile is the cell's top face and
  * the same 25 points of cliff below its two lower edges.
  */
-const sheetUrl = (name: string): string => `${import.meta.env.BASE_URL}maproom/${name}@2x.webp`;
+/**
+ * A sheet's file. While it is Christmas (`game/season.ts`) the winter copy, its land tiles under snow
+ * (`web/tools/maproom-ground/winter.py`); fetched only then.
+ */
+const sheetUrl = (name: string): string =>
+  `${import.meta.env.BASE_URL}maproom/${name}${currentSeason() === "christmas" ? "-winter" : ""}@2x.webp`;
 
 /** The Flash and painted sheets for the world grid's shape and cell size. */
 const sheetsForGrid = (): { flash: string; painted: string } => {
