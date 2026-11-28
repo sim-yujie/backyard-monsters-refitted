@@ -147,6 +147,8 @@ import { devStats } from "../devDetails";
 import { connectMr2TimingReport } from "../mr2TimingReport";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../sceneName";
+import { MapSnowfall } from "@/game/maproom/MapSnowfall";
+import { currentSeason, onSeasonChange } from "@/game/season";
 
 /**
  * Map Room 2.
@@ -398,6 +400,9 @@ export class MapRoom2Scene implements Scene {
   /** Something this frame changed what the stage shows in a way its change lists miss. */
   private stageMustDraw = true;
   private stageDrawnAt = 0;
+  /** Christmas: snow falling over the map (`MapSnowfall.ts`), on its own canvas under the HUD. */
+  private readonly snowfall = new MapSnowfall();
+  private unwatchSnowSeason: (() => void) | null = null;
   /**
    * Whether the stage needs drawing this frame (App asks after `update`, `setRenderGate`): only
    * when something changed (the camera, the tilted picture, a painted animation step, anything
@@ -571,6 +576,14 @@ export class MapRoom2Scene implements Scene {
         { id: SceneName.YARD, label: "Yard" },
       ],
     ).mount(context.overlay.content, context.overlay.modal);
+
+    // Christmas: snow over the map (owner, 28 Nov 2026), as on the yard.
+    const snowFor = (season: string): void => {
+      if (season === "christmas") this.snowfall.start(context.overlay.content);
+      else this.snowfall.stop();
+    };
+    snowFor(currentSeason());
+    this.unwatchSnowSeason = onSeasonChange(snowFor);
 
     // Mail (#193): the tool row's first button, and the mailbox behind it.
     this.mail = new MailDoor({
@@ -747,6 +760,9 @@ export class MapRoom2Scene implements Scene {
     this.mail = null;
     this.ui?.destroy();
     this.ui = null;
+    this.unwatchSnowSeason?.();
+    this.unwatchSnowSeason = null;
+    this.snowfall.stop();
     this.renderer.destroy();
     // Nothing new is fetched for a map nobody is looking at.
     this.store.stop();

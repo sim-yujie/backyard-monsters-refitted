@@ -19,6 +19,7 @@ import { cellCentre, paintedCellShape, textureAspect, type CellShape } from "./c
 import { SPRITE_ROWS, SPRITE_SHEET_ROWS } from "./canopy";
 import { GroundData } from "./GroundData";
 import { GroundTexture, SHADER_TEXTURES } from "./groundKinds";
+import { frostCanvas, WINTER_LINE_COLOUR, WINTER_STAND_INS, winterMap } from "./winterLook";
 import { GROUND_SAMPLERS, GROUND_VERTEX, groundFragment } from "./groundShader";
 import { PLACEMENT_GRIDS, PlacementLayer, placementProgram } from "./PlacementLayer";
 import { RiverLayer } from "./RiverLayer";
@@ -190,7 +191,10 @@ export class PaintedGround {
     private readonly warmer: ProgramWarmer | null = null,
   ) {
     this.data = new GroundData();
-    this.standIns = STAND_INS.map(solidSource);
+    const winterStandIns = winterMap();
+    this.standIns = STAND_INS.map((colour, index) =>
+      solidSource((winterStandIns ? WINTER_STAND_INS[SHADER_TEXTURES[index]!] : undefined) ?? colour),
+    );
     this.spriteStandIn = solidSource("rgba(0,0,0,0)");
     const span = shape.cellWidth * TEXTURE_CELLS;
     const resources: Record<string, unknown> = {
@@ -200,7 +204,8 @@ export class PaintedGround {
         uTexScale: { value: new Float32Array([span, span * textureAspect(shape)]), type: "vec2<f32>" },
         uWorldCells: { value: new Float32Array([WORLD_WIDTH, WORLD_HEIGHT]), type: "vec2<f32>" },
         uQuality: { value: QUALITY_LEVEL[quality()], type: "f32" },
-        uLine: { value: new Float32Array(LINE_COLOUR), type: "vec4<f32>" },
+        // Dark slate on the Christmas snow, where the cream lines vanish (`winterLook.ts`).
+        uLine: { value: new Float32Array(winterMap() ? WINTER_LINE_COLOUR : LINE_COLOUR), type: "vec4<f32>" },
         uFog: { value: new Float32Array(rgb(FOG_COLOUR)), type: "vec3<f32>" },
         uUnloaded: { value: new Float32Array(rgb(LOADING_COLOUR)), type: "vec3<f32>" },
         uSpritesReady: { value: 0, type: "f32" },
@@ -464,6 +469,7 @@ export class PaintedGround {
     const size = Math.round(square / (1 + 2 * GROUND_GUTTER));
     const gutter = (square - size) / 2;
     // Cutting the atlas runs on the main thread (timed for the open, `openMarks.ts`).
+    const winter = winterMap();
     const cut: TextureSource[] = timeCut("ground", () => {
       const canvases = SHADER_TEXTURES.map((slot) => {
         const canvas = document.createElement("canvas");
@@ -479,6 +485,8 @@ export class PaintedGround {
           size,
           size,
         );
+        // Christmas: the snow toned off pure white, the forest frosted, the beaches grey (`winterLook.ts`).
+        if (winter) frostCanvas(canvas, slot);
         return canvas;
       });
       const style = {
