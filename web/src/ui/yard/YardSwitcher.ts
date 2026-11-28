@@ -112,9 +112,18 @@ let lastYardKey: string | null = null;
 
 const yardKey = (target: OwnYardTarget): string => `${target.kind}:${target.baseid}`;
 
-/** For the tests: forget the last yard shown. */
+/**
+ * Where the yard list was scrolled when it last closed, kept outside any one
+ * switcher for the same reason, so the list opens where the player left it
+ * after a change of yard (owner, 28 Nov 2026). Null until it first closes:
+ * the first open of a session starts at the top, with the open yard in view.
+ */
+let lastListScroll: number | null = null;
+
+/** For the tests: forget the last yard shown and where the list was scrolled. */
 export const resetYardArrival = (): void => {
   lastYardKey = null;
+  lastListScroll = null;
 };
 
 /** The server calls the list makes; the tests pass their own. */
@@ -152,6 +161,8 @@ const STEP_WAIT_MS = 2500;
 const FLASH_FADE_MS = 400;
 /** The list never gets shorter than this, even on a very short screen. */
 const LIST_MIN_HEIGHT = 120;
+/** The fade at the top of a scrolled list (`.yard-switcher__rows--scrolled`): the open yard's row stays below it. */
+const ROWS_FADE_PX = 14;
 
 const errorWords = (error: unknown): string =>
   error instanceof Error && error.message ? error.message : YARD_SWITCHER_TEXT.failed;
@@ -556,6 +567,8 @@ export class YardSwitcher {
   }
 
   private toggle(open: boolean): void {
+    // Only a list on screen has a place to keep: a hidden one reads 0.
+    if (!open && this.open && this.rows.clientHeight > 0) lastListScroll = this.rows.scrollTop;
     if (!open && this.editing && !this.editing.saving) {
       // Closing while typing keeps what was typed, as leaving the box does.
       const input = this.rows.querySelector<HTMLInputElement>(".yard-switcher__input");
@@ -570,10 +583,31 @@ export class YardSwitcher {
       this.showError(null);
       this.renderList();
       this.fitList();
-      // The open yard in view, for a player with many outposts (neon, round 1).
-      this.rows.querySelector<HTMLElement>('[aria-current="true"]')?.scrollIntoView?.({ block: "nearest" });
+      // Where the player left it (owner, 28 Nov 2026), then the open yard in view (neon, round 1).
+      if (lastListScroll !== null) this.rows.scrollTop = lastListScroll;
+      this.revealCurrent();
       this.markScrolled();
     }
+  }
+
+  /**
+   * Scrolls the list just enough to show the open yard's whole row, to the
+   * nearer edge, and not at all when it shows already. Only the rows move,
+   * nothing around them.
+   */
+  private revealCurrent(): void {
+    const current = this.rows.querySelector<HTMLElement>('[aria-current="true"]');
+    if (!current) return;
+    const view = this.rows.getBoundingClientRect();
+    const box = current.getBoundingClientRect();
+    const below = box.bottom - view.bottom;
+    if (below > 0) {
+      this.rows.scrollTop += below;
+      return;
+    }
+    // Above: clear of the fade, unless that is the top of the list.
+    const above = view.top + ROWS_FADE_PX - box.top;
+    if (above > 0) this.rows.scrollTop = Math.max(0, this.rows.scrollTop - above);
   }
 
   /** Scrolled down: the top rows fade under the heading, so rows above are plain (neon, round 2). */

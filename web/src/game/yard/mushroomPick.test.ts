@@ -8,6 +8,7 @@ import {
   mushroomPickAction,
   mushroomZIndex,
   pumpkinsFound,
+  presentsFound,
   pickRefusal,
   turkeysCaught,
   SHAKE_MS,
@@ -296,6 +297,26 @@ describe("MushroomPicker", () => {
 
     expect(calls.slice(-2)).toEqual(["picked false", "huntCount 1 turkey caught."]);
     expect(turkeysCaught(12)).toBe("12 turkeys caught.");
+  });
+
+  it("at Christmas a present gets the present count, told to the Christmas ladder", async () => {
+    const save = loadWith();
+    const store = storeOf(save, vi.fn(() => Promise.resolve(answer(save, 0, { presents: 7 }))));
+    const { view, calls } = viewSpy();
+    const heard = vi.fn();
+    const stop = onHuntCount(heard);
+    const time = handTimers();
+    const picker = new MushroomPicker(store, view, { timers: time.timers });
+
+    const done = picker.pick(store.yard.mushrooms[0]!);
+    time.fire();
+    await done;
+    stop();
+
+    expect(calls.at(-1)).toBe("huntCount 7 presents found.");
+    expect(heard).toHaveBeenCalledWith(7, "christmas");
+    expect(presentsFound(1)).toBe("1 present found.");
+    expect(presentsFound(1250)).toBe("1,250 presents found.");
   });
 
   it("no free worker: says so at once, no shake, nothing sent", async () => {

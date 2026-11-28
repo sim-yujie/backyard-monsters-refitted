@@ -4,6 +4,9 @@ import {
   ATTACK_MAX_SECONDS,
   BOMBS,
   bombBlast,
+  BOMB_GROUND_REACH,
+  bombReach,
+  groundRing,
   bombParticleDamage,
   bombReaches,
   ellipseEdgeSquared,
@@ -458,11 +461,22 @@ describe("bombs", () => {
 describe("the bomb blast (#75)", () => {
   const byId = (id: string) => BOMBS.find((one) => one.id === id)!;
 
-  it("reads the radius as a full width, squashed by 0.8 (`ResourceBomb.as`)", () => {
-    expect(bombBlast(byId("tw0"))).toEqual({ rx: 100, ry: 80 });
-    expect(bombBlast(byId("pb1"))).toEqual({ rx: 150, ry: 120 });
-    expect(bombBlast(byId("pb2"))).toEqual({ rx: 175, ry: 140 });
-    expect(bombBlast(byId("pb3"))).toEqual({ rx: 200, ry: 160 });
+  it("is the ground circle with the area of Flash's squashed blast (owner, option C)", () => {
+    // Flash: `radius` wide, `radius * 0.8` tall on screen. Now a ground circle
+    // of `radius * sqrt 0.2` yard units: sqrt 1.6 (1.26x) as wide, half as tall
+    // as it is wide, the same area.
+    expect(BOMB_GROUND_REACH).toBeCloseTo(Math.sqrt(0.2), 12);
+    for (const bomb of BOMBS.filter((one) => one.damage > 0)) {
+      const blast = bombBlast(bomb);
+      expect(blast.rx).toBeCloseTo(2 * blast.ry, 9);
+      expect(blast.rx).toBeCloseTo((bomb.radius / 2) * Math.sqrt(1.6), 9);
+      expect(blast.rx * blast.ry).toBeCloseTo((bomb.radius / 2) * (bomb.radius * 0.4), 6);
+      expect(blast).toEqual(groundRing(bombReach(bomb)));
+    }
+    expect(bombBlast(byId("tw0")).rx).toBeCloseTo(126.4911, 4);
+    expect(bombBlast(byId("tw0")).ry).toBeCloseTo(63.2456, 4);
+    expect(bombBlast(byId("pb3")).rx).toBeCloseTo(252.9822, 4);
+    expect(bombBlast(byId("pb3")).ry).toBeCloseTo(126.4911, 4);
   });
 
   it("truncates the width and the squashed height separately, as the int parameters do", () => {
@@ -492,20 +506,21 @@ describe("the bomb blast (#75)", () => {
   });
 
   it("reaches a sizeless building only inside the blast ellipse", () => {
+    // tw0: 126.49 either side, 63.25 above and below.
     const twig = byId("tw0");
-    expect(bombReaches(twig, 99, 0, 0)).toBe(true);
-    expect(bombReaches(twig, 100, 0, 0)).toBe(false);
-    expect(bombReaches(twig, -99, 0, 0)).toBe(true);
-    expect(bombReaches(twig, 0, 79, 0)).toBe(true);
-    expect(bombReaches(twig, 0, 80, 0)).toBe(false);
+    expect(bombReaches(twig, 126, 0, 0)).toBe(true);
+    expect(bombReaches(twig, 127, 0, 0)).toBe(false);
+    expect(bombReaches(twig, -126, 0, 0)).toBe(true);
+    expect(bombReaches(twig, 0, 63, 0)).toBe(true);
+    expect(bombReaches(twig, 0, 64, 0)).toBe(false);
     expect(bombReaches(twig, 0, 0, 0)).toBe(true);
   });
 
   it("reaches a little further for a big building, in quadrature", () => {
-    // A 100-size building stands in as an ellipse 50 wide: sqrt(100^2 + 25^2) = 103.08.
+    // A 100-size building stands in as an ellipse 50 wide: sqrt(126.49^2 + 25^2) = 128.94.
     const twig = byId("tw0");
-    expect(bombReaches(twig, 103, 0, 100)).toBe(true);
-    expect(bombReaches(twig, 104, 0, 100)).toBe(false);
+    expect(bombReaches(twig, 128, 0, 100)).toBe(true);
+    expect(bombReaches(twig, 129, 0, 100)).toBe(false);
   });
 
   it("splits the damage over the particles with no falloff", () => {

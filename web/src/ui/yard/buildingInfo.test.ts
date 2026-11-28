@@ -45,6 +45,20 @@ describe("towers", () => {
     expect(damagePerSecond(10, 0)).toBe(0);
   });
 
+  it("a Spurtz Cannon on a main yard shows the 2x reload; a tribe camp's shows Flash's (beta 10)", () => {
+    // Black Spurtz Cannon 4 → 5: damage 390 → 410 every 144 → 170 ticks,
+    // doubled on a player's main yard (MAIN_YARD_SPURTZ_RELOAD).
+    const black = one({ t: 137, l: 4 });
+    const damageOf = (wild: boolean) =>
+      buildingInfo(black, "main", 0, 0, wild).rows.find((entry) => entry.label === "Damage");
+    expect(damageOf(false)).toMatchObject({ label: "Damage", now: { text: "54/s" }, next: { text: "48/s" } });
+    expect(damageOf(true)).toMatchObject({ label: "Damage", now: { text: "108/s" }, next: { text: "96/s" } });
+    // Spurtz Cannon 1: 280 every 72 ticks, 155/s in Flash.
+    expect(row({ t: 136, l: 1 }, "Damage")?.now).toEqual({ text: "77/s" });
+    // Every other tower keeps its table rate on a main yard.
+    expect(row({ t: 20, l: 4 }, "Damage")?.now).toEqual({ text: "80/s" });
+  });
+
   it("Cannon Tower 4: range 190 → 200, damage 80/s → 100/s", () => {
     expect(row({ t: 20, l: 4 }, "Range")).toEqual({
       label: "Range",

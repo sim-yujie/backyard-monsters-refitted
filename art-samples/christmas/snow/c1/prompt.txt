@@ -1,0 +1,17 @@
+Generate an image using your image generation tool (one image only, do not make variations or extra files).
+
+The attached images are REAL ground textures of the 2009 Flash game Backyard Monsters:
+- ref-flash-grass.png: its seven grass tiles and one sand tile, each tiled 2x2 (200x100 px tiles, as the game lays them).
+- ref-flash-grass-3x.png: one grass tile enlarged 3x, to show the grain.
+The game blends these tiles together through soft noise masks to make the yard's ground, seen from above at a slight angle.
+Study them closely: they are small photographic-looking textures, soft and grainy, slightly dusty, with gentle low-contrast mottling, no hard shapes, no outlines, no lighting direction, no objects.
+
+Make a SHEET of 4 SNOW ground textures for the same game's winter yard, in exactly that texture style (as if made by the same artists in 2009): the yard covered in snow, so buildings stand on snowy ground.
+Canvas 1536x1024 split into 2 columns x 2 rows of equal cells (768x512 each). Each cell entirely filled edge to edge with its texture (no border, no margin, no frame, no gaps):
+- Top left: SOFT SNOW: an even blanket of fresh snow, soft cool off-white with very faint blue-grey mottling and fine grain, like the grass tiles' mottling but in snow. Not pure white: mid-light (about 75-85% brightness), so white sprites still stand out on it.
+- Top right: TRAMPLED SNOW: the same snow, a little greyer, with soft shallow footprint dents and faint blue shadows in hollows, low contrast.
+- Bottom left: SNOW WITH GRASS SHOWING: snow thinning out, small tufts and patches of dull winter-green and straw-coloured grass poking through (about 25% grass), grainy like the reference grass.
+- Bottom right: CRUSTY SNOW: wind-packed snow with faint icy sheen streaks and fine crystal sparkle grain, a touch bluer, still low contrast.
+All four the same overall brightness and tone so they blend smoothly; even lighting across each cell (no vignette, no light side, no big shapes), fine detail small (the texture repeats every 200x100 px in the game, so features must be small, a few px to 20 px in game size).
+No objects, no footprint trails across the cell, no text, no labels, no lines between cells.
+Save the final PNG as sheet.png in the current working directory.

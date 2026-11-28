@@ -3,7 +3,14 @@ import { MikroORM } from "@mikro-orm/postgresql";
 
 import ormConfig from "../../mikro-orm.config.js";
 import { SEVEN_SETS_DOWN, SEVEN_SETS_UP } from "../../database/migrations/20261116_Mr2WelcomeSevenSets.js";
-import { forgetLaunchTime, LAUNCH_SETTING_KEY, MR2_WELCOME_SECONDS, MR2_WELCOME_SETS, sqlWelcomeStore as store } from "./mr2Welcome.js";
+import {
+  forgetLaunchTime,
+  LAUNCH_SETTING_KEY,
+  MR2_WELCOME_SECONDS,
+  MR2_WELCOME_SETS,
+  sqlWelcomeStore as store,
+  welcomeEnd,
+} from "./mr2Welcome.js";
 
 /**
  * The "New to Map Room 2" store against a real Postgres: once-ever start,
@@ -68,7 +75,8 @@ describe.skipIf(!dbName)("Map Room 2 welcome on a real database", () => {
   test("one of each a UTC day, 7 of each, only inside the 10 days", async () => {
     await store.start(em(), A, T0);
     expect(await store.claim(em(), A, "takeover", T0 - 1)).toBe(false);
-    expect(await store.claim(em(), A, "takeover", T0 + MR2_WELCOME_SECONDS)).toBe(false);
+    // A start off a reset (a pass from before 9.1) runs to the reset after its 10 x 24 hours.
+    expect(await store.claim(em(), A, "takeover", MIDNIGHT + MR2_WELCOME_SECONDS)).toBe(false);
     expect(await store.claim(em(), A, "takeover", T0 + 5)).toBe(true);
     expect(await store.claim(em(), A, "takeover", T0 + 6)).toBe(false);
     expect(await store.claim(em(), A, "kit", T0 + 6)).toBe(true);
@@ -87,6 +95,17 @@ describe.skipIf(!dbName)("Map Room 2 welcome on a real database", () => {
     expect((await store.read(em(), A))!.takeoverUses).toHaveLength(MR2_WELCOME_SETS);
     expect(await store.claim(em(), A, "kit", MIDNIGHT + 6 * DAY)).toBe(true);
     expect(await store.claim(em(), B, "kit", T0 + 5)).toBe(false);
+  });
+
+  test("the claim's end is welcomeEnd: at a reset 10 days, off one rounded up (no time lost)", async () => {
+    const DAY1 = MIDNIGHT - DAY;
+    for (const [userid, start] of [[A, DAY1], [B, T0]] as const) {
+      await store.start(em(), userid, start);
+      const end = welcomeEnd(start);
+      expect(end).toBe(start === DAY1 ? DAY1 + MR2_WELCOME_SECONDS : MIDNIGHT + MR2_WELCOME_SECONDS);
+      expect(await store.claim(em(), userid, "kit", end)).toBe(false);
+      expect(await store.claim(em(), userid, "kit", end - 1)).toBe(true);
+    }
   });
 
   test("a one-set row: read and claimed as 1 of 7, and moved by the migration", async () => {

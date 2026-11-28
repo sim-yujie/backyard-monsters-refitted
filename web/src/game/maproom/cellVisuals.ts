@@ -2,6 +2,7 @@ import { CELL_HEIGHT, CELL_WIDTH, WATER_MAX_HEIGHT } from "@/config";
 import { CellType, isFogCell, isPlayerCell, isWaterCell, type MapCell, type PlayerCell } from "@/api/types";
 import { HexGrid, mapRoomGrid } from "@/game/HexGrid";
 import { classicLook } from "@/game/classicLook";
+import { currentSeason } from "@/game/season";
 import { RELATION_LOOK, type PlayerRelation } from "./relationLook";
 import type { MapAlliance } from "./mapAlliances";
 
@@ -358,9 +359,18 @@ const TRIBE_FALLBACK = 0x9aa3b8;
 const PLAYER_COLOUR = 0xe8ecf5;
 const OUTPOST_COLOUR = 0xb9c2d6;
 
+/**
+ * The land bands' colours while it is Christmas (`game/season.ts`): the winter tiles' top-face averages
+ * (`web/tools/maproom-ground/winter.py --report`), sand to high rock, so the far view is snow too.
+ */
+const WINTER_LAND: readonly number[] = [0xd3d8dd, 0xd2d7dc, 0xc2cccf, 0xc0ccce, 0xc0cacf, 0xbec9ce, 0xafbbbc, 0xabb5b5];
+const FIRST_LAND_BAND = 3;
+
 export const terrainColour = (height: number): number => {
   if (Number.isNaN(height)) return LOADING_COLOUR;
-  const band = TERRAIN_BANDS[terrainBand(height)]!;
+  const index = terrainBand(height);
+  if (index >= FIRST_LAND_BAND && currentSeason() === "christmas") return WINTER_LAND[index - FIRST_LAND_BAND]!;
+  const band = TERRAIN_BANDS[index]!;
   return classicLook() ? band.colour : (band.modern ?? band.colour);
 };
 

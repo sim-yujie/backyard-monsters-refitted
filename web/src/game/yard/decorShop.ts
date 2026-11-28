@@ -71,7 +71,8 @@ export interface DecorKindDefinition {
 /**
  * Which sub-tab each decoration is under in Flash: every one of the 84
  * decoration types (`isDecoration`) has a `subgroup`, 0 to 4. This project's
- * own go under Plants and Good (the new ones of 24 Nov 2026 also under Flags and Premium).
+ * own go under Plants and Good (the new ones of 24 Nov 2026 also under Flags and Premium; the Christmas 2026
+ * prizes, not sold, under Plants and Good).
  */
 /**
  * The sub-tab whose first tiles are this project's own seasonal decorations
@@ -87,14 +88,16 @@ export const DECOR_KINDS: readonly DecorKindDefinition[] = [
   {
     id: DecorKind.PLANTS,
     label: "Plants",
-    // Blocked: 67 Rock, 59 Childrens Jax, 69 Scarecrow. This project's autumn ones first.
-    types: [201, 205, 206, 228, 232, 229, 231, 230, 225, 226, 223, 224, 227, 55, 66, 72, 67, 59, 91, 92, 94, 95, 93, 56, 69, 90, 86, 88, 89, 87],
+    // Blocked: 67 Rock, 59 Childrens Jax, 69 Scarecrow, 236 Christmas Tree (a Christmas 2026 prize, last:
+    // not sold). This project's own first.
+    types: [201, 205, 206, 228, 232, 229, 231, 230, 225, 226, 223, 224, 227, 55, 66, 72, 67, 59, 91, 92, 94, 95, 93, 56, 69, 90, 86, 88, 89, 87, 236],
   },
   {
     id: DecorKind.GOOD,
     label: "Good",
-    // Blocked: 70 Sun Dial, 58 Camping Tent. This project's autumn ones first.
-    types: [202, 203, 204, 211, 212, 209, 208, 210, 213, 70, 57, 58, 65, 63, 64, 71, 108, 109, 61, 62, 60, 102, 103, 68, 104, 105, 106],
+    // Blocked: 70 Sun Dial, 58 Camping Tent, 233-235 the Christmas 2026 prizes (Snowman, Present Pile, Lamp
+    // Post with Lights; last: not sold). This project's own first.
+    types: [202, 203, 204, 211, 212, 209, 208, 210, 213, 70, 57, 58, 65, 63, 64, 71, 108, 109, 61, 62, 60, 102, 103, 68, 104, 105, 106, 233, 234, 235],
   },
   {
     id: DecorKind.FLAGS,

@@ -315,6 +315,8 @@ export class HatchTab implements MonstersTab {
    * housing strip and the presets, on a surface yard with a finished HCC.
    */
   private bench: HccBench | null = null;
+  /** The housing the batch chosen would take, before Add (the housing bars show it). */
+  private addingSpace = 0;
   /**
    * An outpost run from the main yard's level 3 HCC: its own store (its
    * buildings and queue; the pool is the main yard's) and actions that say
@@ -582,6 +584,7 @@ export class HatchTab implements MonstersTab {
       savePreset: (slot, stacks) => this.savePreset(slot, stacks),
       sendPreset: (slot) => this.sendPreset(slot),
       redraw: () => this.render(),
+      adding: () => this.addingSpace,
     });
     // The main yard's level 3 runs its outposts: the switcher needs to know which have an HCC.
     if (this.outpostRows === null && this.context.binding.store.kind === "main" && (readHatchYard(this.context.binding.store.save, 0).hcc?.level ?? 0) >= 3) {
@@ -839,9 +842,12 @@ export class HatchTab implements MonstersTab {
     this.warningLine.title = warning ?? "";
     this.warningLine.hidden = warning === null;
 
+    this.addingSpace = preview && row ? preview.added * row.space : 0;
     if (yard) {
       this.renderLines(yard, preview && row ? slotPreview(row.monster.id, preview) : null, preview);
-      this.renderMessage(yard, preview && row ? preview.added * row.space : 0);
+      this.renderMessage(yard, this.addingSpace);
+      // With the bench on, its strip is the housing in sight: it shows the batch too.
+      this.bench?.countChanged(yard);
     }
     this.syncPending();
   }

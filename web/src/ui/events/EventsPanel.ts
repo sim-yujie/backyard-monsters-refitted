@@ -6,6 +6,7 @@ import {
   countdownText,
   krallenPenaltyText,
   krallenPrizeText,
+  leadsPage,
   rewardText,
   shortAmount,
   shortDate,
@@ -28,7 +29,7 @@ import { centreWindow, type CentreWindow } from "@/ui/centreWindow";
 import { Panel } from "@/ui/Panel";
 import { resourceIcon, RESOURCE_KEYS } from "@/ui/resourceIcon";
 import { eventsArt } from "./eventsArt";
-import { mr2WelcomeCard, paintWelcomeReward, paintWelcomeTimeline, welcomeDaysText } from "./mr2WelcomeCard";
+import { mr2WelcomeCard, paintWelcomeReward, paintWelcomeTimeline, welcomeDaysText, welcomeStartsText } from "./mr2WelcomeCard";
 import { tickCheckin, WEEKEND_ICON, weekendAmount, weekendCheckinBlock } from "./weekendUi";
 import "./events.css";
 import { el } from "@/ui/dom";
@@ -265,6 +266,54 @@ const KORATH_POWER_SHORT = ["Burn", "Fire", "Fists"] as const;
 const GOAL_BAR_KINDS: ReadonlySet<string> = new Set(["monster-madness"]);
 
 /**
+ * Ladders drawn as one prize track and one dock (owner, 28 Nov 2026, on
+ * Christmas's presents: "each row is too chunky and a lot of empty space";
+ * neon's direction A, as the Wild Monster Invasion card): the goals evenly
+ * spaced along one bar with each goal's main prize over it, then one row for
+ * the chosen goal with all its prizes and its Claim. Christmas only for now;
+ * the live Thanksgiving card keeps its rows.
+ */
+const TRACK_KINDS: ReadonlySet<string> = new Set(["christmas"]);
+
+/**
+ * Where the track's fill ends for `counter`, in percent: the goals stand
+ * evenly spaced (goal i of n at (i + 1) / n), and the fill runs straight
+ * between them, so 25 / 50 / 150 / 200 do not crowd into the bar's first
+ * quarter.
+ */
+export const trackShare = (counter: number, needs: readonly number[]): number => {
+  const count = needs.length;
+  if (count === 0) return 0;
+  let below = 0;
+  for (let index = 0; index < count; index++) {
+    const need = needs[index]!;
+    const at = ((index + 1) / count) * 100;
+    if (counter < need) {
+      const from = index === 0 ? 0 : (index / count) * 100;
+      const share = need > below ? Math.max(0, counter - below) / (need - below) : 1;
+      return from + (at - from) * share;
+    }
+    below = need;
+  }
+  return 100;
+};
+
+/** The goal the dock opens on: the first ready to claim, else the next to reach, else the last. */
+export const trackFocus = (ladder: LadderView): number => {
+  const ready = claimableTiers(ladder);
+  if (ready.length > 0) return ready[0]!;
+  const next = ladder.tiers.findIndex((tier) => !tier.claimed && ladder.counter < tier.need);
+  return next >= 0 ? next : ladder.tiers.length - 1;
+};
+
+/** The prize a goal shows on the track: a decoration first, then Shiny, then Glimmers, else its first. */
+export const heroReward = (rewards: readonly EventReward[]): EventReward | undefined =>
+  rewards.find((reward) => reward.kind === "decoration") ??
+  rewards.find((reward) => reward.kind === "shiny") ??
+  rewards.find((reward) => reward.kind === "eventCoins") ??
+  rewards[0];
+
+/**
  * One bar from 0 to the top goal, filled to the player's points, with a tick
  * at each goal (green once reached) and its figure under it. `minimum`, when
  * above 0, adds the Krallen Hunt's half-goal mark (red until reached,
@@ -451,6 +500,8 @@ export class EventsPanel {
   readonly element: HTMLElement;
   private readonly panel: Panel;
   private readonly options: EventsPanelOptions;
+  /** A prize track's goal the player tapped, by event id (`trackLadder`); kept across redraws until claimed. */
+  private readonly trackChoice = new Map<string, number>();
 
   /** Its place in the middle of the screen, one window at a time (`ui/centreWindow.ts`). */
   private readonly centre: CentreWindow;
@@ -501,6 +552,9 @@ export class EventsPanel {
     tickCheckin(this.element, now);
     for (const line of this.element.querySelectorAll<HTMLElement>("[data-welcome-ends]")) {
       line.textContent = welcomeDaysText(Number(line.dataset["welcomeEnds"]), now);
+    }
+    for (const line of this.element.querySelectorAll<HTMLElement>("[data-welcome-starts]")) {
+      line.textContent = welcomeStartsText(Number(line.dataset["welcomeStarts"]), now);
     }
     for (const line of this.element.querySelectorAll<HTMLElement>("[data-welcome-start]")) paintWelcomeTimeline(line, now);
     // A Frontier Pass reward used today is back at the daily reset.
@@ -555,6 +609,9 @@ export class EventsPanel {
     const weekendOn = view.weekend?.on ?? null;
     const weekendNext = weekendOn ? null : (view.weekend?.next ?? null);
     const main = el("div", "events-page__main");
+    // Christmas leads even the weekend event while it is on (owner, 28 Nov 2026: "First, while Christmas is on").
+    const leading = active.filter(leadsPage);
+    for (const event of leading) main.append(this.activeCard(event, view));
     if (weekendOn && view.weekend) {
       const onCheckIn = this.options.onCheckInWeekend;
       main.append(
@@ -566,7 +623,7 @@ export class EventsPanel {
         ),
       );
     }
-    for (const event of active) main.append(this.activeCard(event, view));
+    for (const event of active) if (!leading.includes(event)) main.append(this.activeCard(event, view));
     if (main.childElementCount === 0 && !welcome) main.append(el("p", "events-status", "No event is on right now."));
     if (main.childElementCount > 0) page.append(main);
     if (upcoming.length > 0 || weekendNext) {
@@ -614,7 +671,10 @@ export class EventsPanel {
     extra.dataset["event"] = event.id;
     const own = EVENT_EXTRAS.get(event.kind)?.(event);
     if (own) extra.append(own);
-    card.append(extra);
+    // A prize track's hint (where the presents come from) under its title, above its bar (neon round 1).
+    const trackHead = card.querySelector(".events-ladder--track > .events-calendar__head");
+    if (trackHead) trackHead.after(extra);
+    else card.append(extra);
     return card;
   }
 
@@ -687,6 +747,7 @@ export class EventsPanel {
   }
 
   private ladder(event: EventView, ladder: LadderView, view: Extract<EventsPanelView, { kind: "list" }>): HTMLElement {
+    if (TRACK_KINDS.has(event.kind) && ladder.tiers.length > 0) return this.trackLadder(event, ladder, view);
     const goalBar = GOAL_BAR_KINDS.has(event.kind);
     const section = el("section", `events-ladder${goalBar ? ` events-ladder--goals events-ladder--${event.kind}` : ""}`);
     const head = el("div", "events-calendar__head");
@@ -730,6 +791,127 @@ export class EventsPanel {
     section.append(head);
     if (goalBar) section.append(goalsBar(ladder));
     section.append(list);
+    return section;
+  }
+
+  /**
+   * A ladder as one track and one dock ({@link TRACK_KINDS}): the goals along
+   * the bar, each with its main prize over it (grey until reached, lit gold
+   * when ready, ticked once claimed); tapping one shows it in the dock under
+   * the bar with all its prizes and its Claim, or how many are still to find.
+   * The dock opens on {@link trackFocus}; after a claim it moves on to the
+   * next one ready, so several are claimed with taps in one place.
+   */
+  private trackLadder(event: EventView, ladder: LadderView, view: Extract<EventsPanelView, { kind: "list" }>): HTMLElement {
+    const section = el("section", `events-ladder events-ladder--track events-ladder--${event.kind}`);
+    const needs = ladder.tiers.map((tier) => tier.need);
+    const top = Math.max(...needs);
+    const head = el("div", "events-calendar__head");
+    head.append(
+      el("h4", "events-section__title", ladder.label),
+      el("span", "events-calendar__count", `${shortAmount(Math.min(ladder.counter, top))} / ${shortAmount(top)}`),
+    );
+    const ready = claimableTiers(ladder);
+    const readySet = new Set(ready);
+    const chosen = this.trackChoice.get(event.id);
+    // A goal picked by a tap stays picked until it is claimed; then the dock moves on.
+    let focus = chosen !== undefined && chosen < ladder.tiers.length && !ladder.tiers[chosen]!.claimed ? chosen : trackFocus(ladder);
+
+    const track = el("div", "events-track");
+    track.setAttribute("role", "group");
+    track.setAttribute("aria-label", ladder.label);
+    const bar = el("div", "events-track__bar");
+    bar.setAttribute("role", "progressbar");
+    bar.setAttribute("aria-label", ladder.label);
+    bar.setAttribute("aria-valuemin", "0");
+    bar.setAttribute("aria-valuemax", String(top));
+    bar.setAttribute("aria-valuenow", String(Math.min(ladder.counter, top)));
+    bar.setAttribute("aria-valuetext", `${formatAmount(ladder.counter)} of ${formatAmount(top)}`);
+    const fill = el("span", "events-track__fill");
+    fill.style.width = `${Math.round(trackShare(ladder.counter, needs) * 10) / 10}%`;
+    bar.append(fill);
+    track.append(bar);
+
+    const nodes: HTMLButtonElement[] = [];
+    ladder.tiers.forEach((tier, index) => {
+      const state = tier.claimed ? "claimed" : readySet.has(index) ? "ready" : "locked";
+      const node = el("button", `events-track__node events-track__node--${state}`);
+      node.type = "button";
+      node.dataset["tier"] = String(index);
+      node.style.left = `${((index + 1) / ladder.tiers.length) * 100}%`;
+      const status = tier.claimed ? "claimed" : readySet.has(index) ? "ready to claim" : "locked";
+      node.setAttribute("aria-label", `${formatAmount(tier.need)}: ${rewardsText(tier.rewards)}, ${status}`);
+      node.title = rewardsText(tier.rewards);
+      const prize = el("span", "events-track__prize");
+      const hero = heroReward(tier.rewards);
+      if (hero) prize.append(rewardBadge(hero));
+      // The prize's state on its tile's corner too (neon round 1): "!" when ready, a lock until reached.
+      if (state === "ready") prize.append(el("span", "events-track__badge events-track__badge--ready", "!"));
+      if (state === "locked") {
+        const badge = el("span", "events-track__badge events-track__badge--locked");
+        badge.append(eventsArt("lock", 10, "events-track__lock"));
+        prize.append(badge);
+      }
+      const pip = el("span", "events-track__pip");
+      if (tier.claimed) pip.append(eventsArt("tick", 14, "events-track__tick"));
+      node.append(prize, pip, el("span", "events-track__need", shortAmount(tier.need)));
+      node.addEventListener("click", () => {
+        this.trackChoice.set(event.id, index);
+        focus = index;
+        paint();
+      });
+      nodes.push(node);
+      track.append(node);
+    });
+
+    const dock = el("div", "events-track__dock");
+    const refusal = el("div", "events-track__refusal");
+    const paint = (): void => {
+      const tier = ladder.tiers[focus]!;
+      const key = tierKey(event.id, focus);
+      const isReady = readySet.has(focus);
+      for (const node of nodes) {
+        const on = Number(node.dataset["tier"]) === focus;
+        node.classList.toggle("events-track__node--focus", on);
+        node.setAttribute("aria-pressed", String(on));
+      }
+      dock.className = `events-track__dock events-track__dock--${tier.claimed ? "claimed" : isReady ? "ready" : "locked"}`;
+      dock.dataset["tier"] = String(focus);
+      // Where the dock's pointer stands: under the goal it shows (neon round 1).
+      dock.style.setProperty("--at", String((focus + 1) / ladder.tiers.length));
+      const goal = el("span", "events-track__goal");
+      goal.append(el("span", "events-track__goal-need", shortAmount(tier.need)));
+      goal.setAttribute("aria-label", `${formatAmount(tier.need)} ${ladder.label.toLowerCase()}`);
+      const chips = el("span", "events-track__chips");
+      chips.title = rewardsText(tier.rewards);
+      for (const reward of tier.rewards) chips.append(rewardBadge(reward));
+      const end = el("span", "events-track__end");
+      if (tier.claimed) {
+        end.append(eventsArt("tick", 18, "events-tier__mark"), el("span", "events-track__state", "Claimed"));
+      } else if (isReady) {
+        // "Claim 50": it takes this goal only, even with more ready (neon round 2).
+        // "Claim [present] 50": the present beside the number, as in the dock's pill (neon round 3).
+        const button = el("button", "btn btn--primary events-track__claim", "Claim ");
+        button.append(el("span", "events-track__claim-need", shortAmount(tier.need)));
+        button.type = "button";
+        button.dataset["claim"] = key;
+        button.disabled = view.claiming !== null;
+        button.setAttribute("aria-label", `Claim ${formatAmount(tier.need)}: ${rewardsText(tier.rewards)}`);
+        button.addEventListener("click", () => this.options.onClaimTier(event, focus));
+        // More than one waiting: how many, beside the button, so the player knows Claim takes one and to tap again.
+        if (ready.length > 1) end.append(el("span", "events-track__more", `${ready.length} ready`));
+        end.append(button);
+      } else {
+        end.append(
+          eventsArt("lock", 16, "events-tier__mark"),
+          el("span", "events-track__state", `${shortAmount(Math.max(0, tier.need - ladder.counter))} left`),
+        );
+      }
+      dock.replaceChildren(goal, chips, end);
+      refusal.replaceChildren(...(view.refusal?.key === key ? [refusalNote(view.refusal.message)] : []));
+    };
+    paint();
+    section.append(head, track, dock, refusal);
     return section;
   }
 

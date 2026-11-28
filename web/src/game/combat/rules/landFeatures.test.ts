@@ -197,10 +197,12 @@ describe("switched on", () => {
     expect(forest.digest).not.toBe(plain.digest);
     // One battle is chaotic enough to land either side of plain ground by a
     // point or so (patch 7.9's reach did that to the fixture's own seed), so
-    // the land is judged on the average of six. Its Krallen fights by the
-    // rules before patch 8.6 here: keeping her route on her walking look
-    // swings this one battle by up to 20 points a seed, which drowns the land.
-    const seeds = [read(`${FIXTURES}mixed-waves.json`).log.seed as number, 1, 2, 3, 4, 5];
+    // the land is judged on the average of twelve (six until beta 10's
+    // ground-circle pebble blast left rocks a hair above plain over six). Its
+    // Krallen fights by the rules before patch 8.6 here: keeping her route on
+    // her walking look swings this one battle by up to 20 points a seed,
+    // which drowns the land.
+    const seeds = [read(`${FIXTURES}mixed-waves.json`).log.seed as number, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
     const average = (extra: Partial<BattleOptions> = {}) =>
       seeds.reduce(
         (sum, seed) => sum + mixedWaves({ ...extra, flashKrallen: false }, seed).damage,
@@ -209,5 +211,5 @@ describe("switched on", () => {
     const onPlain = average();
     expect(average(battleDefence({ ...FORCES, land: LandFeature.MARSH }))).toBeGreaterThan(onPlain);
     expect(average(battleDefence({ ...FORCES, land: LandFeature.ROCKS }))).toBeLessThan(onPlain);
-  }, 120_000);
+  }, 240_000);
 });

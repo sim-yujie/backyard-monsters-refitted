@@ -196,7 +196,8 @@ import {
   TESLA_ZAP_FRAMES,
   SPURTZ_CULL_FRAMES,
   FLASH_SPURTZ_HATCH,
-  MAIN_YARD_SPURTZ_HATCH,
+  MAIN_YARD_SPURTZ_RELOAD,
+  towerRateScale,
   type SpurtzHatchRule,
   SPURTZ_CULL_ROLL,
   SPURTZ_CULL_TICKS,
@@ -770,11 +771,18 @@ export interface BattleOptions {
   /** Overrides {@link SHELL_BLASTS_WHERE_IT_LANDS} for this battle; absent, it holds. */
   readonly shellBlastsWhereItLands?: boolean;
   /**
-   * Overrides {@link MAIN_YARD_SPURTZ_HATCH}, how a Spurtz Cannon hatches
-   * Spurtz on a player's main yard, for this battle (tests and balance runs);
-   * absent, it holds. Other yards hatch as Flash's whatever this says.
+   * Overrides {@link FLASH_SPURTZ_HATCH}, how a Spurtz Cannon hatches Spurtz
+   * on a player's main yard, for this battle (tests and balance runs); absent,
+   * it holds. Other yards hatch as Flash's whatever this says.
    */
   readonly spurtzHatch?: SpurtzHatchRule;
+  /**
+   * Overrides {@link MAIN_YARD_SPURTZ_RELOAD}, how many times Flash's load and
+   * reload a Spurtz Cannon takes on a player's main yard, for this battle
+   * (tests and balance runs); absent, it holds. Other yards reload as Flash's
+   * whatever this says.
+   */
+  readonly spurtzReload?: number;
   /**
    * Whether an attacking Krallen fights by Flash's two rules of patch 8.6
    * (owner, 25 Nov 2026; fidelity note 9): she keeps her route on her walking
@@ -2517,9 +2525,18 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   /** The other towers' shells in the air, in the order fired (fidelity note 1). */
   const towerShells: TowerShell[] = [];
   const blastWhereItLands = options.shellBlastsWhereItLands ?? SHELL_BLASTS_WHERE_IT_LANDS;
-  // How the Spurtz Cannons hatch here: the main-yard rule on a player's main yard (beta 10).
+  // How the Spurtz Cannons hatch here: Flash's on every yard, unless a test or
+  // balance run hands a player's main yard another rule.
   const spurtzHatch: SpurtzHatchRule =
-    yard.kind === "main" ? (options.spurtzHatch ?? MAIN_YARD_SPURTZ_HATCH) : FLASH_SPURTZ_HATCH;
+    yard.kind === "main" ? (options.spurtzHatch ?? FLASH_SPURTZ_HATCH) : FLASH_SPURTZ_HATCH;
+  const spurtzReload = options.spurtzReload ?? MAIN_YARD_SPURTZ_RELOAD;
+  /**
+   * A tower's `rate` as it fights here: a Spurtz Cannon on a player's main
+   * yard loads and reloads slower (beta 10, {@link MAIN_YARD_SPURTZ_RELOAD});
+   * every other tower as Flash's.
+   */
+  const rateOf = (type: number, rate: number | undefined): number =>
+    (rate ?? 0) * towerRateScale(type, yard.kind, spurtzReload);
   /** Spurtz hatched this step, on their feet at its end: screen points, whole. */
   const pendingSpurtz: Array<{ readonly tower: Tower; readonly x: number; readonly y: number }> =
     [];
@@ -2676,8 +2693,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         firstShotTick: null,
         destroyedTick: null,
       },
-      // `Props()` seeds the fire tick with `rate`, not `rate * 2` (`BTOWER.as:112`).
-      fireTick: stats.rate ?? 0,
+      // `Props()` seeds the fire tick with `rate`, not `rate * 2` (`BTOWER.as:112`);
+      // a main yard's Spurtz Cannon with its slower rate (beta 10).
+      fireTick: rateOf(building.type, stats.rate),
       targets: [],
       frame: 0,
       sightCut: 0,
@@ -4885,7 +4903,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
           gun.type,
           gun.level,
           stats?.damage ?? 0,
-          stats?.rate ?? 0,
+          rateOf(gun.type, stats?.rate),
           TOWER_REARM_MULTIPLIER,
           gun.hp,
           gun.maxHp,
@@ -4955,7 +4973,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         building.type,
         building.level,
         stats?.damage ?? 0,
-        stats?.rate ?? 0,
+        rateOf(building.type, stats?.rate),
         TOWER_REARM_MULTIPLIER,
         building.hp,
         building.maxHp,
@@ -7948,7 +7966,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
 
     tower.fireTick -= 1;
     if (tower.fireTick <= 0) {
-      tower.fireTick += (stats.rate ?? 0) * TOWER_REARM_MULTIPLIER;
+      tower.fireTick += rateOf(building.type, stats.rate) * TOWER_REARM_MULTIPLIER;
       const scan = scanOf(tower);
       const live = liveTargets(tower, scan).length > 0;
       // `FindTargets` keeps the list it had when it finds nobody (`BTOWER.as:395-426`).

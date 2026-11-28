@@ -4,12 +4,13 @@ import {
   MUSHROOM_RESPAWN_SECONDS,
   moveMushroomsOffBuildings,
   mushroomRespawnSeconds,
+  PRESENT_EDGE_INSET,
   readMushrooms,
   spawnMushrooms,
   type MushroomYardSave,
   type Random,
 } from "./mushrooms.js";
-import { yardHuntOn } from "./season.js";
+import { PRESENT_HUNT_EVENT, yardHuntAt, yardHuntOn } from "./season.js";
 
 /**
  * Catch-up step 3 (mushrooms): new mushrooms grow while the player is away
@@ -41,20 +42,23 @@ import { yardHuntOn } from "./season.js";
  * @param now - Unix seconds to advance to.
  * @param random - The spot and frame source.
  * @param respawnSeconds - The period: a yard hunt's while one is on at `now`.
+ * @param inset - Yard units every find keeps from the plot's edge: {@link PRESENT_EDGE_INSET}
+ *   while Christmas's present hunt is on (finds already nearer the edge move in when there is room).
  */
 export const catchUpMushrooms = (
   save: MushroomYardSave,
   now: number,
   random: Random = Math.random,
-  respawnSeconds: number = mushroomRespawnSeconds(yardHuntOn(now))
+  respawnSeconds: number = mushroomRespawnSeconds(yardHuntOn(now)),
+  inset: number = yardHuntAt(now)?.event === PRESENT_HUNT_EVENT ? PRESENT_EDGE_INSET : 0
 ): [] => {
-  moveMushroomsOffBuildings(save, random);
+  moveMushroomsOffBuildings(save, random, inset);
   const { l, s } = readMushrooms(save.mushrooms);
   const periods = s > 0 ? Math.floor((now - s) / respawnSeconds) : MUSHROOM_BURST;
   if (periods <= 0) return [];
 
   const count = Math.min(periods, MUSHROOM_BURST, MUSHROOM_CAP - l.length);
-  const list = count > 0 ? spawnMushrooms(save, l, count, random) : l;
+  const list = count > 0 ? spawnMushrooms(save, l, count, random, inset) : l;
 
   save.mushrooms = { l: list, s: now };
   return [];

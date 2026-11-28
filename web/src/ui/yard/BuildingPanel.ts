@@ -630,6 +630,7 @@ export class BuildingPanel {
           this.yard.store.kind,
           this.yard.store.yard.cellHeight,
           this.yard.store.yard.landRangePct,
+          this.yard.store.yard.wild === true,
         )
       : { rows: [], list: null, yardList: null };
     // With an upgrade to offer, what it changes sits beside the Upgrade

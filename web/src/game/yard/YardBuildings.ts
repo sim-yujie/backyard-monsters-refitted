@@ -26,6 +26,7 @@ import type { YardArtAtlas } from "./yardAtlas";
 import type { Rect } from "./YardGrid";
 import { spriteBox, unionRect } from "./yardSnapshot";
 import { artFor, BuildingCondition, type Yard, type YardBuilding } from "./yardModel";
+import { snowContactSprite } from "./snowContact";
 import { classicTowerTier, tierPlateImage, tierPlateScale, tierPlateSpot } from "./classicTierPlates";
 import { bakeHelpGlow, glowAlpha, helpLook, liftAlpha, litTint, type BakedGlow, type GlowSource } from "./helpGlow";
 
@@ -123,6 +124,8 @@ interface BuildingView {
   readonly art: ResolvedArt | null;
   readonly top: Sprite;
   readonly shadow: Sprite | null;
+  /** Christmas: the dark patch on the snow under it (`snowContact.ts`), or null. */
+  readonly contact: Sprite | null;
   /**
    * In stacking order; empty for the 78 types that never animate. Replaced
    * wholesale when a battle swaps in damaged art with strips of its own.
@@ -275,6 +278,11 @@ export class YardBuildings {
   readonly tops = new Container();
   /** Placeholder names, above everything. */
   readonly labels = new Container();
+  /**
+   * Whether the next `show` lays a dark patch on the snow under each building
+   * (Christmas, `snowContact.ts`). Set by the yard before it shows a yard.
+   */
+  snowContact = false;
   /** Badges over anything with a countdown running. */
   readonly markers = new Container();
 
@@ -421,6 +429,13 @@ export class YardBuildings {
       for (const layer of anims) this.tops.addChild(layer.sprite);
       if (fort) this.tops.addChild(fort.front);
 
+      // Under the art's own shadow, so the two darken the snow together.
+      const contact = this.snowContact ? snowContactSprite(building) : null;
+      if (contact) {
+        contact.visible = false;
+        this.shadows.addChild(contact);
+      }
+
       let shadow: Sprite | null = null;
       if (art?.shadow) {
         shadow = new Sprite(Texture.EMPTY);
@@ -443,6 +458,7 @@ export class YardBuildings {
         art,
         top,
         shadow,
+        contact,
         anims,
         fort,
         plate,
@@ -560,6 +576,7 @@ export class YardBuildings {
       view.top.visible =
         on && !(view.topIsAnim && animsOn && view.anims[0]?.resolved === true);
       if (view.shadow) view.shadow.visible = on && view.shadowResolved;
+      if (view.contact) view.contact.visible = on;
       if (view.label) view.label.visible = on;
       if (view.fort) {
         const shown = on && view.damageStep < 4;
@@ -661,7 +678,7 @@ export class YardBuildings {
     view.offsetX = worldX;
     view.offsetY = worldY;
 
-    for (const sprite of [view.top, view.shadow, view.label, view.marker]) {
+    for (const sprite of [view.top, view.shadow, view.contact, view.label, view.marker]) {
       if (sprite) sprite.position.set(sprite.position.x + dx, sprite.position.y + dy);
     }
     for (const layer of view.anims) {
@@ -693,6 +710,7 @@ export class YardBuildings {
     view.top.visible = false;
     if (view.plate) view.plate.visible = false;
     if (view.shadow) view.shadow.visible = false;
+    if (view.contact) view.contact.visible = false;
     if (view.label) view.label.visible = false;
     for (const layer of view.anims) layer.sprite.visible = false;
     if (view.fort) {
@@ -1447,6 +1465,7 @@ export class YardBuildings {
     // A placeholder keeps its own see-through grey until the picture is in.
     if (view.resolved) view.top.alpha = alpha;
     if (view.shadow) view.shadow.alpha = alpha;
+    if (view.contact) view.contact.alpha = alpha;
     for (const layer of view.anims) layer.sprite.alpha = alpha;
     if (view.fort) {
       view.fort.back.alpha = alpha;

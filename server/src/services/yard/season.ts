@@ -3,8 +3,8 @@ import { EVENTS, type EventDefinition } from "../../game-data/events/events.js";
 import { eventWindow, statusAt } from "../events/schedule.js";
 
 /**
- * The yard's seasonal dress and the yard hunts: Halloween's pumpkins and
- * Thanksgiving's roaming turkeys.
+ * The yard's seasonal dress and the yard hunts: Halloween's pumpkins,
+ * Thanksgiving's roaming turkeys and Christmas's presents.
  *
  * While a hunt's event runs, the yard's mushrooms grow as that event's finds
  * (pumpkins, or turkeys that wander about near where they grew), once an hour
@@ -23,8 +23,11 @@ import { eventWindow, statusAt } from "../events/schedule.js";
 export interface YardHunt {
   readonly event: string;
   /** The `MushroomPickReport` field that carries the player's count. */
-  readonly field: "pumpkins" | "turkeys";
+  readonly field: HuntField;
 }
+
+/** The `MushroomPickReport` fields a yard hunt's count travels in. */
+export type HuntField = "pumpkins" | "turkeys" | "presents";
 
 /** The event whose pumpkins the yard grows and counts. */
 export const PUMPKIN_HUNT_EVENT = "halloween-2026";
@@ -32,10 +35,14 @@ export const PUMPKIN_HUNT_EVENT = "halloween-2026";
 /** The event whose roaming turkeys the yard grows and counts. */
 export const TURKEY_HUNT_EVENT = "thanksgiving-2026";
 
+/** The event whose presents the yard grows and counts. */
+export const PRESENT_HUNT_EVENT = "christmas-2026";
+
 /** Every yard hunt; the first one on wins if two ever overlap. */
 export const YARD_HUNTS: readonly YardHunt[] = [
   { event: PUMPKIN_HUNT_EVENT, field: "pumpkins" },
   { event: TURKEY_HUNT_EVENT, field: "turkeys" },
+  { event: PRESENT_HUNT_EVENT, field: "presents" },
 ];
 
 const isOn = (event: EventDefinition, now: number, forced: ReadonlySet<string>): boolean =>
@@ -74,7 +81,7 @@ export const yardHuntAt = (
     events.some((event) => event.id === hunt.event && isOn(event, now, forced))
   ) ?? null;
 
-/** Whether any yard hunt (pumpkins or turkeys) is on at `now`: mushrooms then grow hourly. */
+/** Whether any yard hunt (pumpkins, turkeys or presents) is on at `now`: mushrooms then grow hourly. */
 export const yardHuntOn = (
   now: number,
   events: readonly EventDefinition[] = EVENTS,
