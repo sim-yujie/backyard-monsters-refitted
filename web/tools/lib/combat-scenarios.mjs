@@ -195,8 +195,10 @@ export const SCENARIOS = [
   {
     name: "champion-power",
     description:
-      "A level 4 Gorgo at power level 3 and food bonus 3 with sixty Pokeys: the food bonus's " +
-      "ladders add health, damage and speed to its level's (`ChampionBase.as:123-155`).",
+      "A level 4 Gorgo at power level 1, every live Gorgo's, and food bonus 3 with sixty " +
+      "Pokeys: the food bonus's ladders add health, damage and speed to its level's " +
+      "(`ChampionBase.as:123-155`). Power level 3 until the Monster Madness abilities " +
+      "(27 Nov 2026), when it was the same fight; now 3 would be two abilities.",
     yard: "sandbox",
     without: SPURTZ_CANNONS,
     kind: "main",
@@ -214,7 +216,7 @@ export const SCENARIOS = [
           y: -480,
           r: 300,
           monsters: { C1: 60 },
-          champion: { t: 1, l: 4, pl: 3, fb: 3 },
+          champion: { t: 1, l: 4, pl: 1, fb: 3 },
         },
       ],
     },
@@ -322,7 +324,8 @@ export const SCENARIOS = [
     playerLevel: 20,
     tailTicks: 12000,
     defence: {
-      defenderChampions: [{ t: 2, l: 4, hp: 60000, pl: 2 }],
+      // Power level 1, every live Drull's (2 until the Monster Madness abilities, the same fight).
+      defenderChampions: [{ t: 2, l: 4, hp: 60000, pl: 1 }],
     },
     log: {
       v: 1,
@@ -435,8 +438,9 @@ export const SCENARIOS = [
   {
     name: "fomor-both-sides",
     description:
-      "A level 6 Fomor at power level 3 enraging and following its wounded Pokeys, against a " +
-      "caged level 5 Fomor enraging the bunkers' garrisons (issue #222).",
+      "A level 6 Fomor at power level 1, every live Fomor's, enraging and following its " +
+      "wounded Pokeys, against a caged level 5 Fomor enraging the bunkers' garrisons " +
+      "(issue #222). Power levels 3 and 2 until the Monster Madness abilities (27 Nov 2026).",
     yard: "sandbox",
     kind: "main",
     levels: MAXED,
@@ -448,7 +452,7 @@ export const SCENARIOS = [
         84: { C2: 6 },
       },
       defenderLevels: { C1: 4, C2: 4 },
-      defenderChampions: [{ t: 3, l: 5, hp: 25000, pl: 2 }],
+      defenderChampions: [{ t: 3, l: 5, hp: 25000, pl: 1 }],
     },
     log: {
       v: 1,
@@ -461,7 +465,7 @@ export const SCENARIOS = [
           y: -300,
           r: 300,
           monsters: { C1: 80, C8: 10 },
-          champion: { t: 3, l: 6, pl: 3, fb: 2 },
+          champion: { t: 3, l: 6, pl: 1, fb: 2 },
         },
       ],
     },
@@ -497,7 +501,7 @@ export const SCENARIOS = [
   ...["offensive", "defensive"].map((stance) => ({
     name: `champion-${stance}`,
     description:
-      `A level 4 Gorgo at power level 3 flung in the ${stance} Mode with forty Pokeys: ` +
+      `A level 4 Gorgo at power level 1 flung in the ${stance} Mode with forty Pokeys: ` +
       "the Mode scores Flash's own target lists (issue #220).",
     yard: "sandbox",
     without: SPURTZ_CANNONS,
@@ -516,7 +520,7 @@ export const SCENARIOS = [
           y: -480,
           r: 300,
           monsters: { C1: 40 },
-          champion: { t: 1, l: 4, pl: 3, s: stance },
+          champion: { t: 1, l: 4, pl: 1, s: stance },
         },
       ],
     },
@@ -526,7 +530,7 @@ export const SCENARIOS = [
   {
     name: "champion-brain",
     description:
-      "A level 4 Gorgo at power level 3 flung in Hybrid with forty Pokeys and a learned brain " +
+      "A level 4 Gorgo at power level 1 flung in Hybrid with forty Pokeys and a learned brain " +
       "that likes towers and the pack and shuns loot (issue #219).",
     yard: "sandbox",
     without: SPURTZ_CANNONS,
@@ -548,10 +552,79 @@ export const SCENARIOS = [
           champion: {
             t: 1,
             l: 4,
-            pl: 3,
+            pl: 1,
             s: "hybrid",
             b: { tower: 150, loot: -120, finish: 40, focus: 90, threat: 60 },
           },
+        },
+      ],
+    },
+  },
+  // The Monster Madness abilities (`championAbilities.ts`, 27 Nov 2026):
+  // every champion at power level 4, all three of its abilities, attacking
+  // and from the cage, so the page and the server agree on every one.
+  {
+    name: "abilities-drull-vs-gorgo",
+    description:
+      "A level 6 Drull with all three abilities (Bloodthirst, Twin Bite, Pounce) and forty " +
+      "Pokeys, against a caged level 6 Gorgo with all three of his (Stone Skin, Chest Pound, " +
+      "Ground Slam) and the bunkers' garrisons.",
+    yard: "sandbox",
+    without: SPURTZ_CANNONS,
+    kind: "main",
+    levels: MAXED,
+    playerLevel: 20,
+    tailTicks: 9600,
+    defence: {
+      bunkers: { 83: { C1: 8 }, 84: { C2: 6 } },
+      defenderLevels: { C1: 4, C2: 4 },
+      defenderChampions: [{ t: 1, l: 6, hp: 110000, pl: 4 }],
+    },
+    log: {
+      v: 1,
+      seed: 27111,
+      events: [
+        {
+          kind: "fling",
+          t: 200,
+          x: 180,
+          y: -480,
+          r: 300,
+          monsters: { C1: 40 },
+          champion: { t: 2, l: 6, pl: 4 },
+        },
+      ],
+    },
+  },
+  {
+    name: "abilities-gorgo-vs-fomor",
+    description:
+      "A level 6 Gorgo with all three abilities and sixty Pokeys, against a caged " +
+      "level 6 Fomor with all three of his (Healing Mist, Bubble, Acid Spit) and the " +
+      "bunkers' garrisons.",
+    yard: "sandbox",
+    without: SPURTZ_CANNONS,
+    kind: "main",
+    levels: MAXED,
+    playerLevel: 20,
+    tailTicks: 9600,
+    defence: {
+      bunkers: { 83: { C1: 8 }, 84: { C2: 6 } },
+      defenderLevels: { C1: 4, C2: 4 },
+      defenderChampions: [{ t: 3, l: 6, hp: 40000, pl: 4 }],
+    },
+    log: {
+      v: 1,
+      seed: 27112,
+      events: [
+        {
+          kind: "fling",
+          t: 200,
+          x: 300,
+          y: -300,
+          r: 300,
+          monsters: { C1: 60 },
+          champion: { t: 1, l: 6, pl: 4 },
         },
       ],
     },

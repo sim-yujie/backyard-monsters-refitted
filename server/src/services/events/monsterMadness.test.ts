@@ -10,6 +10,7 @@ import {
   monsterMadnessRun,
 } from "../../game-data/events/monsterMadness.js";
 import { CHAMPION_STATUS, planChampionRaise, type ChampionSave } from "../yard/champion.js";
+import { eventPlayerOf, lockedReason } from "./eventPlayer.js";
 import { planGrant } from "./grant.js";
 import { grantKorathPower } from "./korathPower.js";
 import { liveEvents } from "./liveEvents.js";
@@ -23,7 +24,13 @@ import {
 } from "./monsterMadnessRuns.js";
 import { memoryProgressStore } from "./progressStore.js";
 import { visibleEvents } from "./schedule.js";
-import { countTakeover, takeoverEventsOn, takeoverPoints, tribeTakeoverPoints } from "./takeoverEvents.js";
+import {
+  PLAYER_OUTPOST_POINTS_CAP,
+  countTakeover,
+  takeoverEventsOn,
+  takeoverPoints,
+  tribeTakeoverPoints,
+} from "./takeoverEvents.js";
 
 /**
  * Monster Madness (owner, 11 Nov 2026): takeover points while a run is on,
@@ -33,10 +40,10 @@ import { countTakeover, takeoverEventsOn, takeoverPoints, tribeTakeoverPoints } 
 
 const DAY = 24 * 60 * 60;
 const START = 1_900_000_000;
-const RUN = { startsAt: START, endsAt: START + 4 * DAY };
+const RUN = { startsAt: START, endsAt: START + 7 * DAY };
 const IN = START + DAY;
 const NO_FORCE: ReadonlySet<string> = new Set();
-const READY = { buildingdata: {}, tutorialstage: 205 };
+const READY = { buildingdata: {}, tutorialstage: 205, mr2upgraded: true, mapversion: 2 };
 const em = {} as never;
 const CAGE = { "3": { id: 3, t: 114, x: 0, y: 0, l: 1 } };
 
@@ -51,14 +58,14 @@ describe("off until the owner starts it", () => {
     expect(takeoverEventsOn(now, liveEvents(NO_FORCE))).toEqual([]);
   });
 
-  test("a started run is listed and counts takeovers for four days, then stops", () => {
+  test("a started run is listed and counts takeovers for seven days, then stops", () => {
     setMonsterMadnessRuns([RUN]);
     const events = liveEvents(NO_FORCE);
     const run = events.find((event) => event.kind === "monster-madness")!;
     expect(run.id).toBe(`monster-madness-${START}`);
     expect(takeoverEventsOn(IN, events).map((event) => event.id)).toEqual([run.id]);
     expect(takeoverEventsOn(START - 1, events)).toEqual([]);
-    expect(takeoverEventsOn(START + 4 * DAY, events)).toEqual([]);
+    expect(takeoverEventsOn(START + 7 * DAY, events)).toEqual([]);
     const shown = visibleEvents(IN, events, NO_FORCE, NO_FORCE).find((one) => one.event.id === run.id);
     expect(shown?.status).toBe("active");
   });
@@ -69,12 +76,12 @@ describe("off until the owner starts it", () => {
     const today = Date.UTC(2026, 10, 20, 12) / 1000;
     const shown = visibleEvents(today, events, forced, NO_FORCE).find((one) => one.event.id === MONSTER_MADNESS_ID);
     expect(shown?.status).toBe("active");
-    expect(shown!.window.endsAt - shown!.window.startsAt).toBe(4 * DAY);
+    expect(shown!.window.endsAt - shown!.window.startsAt).toBe(7 * DAY);
   });
 });
 
 describe("runs", () => {
-  test("start: four days from now, refused while one is on; stop ends it now", () => {
+  test("start: seven days from now, refused while one is on; stop ends it now", () => {
     const started = startRun([], START)!;
     expect(started).toEqual([RUN]);
     expect(startRun(started, IN)).toBeNull();
@@ -82,7 +89,7 @@ describe("runs", () => {
     expect(stopped).toEqual([{ startsAt: START, endsAt: IN }]);
     expect(runningRun(IN, stopped)).toBeNull();
     expect(stopRun(stopped, IN + 1)).toBeNull();
-    expect(startRun(stopped, IN + 10)).toEqual([...stopped, { startsAt: IN + 10, endsAt: IN + 10 + 4 * DAY }]);
+    expect(startRun(stopped, IN + 10)).toEqual([...stopped, { startsAt: IN + 10, endsAt: IN + 10 + 7 * DAY }]);
   });
 
   test("a stopped run ends when stopped; each run its own id", () => {
@@ -109,6 +116,12 @@ describe("takeover points", () => {
     expect(takeoverPoints({ tribe: true, level: 44, empireValue: 0 })).toBe(tribeTakeoverPoints(44));
   });
 
+  test("a player's outpost scores at most a top camp's 3.2M (owner, 27 Nov 2026)", () => {
+    expect(PLAYER_OUTPOST_POINTS_CAP).toBe(3_200_000);
+    expect(takeoverPoints({ tribe: false, level: 0, empireValue: 45_000_000 })).toBe(3_200_000);
+    expect(takeoverPoints({ tribe: false, level: 0, empireValue: 3_199_999 })).toBe(3_199_999);
+  });
+
   const RUN_EVENT = monsterMadnessRun(START);
   const count = (store = memoryProgressStore(), now = IN, save: unknown = READY, baseid = "500", points = 2_000_000) =>
     countTakeover(em, 7, save as never, baseid, points, now, { store, events: [RUN_EVENT], skipTutorial: false });
@@ -119,7 +132,7 @@ describe("takeover points", () => {
     expect(await count(store, IN, READY, "501", 3_000_000)).toEqual([{ event: RUN_EVENT.id, points: 3_000_000, total: 5_000_000 }]);
     expect(await count(store, IN, READY, "500")).toEqual([]);
     expect(await count(store, START - 1, READY, "502")).toEqual([]);
-    expect(await count(store, START + 4 * DAY, READY, "503")).toEqual([]);
+    expect(await count(store, START + 7 * DAY, READY, "503")).toEqual([]);
     expect(store.rows.get(`7:${RUN_EVENT.id}`)?.counter).toBe(5_000_000);
   });
 
@@ -130,6 +143,17 @@ describe("takeover points", () => {
     expect(store.rows.size).toBe(0);
   });
 
+  test("nothing for a player on Map Room 1, who is told to move to Map Room 2", async () => {
+    const store = memoryProgressStore();
+    const mapRoom1 = { buildingdata: {}, tutorialstage: 205, mr2upgraded: false, mapversion: 1 };
+    expect(await count(store, IN, mapRoom1)).toEqual([]);
+    expect(store.rows.size).toBe(0);
+    expect(lockedReason(RUN_EVENT, eventPlayerOf(mapRoom1 as never, false))).toBe("Upgrade your Map Room to level 2 to take part.");
+    expect(lockedReason(RUN_EVENT, eventPlayerOf(READY as never, false))).toBeNull();
+    // Upgraded but its flag not caught up yet still counts as Map Room 2.
+    expect(lockedReason(RUN_EVENT, eventPlayerOf({ ...mapRoom1, mapversion: 2 } as never, false))).toBeNull();
+  });
+
   test("a store that throws is logged, not thrown", async () => {
     const broken = { ...memoryProgressStore(), addTakeover: () => Promise.reject(new Error("db down")) };
     expect(await count(broken)).toEqual([]);
@@ -137,12 +161,10 @@ describe("takeover points", () => {
 });
 
 describe("Korath's powers", () => {
-  test("goals are Flash's, in Flash's order: Burn, Breath of Fire, Fists of Doom", () => {
-    expect(MONSTER_MADNESS_GOALS).toEqual([42_000_000, 94_500_000, 160_125_000]);
+  test("one goal of 100M, a clear, pays one crystal (owner, 27 Nov 2026)", () => {
+    expect(MONSTER_MADNESS_GOALS).toEqual([100_000_000]);
     expect(MONSTER_MADNESS_LADDER.map((tier) => [tier.need, tier.rewards])).toEqual([
-      [42_000_000, [{ kind: "korath", power: 1 }]],
-      [94_500_000, [{ kind: "korath", power: 2 }]],
-      [160_125_000, [{ kind: "korath", power: 3 }]],
+      [100_000_000, [{ kind: "crystal", count: 1 }]],
     ]);
   });
 
@@ -161,6 +183,15 @@ describe("Korath's powers", () => {
     const lower = grantKorathPower({ rewards: won.rewards, champion: won.champions }, 1);
     expect(lower).toMatchObject({ power: 2, raised: false });
     expect(lower.champions).toBeUndefined();
+  });
+
+  test("a Gorgo, Drull or Fomor raised later hatches with the abilities his crystals unlocked", () => {
+    const rewards = { [Reward.CHAMPION_ABILITIES]: { id: Reward.CHAMPION_ABILITIES, value: { "1": 2, "3": 3 } } };
+    const raise = (type: number) =>
+      planChampionRaise({ buildingdata: { ...CAGE }, champion: [], rewards }, type, START).slices.champion?.[0]?.pl;
+    expect(raise(1)).toBe(3);
+    expect(raise(2)).toBe(1);
+    expect(raise(3)).toBe(4);
   });
 
   test("ignores the old Town Hall 7 KorathReward of 3", () => {
@@ -183,8 +214,8 @@ describe("Korath's powers", () => {
     expect(drull.slices.champion?.[0]?.pl).not.toBe(3);
   });
 
-  test("a goal's claim pays the power into rewards and the yard's Korath", () => {
-    const plan = planGrant({ resources: {}, champion: [korath], rewards: {} } as never, MONSTER_MADNESS_LADDER[1]!.rewards, START);
+  test("a Korath power reward pays into rewards and the yard's Korath", () => {
+    const plan = planGrant({ resources: {}, champion: [korath], rewards: {} } as never, [{ kind: "korath", power: 2 }], START);
     expect(plan.granted).toEqual([{ kind: "korath", power: 2, raised: true, hasKorath: true }]);
     expect(plan.slices.champion).toEqual([{ ...korath, pl: 2 }]);
     expect(korathPowerOf(plan.slices.rewards)).toBe(2);

@@ -12,6 +12,7 @@ import { addAmounts, noAmounts, RESOURCE_KEYS } from "../base/economy/resourceBu
 import { fitCredit, type CreditSave } from "../yard/credit.js";
 import type { ResourceAmounts } from "../yardplanner/costs.js";
 import { KORATH_MAX_POWER } from "../../game-data/events/monsterMadness.js";
+import { grantCrystals } from "./championCrystals.js";
 import { grantKorathPower } from "./korathPower.js";
 import { grantKrallenAura, raiseKrallen } from "./krallenReward.js";
 
@@ -58,6 +59,8 @@ export type GrantedReward =
    * `hasKorath` false when it waits for him to be raised.
    */
   | { kind: "korath"; power: number; raised: boolean; hasKorath: boolean }
+  /** Monster Madness crystals paid, and how many the player holds now. */
+  | { kind: "crystal"; count: number; held: number }
   /** Event coins paid (`eventCoins.ts`); the yard answer carries the new balance. */
   | { kind: "eventCoins"; amount: number };
 
@@ -110,6 +113,8 @@ export const rewardProblem = (reward: EventReward): string | null => {
         : "not a Korath power";
     case "eventCoins":
       return whole(reward.amount) > 0 ? null : "no amount";
+    case "crystal":
+      return whole(reward.count) > 0 ? null : "no count";
     default:
       return "unknown kind";
   }
@@ -215,6 +220,12 @@ export const planGrant = (save: GrantSave, rewards: readonly EventReward[], now:
         rewardsSlice = won.rewards;
         if (won.champions) champion = won.champions;
         granted.push({ kind: "korath", power: won.power, raised: won.raised, hasKorath: won.hasKorath });
+        break;
+      }
+      case "crystal": {
+        const paid = grantCrystals(rewardsSlice ?? save.rewards, reward.count);
+        rewardsSlice = paid.rewards;
+        granted.push({ kind: "crystal", count: whole(reward.count), held: paid.held });
         break;
       }
     }

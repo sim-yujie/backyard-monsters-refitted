@@ -117,13 +117,17 @@ const fixtures = new Map<string, Fixture>(
  * The attacker's champions, as `battle.test.ts` gives them: Krallen, Gorgo,
  * Korath, Fomor. Krallen won the Krallen Hunt's 3x mark: her loot aura runs
  * past the load's clock (`la`), so the page flings her with it and the
- * server's replay stamps it too (owner, 13 Nov 2026).
+ * server's replay stamps it too (owner, 13 Nov 2026). Gorgo, Drull and Fomor
+ * at power level 4 hold all three Monster Madness abilities (27 Nov 2026,
+ * `championAbilities.ts`): a fixture that flings one at power level 1 fights
+ * without them, the abilities fixtures with them.
  */
 const CHAMPIONS: readonly ChampionSaveEntry[] = [
   { t: 5, l: 5, hp: 62_000, pl: 2, fb: 0, la: 1_800_000_000 },
-  { t: 1, l: 4, hp: 190_000, pl: 3, fb: 3 },
+  { t: 1, l: 6, hp: 190_000, pl: 4, fb: 3 },
+  { t: 2, l: 6, hp: 40_000, pl: 4, fb: 0 },
   { t: 4, l: 6, hp: 179_000, pl: 3, fb: 3 },
-  { t: 3, l: 6, hp: 42_200, pl: 3, fb: 2 },
+  { t: 3, l: 6, hp: 42_200, pl: 4, fb: 2 },
 ].map((champion) => ({ ...champion, ft: 0, fd: 0, status: 0 }));
 
 const SIEGE = { jars: { quantity: 2 }, decoy: { quantity: 1 } };

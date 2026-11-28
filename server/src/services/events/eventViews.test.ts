@@ -65,7 +65,7 @@ describe("the Krallen Hunt's view", () => {
   const hunt = krallenHunt(2030, 1);
   const huntWindow = { startsAt: Date.parse(hunt.startsAt) / 1000, endsAt: Date.parse(hunt.endsAt) / 1000 };
   const scheduled = { event: hunt, window: huntWindow, status: "active" as const };
-  const player = (townHall: number, tutorialDone = true, krallenLevel = 0) => ({ townHall, tutorialDone, krallenLevel });
+  const player = (townHall: number, tutorialDone = true, krallenLevel = 0) => ({ townHall, tutorialDone, krallenLevel, mapRoom2: true });
 
   test("locked below Town Hall 6 or before the guided start is done, with the reason in words", () => {
     expect(eventView(scheduled, NO_PROGRESS, huntWindow.startsAt, player(5)).locked).toBe("Reach Town Hall 6 to take part.");

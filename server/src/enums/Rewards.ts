@@ -14,6 +14,12 @@ export enum Reward {
    * meant anything in this game.
    */
   KORATH_POWER = "korathPower",
+  /**
+   * Monster Madness crystals not yet spent, and Gorgo's, Drull's and Fomor's
+   * unlocked ability counts (`services/events/championCrystals.ts`).
+   */
+  MM_CRYSTALS = "mmCrystals",
+  CHAMPION_ABILITIES = "championAbilities",
   KRALLEN = "krallenReward",
   SPURTZ1 = "spurtzCannonReward",
   SPURTZ2 = "spurtzCannonReward2",

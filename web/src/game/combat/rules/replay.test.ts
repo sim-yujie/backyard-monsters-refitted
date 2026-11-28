@@ -235,7 +235,10 @@ describe("golden replays", () => {
     ["champion-offensive", "6599382b177c1975"],
     ["champion-power", "603879c541246e9f"],
     ["empty-yard", "0541193f927361a1"],
-    ["fomor-both-sides", "267c586401532bf6"],
+    // Its Fomors at power level 1 since the Monster Madness abilities (27 Nov
+    // 2026): the rage of power levels 2 and 3 went with them, so its 8.6
+    // digest at 3 and 2 is no longer reachable.
+    ["fomor-both-sides", "7c67c339ff014763"],
     ["korath-and-krallen", "8f07859395c3ffbd"],
     ["lab-abilities", "18e1377918d24153"],
     ["lab-split", "78eab55c3a3ec15a"],

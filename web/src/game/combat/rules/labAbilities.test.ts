@@ -401,7 +401,7 @@ describe("Fomor's enrage armour on the numbers", () => {
       y: -60,
       r: 100,
       monsters: { C6: 3 },
-      champion: { t: 3, l: 6, pl: 3 },
+      champion: { t: 3, l: 6, pl: 1 },
     });
     const shares: number[] = [];
     let plainReduced = 0;
@@ -416,8 +416,8 @@ describe("Fomor's enrage armour on the numbers", () => {
       }
     });
     expect(shares.length).toBeGreaterThan(0);
-    // Buff 0.75 at level 6, power 3: a quarter of each hit gets through.
-    for (const share of shares) expect(share).toBeCloseTo(0.75, 9);
+    // Buff 0.63 at level 6, power 1 (every live Fomor's): 37% of each hit gets through.
+    for (const share of shares) expect(share).toBeCloseTo(0.63, 9);
     expect(plainReduced).toBe(0);
   });
 });

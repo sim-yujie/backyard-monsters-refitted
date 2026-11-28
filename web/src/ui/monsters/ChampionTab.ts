@@ -1,8 +1,10 @@
-import type { ChampionActions } from "@/api/yardChampion";
+import { championActions, type ChampionActions } from "@/api/yardChampion";
 import { YardChangeReason, type YardChange } from "@/game/yard/YardStore";
 import "@/ui/styles/housing.css";
 import { ChamberPanel } from "@/ui/yard/ChamberPanel";
 import { ChampionPanel } from "@/ui/yard/ChampionPanel";
+import { crystalsHeld } from "@/game/events/crystals";
+import { CrystalAbilities, crystalIcon } from "./CrystalAbilities";
 import {
   MonsterBuilding,
   type MonstersFocus,
@@ -36,6 +38,13 @@ export class ChampionTab implements MonstersTab {
   private readonly chamberSection: HTMLElement;
   private champion: ChampionPanel | null = null;
   private chamber: ChamberPanel | null = null;
+  /** The Monster Madness abilities, the tab's second view (crystals, 27 Nov 2026). */
+  private readonly abilities: CrystalAbilities;
+  private readonly abilitiesView: HTMLElement;
+  private readonly switchCage: HTMLButtonElement;
+  private readonly switchAbilities: HTMLButtonElement;
+  private readonly switchCount: HTMLElement;
+  private view: "cage" | "abilities" = "cage";
 
   constructor(context: MonstersTabContext, actions?: ChampionActions) {
     this.context = context;
@@ -49,7 +58,48 @@ export class ChampionTab implements MonstersTab {
     this.cageSection = section("champion-tab__cage", "Champion Cage");
     this.chamberSection = section("champion-tab__chamber", "Champion Chamber");
     this.scroll.append(this.cageSection, this.chamberSection);
-    this.element.append(this.scroll);
+
+    // Cage | Abilities: the crystals' view sits beside the cage, not in a 7th tab.
+    const views = document.createElement("div");
+    views.className = "champion-tab__views";
+    views.setAttribute("role", "group");
+    views.setAttribute("aria-label", "Champion view");
+    this.switchCage = viewButton("Cage");
+    this.switchAbilities = viewButton("Abilities");
+    this.switchCount = document.createElement("span");
+    this.switchCount.className = "champion-tab__view-count";
+    this.switchAbilities.append(crystalIcon("champion-tab__view-crystal"), this.switchCount);
+    this.switchCage.addEventListener("click", () => this.setView("cage"));
+    this.switchAbilities.addEventListener("click", () => this.setView("abilities"));
+    views.append(this.switchCage, this.switchAbilities);
+
+    this.abilities = new CrystalAbilities({
+      read: () => this.store.save,
+      actions: actions ?? championActions(this.store),
+      popups: () => (this.element.closest(".panel")?.parentElement as HTMLElement | null) ?? document.body,
+    });
+    this.abilitiesView = document.createElement("div");
+    this.abilitiesView.className = "champion-tab__scroll champion-tab__abilities";
+    this.abilitiesView.append(this.abilities.element);
+    this.element.append(views, this.scroll, this.abilitiesView);
+    this.syncView();
+  }
+
+  private setView(view: "cage" | "abilities"): void {
+    this.view = view;
+    this.syncView();
+    this.render();
+  }
+
+  private syncView(): void {
+    const abilities = this.view === "abilities";
+    this.scroll.hidden = abilities;
+    this.abilitiesView.hidden = !abilities;
+    this.switchCage.setAttribute("aria-pressed", String(!abilities));
+    this.switchAbilities.setAttribute("aria-pressed", String(abilities));
+    const crystals = crystalsHeld(this.store.save.rewards);
+    this.switchCount.textContent = String(crystals);
+    this.switchAbilities.setAttribute("aria-label", `Abilities, ${crystals} ${crystals === 1 ? "crystal" : "crystals"}`);
   }
 
   private get store() {
@@ -57,6 +107,10 @@ export class ChampionTab implements MonstersTab {
   }
 
   show(focus: MonstersFocus): void {
+    if (focus.view) {
+      this.view = focus.view;
+      this.syncView();
+    }
     this.render();
     const chamber = this.buildingOf(MonsterBuilding.CHAMPION_CHAMBER);
     if (chamber && focus.buildingId === chamber.id && !this.chamberSection.hidden) {
@@ -121,8 +175,20 @@ export class ChampionTab implements MonstersTab {
 
     this.champion?.show();
     this.chamber?.show();
+    this.syncView();
+    if (this.view === "abilities") this.abilities.render();
   }
 }
+
+const viewButton = (label: string): HTMLButtonElement => {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "champion-tab__view";
+  const words = document.createElement("span");
+  words.textContent = label;
+  button.append(words);
+  return button;
+};
 
 const section = (className: string, title: string): HTMLElement => {
   const element = document.createElement("section");

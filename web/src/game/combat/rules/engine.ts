@@ -1,5 +1,6 @@
 import {
   CHAMPION_RETARGET_FRAMES,
+  DRULL_ID,
   ENRAGE_INTERVAL,
   ENRAGE_RADIUS,
   FLAME_INTERVAL,
@@ -10,6 +11,7 @@ import {
   FOMOR_HEALED_FRAMES,
   FOMOR_ID,
   FOMOR_IDLE_FRAMES,
+  GORGO_ID,
   FOMOR_LOOK_FRAMES,
   KORATH_DEFEND_FLYER_REACH,
   KORATH_FIREBALL_DIVISOR,
@@ -38,6 +40,39 @@ import {
   lootAuraBonus,
 } from "./champions.js";
 import { brainBase } from "./brain.js";
+import {
+  ACID_SPIT_EVERY,
+  ACID_SPIT_TICKS,
+  BUBBLE_EVERY,
+  BUBBLE_TICKS,
+  CHEST_POUND_EVERY,
+  CHEST_POUND_RETRY,
+  FOMOR_ABILITY_RADIUS,
+  GROUND_SLAM_BLOWS,
+  HEALING_MIST_EVERY,
+  POUNCE_MAX,
+  POUNCE_MIN,
+  POUNCE_MULTIPLIER,
+  POUNCE_TICKS,
+  STONE_SKIN_BELOW,
+  STONE_SKIN_COOLDOWN,
+  STONE_SKIN_TICKS,
+  TWIN_BITE_BLOWS,
+  acidSpitShare,
+  bloodthirstShare,
+  bubbleHealth,
+  championAbilities,
+  chestPoundRadius,
+  chestPoundTicks,
+  groundSlamRadius,
+  groundSlamTicks,
+  hasAbility,
+  healingMistShare,
+  pounceCooldown,
+  stoneSkinCut,
+  twinBiteShare,
+  type ChampionAbilityId,
+} from "./championAbilities.js";
 import {
   DECOY_BUILDING_REACH,
   DECOY_FRAME_TICKS,
@@ -249,6 +284,7 @@ import {
   screenPxToCornerSquared,
   towerHolds,
   yardToAnchorSquared,
+  yardToCentreSquared,
 } from "./reach.js";
 import type { PathGrid } from "./grid.js";
 import type { Rng } from "./rng.js";
@@ -1070,6 +1106,16 @@ export interface CreepSnapshot {
   readonly splitCopy?: boolean;
   /** Raised by a Rezghul (`Zombiefy.as:26-34`): drawn grey, with green sparks. */
   readonly zombie?: boolean;
+  /** Gorgo under his Stone Skin (`championAbilities.ts`). */
+  readonly stone?: boolean;
+  /** Stunned by Gorgo's Ground Slam: it neither moves nor swings. */
+  readonly stunned?: boolean;
+  /** Inside a Fomor's Bubble: the damage it still soaks up. */
+  readonly shield?: number;
+  /** Marked by a Fomor's Acid Spit: every blow on it does more. */
+  readonly marked?: boolean;
+  /** Drull mid-Pounce: how far through the leap, 0 to 1. */
+  readonly leap?: number;
 }
 
 /**
@@ -1303,6 +1349,26 @@ export type BattleVisualEvent =
       readonly iy: number;
     }
   | {
+      /**
+       * One of Gorgo's, Drull's or Fomor's abilities went off
+       * (`championAbilities.ts`), at the champion's yard point. `radius` is
+       * its reach in screen px for a ring, 0 for none; `toIx`, `toIy` where it
+       * lands (a Pounce's landing, a Bubble's or Acid Spit's target).
+       */
+      readonly kind: "ability";
+      readonly tick: number;
+      readonly creepId: number;
+      readonly ability: ChampionAbilityId;
+      readonly friendly: boolean;
+      readonly ix: number;
+      readonly iy: number;
+      readonly radius: number;
+      readonly toIx?: number;
+      readonly toIy?: number;
+      /** What it caught: towers stunned or taunted, creeps healed, turned or stunned. */
+      readonly count?: number;
+    }
+  | {
       /** Korath's quake landed (issue #222): a ring on the ground, `radius` screen px. */
       readonly kind: "quake";
       readonly tick: number;
@@ -1442,6 +1508,17 @@ export interface Battle {
    * Ooze"), by building id, ascending. Drawing only. A fresh copy per call.
    */
   weakenedTowers(): readonly number[];
+  /**
+   * The towers Gorgo's Ground Slam holds and the buildings a Fomor's Acid
+   * Spit marks right now, ascending building id (`championAbilities.ts`).
+   * Drawing only.
+   */
+  abilityMarks?(): {
+    readonly stunned: readonly number[];
+    readonly marked: readonly number[];
+    /** Towers a Chest Pound holds: the tower's building id, its Gorgo's creep id. */
+    readonly taunted?: readonly { readonly tower: number; readonly by: number }[];
+  };
   /**
    * The defender's champions in their cage right now (issues #260, #310), in
    * the order {@link BattleOptions.defenderChampions} gave them: before they
@@ -1687,6 +1764,36 @@ interface Creep {
    * goes back in its cage ({@link holdChampion}).
    */
   heldBy: number;
+  /* Gorgo's, Drull's and Fomor's abilities (`championAbilities.ts`). */
+  /** How many of its champion's abilities it has unlocked, 0 to 3; 0 for every other creep. */
+  abilities: number;
+  /** Gorgo's and Drull's blows since the battle began, which time Ground Slam and Twin Bite. */
+  blows: number;
+  /** Gorgo's Stone Skin: the tick it wears off, and the tick it is ready again. */
+  stoneUntil: number;
+  stoneReady: number;
+  /** The tick of a champion's next Chest Pound, Healing Mist, Bubble or Acid Spit. */
+  nextPound: number;
+  nextMist: number;
+  nextBubble: number;
+  nextSpit: number;
+  /** Drull's Pounce: the tick he may leap again; the tick he took off, -1 when not leaping. */
+  pounceReady: number;
+  leapStart: number;
+  leapFromX: number;
+  leapFromY: number;
+  leapToX: number;
+  leapToY: number;
+  /** His next blow is a Pounce's doubled one. */
+  pounced: boolean;
+  /** Stunned by Gorgo's Ground Slam until this tick: it neither moves nor swings. */
+  stunUntil: number;
+  /** A Fomor's Bubble on it: the damage it still soaks up, and the tick it pops. */
+  shield: number;
+  shieldUntil: number;
+  /** A Fomor's Acid Spit on it: the tick it wears off, and the share every blow adds. */
+  markedUntil: number;
+  markShare: number;
 }
 
 /** What a lesson credits: the old brain's features and the habits' own. */
@@ -1801,6 +1908,26 @@ const NO_ABILITIES = {
   weakShare: 0,
   splitCopy: false,
   heldBy: -1,
+  abilities: 0,
+  blows: 0,
+  stoneUntil: 0,
+  stoneReady: 0,
+  nextPound: 0,
+  nextMist: 0,
+  nextBubble: 0,
+  nextSpit: 0,
+  pounceReady: 0,
+  leapStart: -1,
+  leapFromX: 0,
+  leapFromY: 0,
+  leapToX: 0,
+  leapToY: 0,
+  pounced: false,
+  stunUntil: 0,
+  shield: 0,
+  shieldUntil: 0,
+  markedUntil: 0,
+  markShare: 0,
 } as const;
 
 interface DefenderHome {
@@ -1872,6 +1999,11 @@ interface Tower {
   weakUntil: number;
   /** The share of its damage the ooze takes off while it lasts. */
   weakShare: number;
+  /** Stunned by Gorgo's Ground Slam until this tick: it holds its fire. */
+  stunUntil: number;
+  /** Gorgo's Chest Pound on it: the Gorgo it shoots only, by creep id, or -1, and till when. */
+  tauntBy: number;
+  tauntUntil: number;
 }
 
 /**
@@ -2557,6 +2689,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       onHose: false,
       weakUntil: 0,
       weakShare: 0,
+      stunUntil: 0,
+      tauntBy: -1,
+      tauntUntil: 0,
     });
   }
 
@@ -2752,6 +2887,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    */
   let towerSource: Tower | null = null;
   let lastBlowMods: { readonly bonus: number; readonly reduced: number } | null = null;
+  /** Buildings a Fomor's Acid Spit marked, by id: till when, and the share every blow adds. */
+  const buildingMarks = new Map<number, { until: number; share: number }>();
   /** The share an Octo-ooze's ooze takes off a creep's blows now; 0 when it is not oozed. */
   const weakShareOf = (creep: Creep): number => (creep.weakUntil > tick ? creep.weakShare : 0);
   /** The same for a tower's shots. */
@@ -2795,6 +2932,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   ): number => {
     lastBlowMods = null;
     if (building.hp <= 0 || raw <= 0) return 0;
+    // A Fomor's Acid Spit on it: every attacker's blow does more (`championAbilities.ts`).
+    if (creep && !creep.friendly && buildingMarks.size > 0 && struck(blow)) {
+      const mark = buildingMarks.get(building.id);
+      if (mark && mark.until > tick) raw *= 1 + mark.share;
+    }
     // An Octo-ooze's ooze on the striker takes its share off (Lab "Weakening Ooze").
     const weak = creep && struck(blow) ? weakShareOf(creep) : 0;
     const reduced = raw * weak;
@@ -2931,10 +3073,30 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       visual.push({ kind: "dodge", tick, creepId: creep.id, ix: creep.ix, iy: creep.iy });
       return 0;
     }
+    // A Fomor's Acid Spit on it adds to every blow; Gorgo's Stone Skin takes
+    // its share off, and a Fomor's Bubble soaks up what is left, before any
+    // armour (`championAbilities.ts`). Both cuts show as "(-X)".
+    let abilityCut = 0;
+    if (creep.markedUntil > tick && struck(blow)) raw *= 1 + creep.markShare;
+    if (creep.stoneUntil > tick && raw > 0) {
+      const cut = raw * stoneSkinCut(creep.level);
+      abilityCut += cut;
+      raw -= cut;
+    }
+    if (creep.shield > 0) {
+      if (creep.shieldUntil > tick) {
+        const soak = Math.min(creep.shield, raw);
+        creep.shield -= soak;
+        abilityCut += soak;
+        raw -= soak;
+      } else {
+        creep.shield = 0;
+      }
+    }
     // An enraged creep's armour, `1 - armor` off every hit (issue #222).
     // A putty boost is its own armour; the two combine as 1-(1-a)(1-b).
     // Only Fomor's enrage sets `armour`: its cut shows as "(-X)" too (owner).
-    const fomorCut = raw * creep.armour;
+    const fomorCut = raw * creep.armour + abilityCut;
     if (creep.armour > 0) raw *= 1 - creep.armour;
     if (creep.puttyArmour > 0) raw *= 1 - creep.puttyArmour;
     // The Monster Defensive Buff is armour of its own too (`BeastMode.as`).
@@ -2974,6 +3136,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       if (creep.friendly && creep.explode && !creep.champion) deathBlast(creep);
     }
     if (striker && striker.friendly && !creep.friendly) creditDefender(striker, applied, killed);
+    if (!killed && applied > 0 && creep.abilities > 0) stoneSkin(creep);
     // Ichi's thorns: a share of the health it actually lost, back at the striker.
     if (applied > 0 && creep.rank > 0 && creep.monsterId === ICHI_ID && struck(blow)) {
       thorns(creep, applied * thornsShare(creep.rank), tower, striker);
@@ -3455,6 +3618,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   ): void => {
     const id = creep.monsterId;
     creep.power = championPower(id, power);
+    // Gorgo's, Drull's and Fomor's abilities, each ready from the start.
+    if (id !== KORATH_ID) creep.abilities = championAbilities(id, creep.power);
     creep.frame = frame ?? startFrame(creep.flying);
     const screen = screenPointOf(at.x, at.y);
     const spawnSx = Math.trunc(screen.x / 100) * 100;
@@ -5044,6 +5209,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     // where its reach is measured (`sightPointOf`); a blow, at the stored X/Y.
     const aim = fireball ? sightPointOf(creep.ix, creep.iy, target) : target;
     recordHit(creep, aim.x, aim.y, dealt, lastBlowMods);
+    if (creep.abilities > 0) championBlow(creep, dealt, null, target, null);
     if (creep.rank > 0) onAttack(creep, creep.damage * multiplier, null, target);
     if (creep.monsterId === KING_WORMZER_ID) {
       kingWormzerSplash(creep, creep.damage * multiplier, null, target);
@@ -5157,7 +5323,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       // A ranked Crabatron's critical hit doubles the blow (Lab "Critical Hits").
       const crit = critRoll(creep);
       const blow = crit ? huntBlow(creep) * CRIT_MULTIPLIER : huntBlow(creep);
-      return damageCreep(foe, blow, by, creep, crit ? "crit" : "hit");
+      const dealt = damageCreep(foe, blow, by, creep, crit ? "crit" : "hit");
+      if (creep.abilities > 0) championBlow(creep, dealt, foe, null, by);
+      return dealt;
     }
     if (foe.flying && hasFireball(KORATH_ID, creep.level, creep.power)) {
       // The flame catches as the fireball lands, before its damage (`FIREBALL.as:138-149`).
@@ -6310,6 +6478,333 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     recordHit(healer, target.ix, target.iy, -healed);
   };
 
+
+  /* ── Gorgo's, Drull's and Fomor's abilities (`championAbilities.ts`) ───── */
+
+  /** Whether `creep` is a champion with `ability` unlocked. */
+  const abilityOn = (creep: Creep, ability: ChampionAbilityId): boolean =>
+    creep.abilities > 0 &&
+    creep.champion &&
+    hasAbility(creep.monsterId, creep.abilities, ability);
+
+  /** The `ability` visual event at `creep`; `radius` in yard units, drawn in screen px. */
+  const showAbility = (
+    creep: Creep,
+    ability: ChampionAbilityId,
+    radius: number,
+    extra: { toIx?: number; toIy?: number; count?: number } = {},
+  ): void => {
+    visual.push({
+      kind: "ability",
+      tick,
+      creepId: creep.id,
+      ability,
+      friendly: creep.friendly,
+      ix: creep.ix,
+      iy: creep.iy,
+      radius: radius * Math.SQRT2,
+      ...extra,
+    });
+  };
+
+  /** Health an ability gives back, never past full; what it gave. */
+  const restore = (target: Creep, amount: number): number => {
+    if (target.hp <= 0 || target.gone) return 0;
+    const healed = Math.min(amount, target.maxHp - target.hp);
+    if (!(healed > 0)) return 0;
+    target.hp = healthAfter(target.hp + healed);
+    return healed;
+  };
+
+  /** The flags of everything on the other side of `creep`, on the ground or in the air. */
+  const foesOf = (creep: Creep): number =>
+    (creep.friendly ? TARGETS_ATTACKERS : TARGETS_DEFENDERS) | TARGETS_GROUND | TARGETS_FLYING;
+
+  /** The flags of everything on `creep`'s own side, hidden ones too. */
+  const alliesOf = (creep: Creep): number =>
+    (creep.friendly ? TARGETS_DEFENDERS : TARGETS_ATTACKERS) |
+    TARGETS_GROUND |
+    TARGETS_FLYING |
+    TARGETS_INVISIBLE;
+
+  /**
+   * Stone Skin: a blow that leaves Gorgo under half health, with the skin
+   * ready, turns it to stone ({@link damageCreep} takes the cut off).
+   */
+  const stoneSkin = (gorgo: Creep): void => {
+    if (!abilityOn(gorgo, "stoneSkin") || tick < gorgo.stoneReady) return;
+    if (gorgo.hp >= gorgo.maxHp * STONE_SKIN_BELOW) return;
+    gorgo.stoneUntil = tick + STONE_SKIN_TICKS;
+    gorgo.stoneReady = tick + STONE_SKIN_COOLDOWN;
+    showAbility(gorgo, "stoneSkin", 0);
+  };
+
+  /**
+   * Chest Pound: attacking, the towers near Gorgo that can hit him shoot
+   * only him for a while ({@link tauntTarget}); defending, the attackers near
+   * him that can fight turn on him. Nothing near: he tries again in a second.
+   */
+  const chestPound = (gorgo: Creep): void => {
+    if (tick < gorgo.nextPound) return;
+    const radius = chestPoundRadius(gorgo.level);
+    let count = 0;
+    if (gorgo.friendly) {
+      for (const { creep: other } of index.inRange(radius, gorgo.x, gorgo.y, foesOf(gorgo))) {
+        if (other.gone || other.hp <= 0 || other.support || !fightsBack(other)) continue;
+        if (!canHit(other.hitFlags, gorgo.flags) || other.targetCreep === gorgo.id) continue;
+        loseTarget(other);
+        other.targetCreep = gorgo.id;
+        count += 1;
+      }
+    } else {
+      const until = tick + chestPoundTicks(gorgo.level);
+      for (const tower of towers) {
+        const building = tower.building;
+        if (building.hp <= 0 || tower.gun) continue;
+        if (!canHit(towerTargets(building.type), gorgo.flags)) continue;
+        if (yardToCentreSquared(gorgo.x, gorgo.y, building) >= radius * radius) continue;
+        tower.tauntBy = gorgo.id;
+        tower.tauntUntil = until;
+        count += 1;
+      }
+    }
+    if (count === 0) {
+      gorgo.nextPound = tick + CHEST_POUND_RETRY;
+      return;
+    }
+    gorgo.nextPound = tick + CHEST_POUND_EVERY;
+    showAbility(gorgo, "chestPound", radius, { count });
+  };
+
+  /**
+   * A taunted tower's aim: the Gorgo that pounded at it, while he lives,
+   * can be hit and stands in its range; else it aims as it would.
+   */
+  const tauntTarget = (tower: Tower, scan: TowerScan): void => {
+    const gorgo = tower.tauntUntil > tick ? byCreepId.get(tower.tauntBy) : undefined;
+    if (
+      !gorgo ||
+      gorgo.hp <= 0 ||
+      gorgo.gone ||
+      !gorgo.targetable ||
+      !canHit(scan.flags, gorgo.flags) ||
+      !towerHolds(gorgo, tower.building, tower.range)
+    ) {
+      if (tower.tauntUntil <= tick) tower.tauntBy = -1;
+      return;
+    }
+    tower.targets = [gorgo.id];
+  };
+
+  /**
+   * Ground Slam: the towers (attacking) and ground creeps of the other side
+   * near Gorgo are stunned. Flyers are not on the ground to be shaken.
+   */
+  const groundSlam = (gorgo: Creep): void => {
+    const radius = groundSlamRadius(gorgo.level);
+    const until = tick + groundSlamTicks(gorgo.level);
+    let count = 0;
+    if (!gorgo.friendly) {
+      for (const tower of towers) {
+        if (tower.building.hp <= 0) continue;
+        if (yardToCentreSquared(gorgo.x, gorgo.y, tower.building) >= radius * radius) continue;
+        tower.stunUntil = Math.max(tower.stunUntil, until);
+        count += 1;
+      }
+    }
+    const flags = (gorgo.friendly ? TARGETS_ATTACKERS : TARGETS_DEFENDERS) | TARGETS_GROUND;
+    for (const { creep: other } of index.inRange(radius, gorgo.x, gorgo.y, flags)) {
+      if (other.gone || other.hp <= 0 || other.flying) continue;
+      other.stunUntil = Math.max(other.stunUntil, until);
+      count += 1;
+    }
+    showAbility(gorgo, "groundSlam", radius, { count });
+  };
+
+  /**
+   * What follows a champion's blow that took `dealt` off `foe` or
+   * `building`: Gorgo's Ground Slam, and Drull's Pounce, Twin Bite and
+   * Bloodthirst. `by` is who the blow turns, as {@link strikeCreep} has it.
+   */
+  const championBlow = (
+    creep: Creep,
+    dealt: number,
+    foe: Creep | null,
+    building: EngineBuilding | null,
+    by: Creep | null,
+  ): void => {
+    if (creep.monsterId === GORGO_ID) {
+      creep.blows += 1;
+      if (abilityOn(creep, "groundSlam") && creep.blows % GROUND_SLAM_BLOWS === 0) {
+        groundSlam(creep);
+      }
+      return;
+    }
+    if (creep.monsterId !== DRULL_ID) return;
+    creep.blows += 1;
+    let total = dealt;
+    /** Another blow at the same target, its number shown as a hit. */
+    const again = (raw: number): number => {
+      let more = 0;
+      if (foe && foe.hp > 0 && !foe.gone) {
+        more = damageCreep(foe, raw, by, creep);
+        recordHit(creep, foe.ix, foe.iy, more);
+      } else if (building && building.hp > 0) {
+        more = damageBuilding(building, raw, creep, lootOf(creep));
+        recordHit(creep, building.x, building.y, more, lastBlowMods);
+      }
+      return more;
+    };
+    if (creep.pounced) {
+      creep.pounced = false;
+      total += again(creep.damage * (POUNCE_MULTIPLIER - 1));
+    }
+    if (abilityOn(creep, "twinBite") && creep.blows % TWIN_BITE_BLOWS === 0) {
+      const at = foe ?? building;
+      const bite = again(creep.damage * twinBiteShare(creep.level));
+      total += bite;
+      // Its target fell to the first head: the second has nothing to bite.
+      if (bite > 0) showAbility(creep, "twinBite", 0, {
+        ...(at ? { toIx: "ix" in at ? at.ix : at.x, toIy: "iy" in at ? at.iy : at.y } : {}),
+        count: Math.round(bite),
+      });
+    }
+    if (abilityOn(creep, "bloodthirst")) restore(creep, total * bloodthirstShare(creep.level));
+  };
+
+  /** Drull takes off for `toX`, `toY` (yard units), over anything in the way. */
+  const startLeap = (drull: Creep, toX: number, toY: number): void => {
+    drull.leapStart = tick;
+    drull.leapFromX = drull.ix;
+    drull.leapFromY = drull.iy;
+    drull.leapToX = toX;
+    drull.leapToY = toY;
+    drull.pounceReady = tick + pounceCooldown(drull.level);
+    drull.attacking = false;
+    showAbility(drull, "pounce", 0, { toIx: toX, toIy: toY });
+  };
+
+  /**
+   * Pounce, attacking: with his route set and its end between
+   * {@link POUNCE_MIN} and {@link POUNCE_MAX} on screen, he leaps there.
+   */
+  const tryPounce = (drull: Creep): boolean => {
+    if (tick < drull.pounceReady || drull.atTarget || drull.targetBuilding < 0) return false;
+    const end = drull.waypoints[drull.waypoints.length - 1];
+    if (!end || drull.waypointIndex >= drull.waypoints.length) return false;
+    const squared = screenDistanceSquared(drull.ix, drull.iy, end.x, end.y);
+    if (squared < POUNCE_MIN * POUNCE_MIN || squared > POUNCE_MAX * POUNCE_MAX) return false;
+    startLeap(drull, end.x, end.y);
+    return true;
+  };
+
+  /**
+   * One tick of the leap: a straight line to where he lands, which he
+   * reaches on {@link POUNCE_TICKS}; then his next blow is doubled. An
+   * attacker lands at the end of his route, at his building.
+   */
+  const tickLeap = (drull: Creep): void => {
+    const share = Math.min((tick - drull.leapStart + 1) / POUNCE_TICKS, 1);
+    drull.ix = drull.leapFromX + (drull.leapToX - drull.leapFromX) * share;
+    drull.iy = drull.leapFromY + (drull.leapToY - drull.leapFromY) * share;
+    const cart = rangePointOf(drull.ix, drull.iy);
+    drull.x = cart.x;
+    drull.y = cart.y;
+    if (share < 1) return;
+    drull.leapStart = -1;
+    drull.pounced = true;
+    if (!drull.friendly) {
+      drull.waypointIndex = drull.waypoints.length;
+      drull.atTarget = true;
+    }
+    showAbility(drull, "pounce", 40);
+  };
+
+  /**
+   * Healing Mist: every hurt ally in Fomor's ring, not himself, heals a share
+   * of its full health. Nobody hurt: he tries again in a second.
+   */
+  const healingMist = (fomor: Creep): void => {
+    if (tick < fomor.nextMist) return;
+    const share = healingMistShare(fomor.level);
+    let count = 0;
+    const near = index.inRange(FOMOR_ABILITY_RADIUS, fomor.x, fomor.y, alliesOf(fomor), fomor.id);
+    for (const { creep: other } of near) {
+      if (restore(other, other.maxHp * share) > 0) count += 1;
+    }
+    if (count === 0) {
+      fomor.nextMist = tick + CHEST_POUND_RETRY;
+      return;
+    }
+    fomor.nextMist = tick + HEALING_MIST_EVERY;
+    showAbility(fomor, "healingMist", FOMOR_ABILITY_RADIUS, { count });
+  };
+
+  /**
+   * Bubble: the ally in Fomor's ring, not himself, that has lost the most of
+   * its health and has no bubble yet gets one. Nobody hurt: again in a second.
+   */
+  const bubble = (fomor: Creep): void => {
+    if (tick < fomor.nextBubble) return;
+    let best: Creep | null = null;
+    let left = 1;
+    const near = index.inRange(FOMOR_ABILITY_RADIUS, fomor.x, fomor.y, alliesOf(fomor), fomor.id);
+    for (const { creep: other } of near) {
+      if (other.gone || other.hp <= 0 || other.maxHp <= 0) continue;
+      if (other.shield > 0 && other.shieldUntil > tick) continue;
+      const share = other.hp / other.maxHp;
+      if (share < left) {
+        best = other;
+        left = share;
+      }
+    }
+    if (!best) {
+      fomor.nextBubble = tick + CHEST_POUND_RETRY;
+      return;
+    }
+    best.shield = bubbleHealth(fomor.level);
+    best.shieldUntil = tick + BUBBLE_TICKS;
+    fomor.nextBubble = tick + BUBBLE_EVERY;
+    showAbility(fomor, "bubble", 0, { toIx: best.ix, toIy: best.iy });
+  };
+
+  /**
+   * Acid Spit: what Fomor is shooting, a creep or a building, is marked;
+   * every blow on it does more for a while. Shooting nothing: again in a second.
+   */
+  const acidSpit = (fomor: Creep): void => {
+    if (tick < fomor.nextSpit) return;
+    const share = acidSpitShare(fomor.level);
+    const until = tick + ACID_SPIT_TICKS;
+    const foe = fomor.targetCreep >= 0 ? byCreepId.get(fomor.targetCreep) : undefined;
+    const building = fomor.targetBuilding >= 0 ? buildingOf(fomor.targetBuilding) : null;
+    if (fomor.attacking && foe && foe.hp > 0 && !foe.gone) {
+      foe.markedUntil = until;
+      foe.markShare = share;
+      showAbility(fomor, "acidSpit", 0, { toIx: foe.ix, toIy: foe.iy });
+    } else if (fomor.attacking && building && building.hp > 0 && !fomor.friendly) {
+      buildingMarks.set(building.id, { until, share });
+      showAbility(fomor, "acidSpit", 0, { toIx: building.x, toIy: building.y });
+    } else {
+      fomor.nextSpit = tick + CHEST_POUND_RETRY;
+      return;
+    }
+    fomor.nextSpit = tick + ACID_SPIT_EVERY;
+  };
+
+  /** A champion's abilities that go off on their own clock, while it fights. */
+  const tickAbilities = (creep: Creep): void => {
+    if (!inBattle(creep)) return;
+    if (creep.monsterId === GORGO_ID) {
+      if (abilityOn(creep, "chestPound")) chestPound(creep);
+      return;
+    }
+    if (creep.monsterId !== FOMOR_ID) return;
+    if (abilityOn(creep, "healingMist")) healingMist(creep);
+    if (abilityOn(creep, "bubble")) bubble(creep);
+    if (abilityOn(creep, "acidSpit")) acidSpit(creep);
+  };
+
   /* ── Champion abilities (issue #222) ───────────────────────────────────── */
 
   /**
@@ -6991,12 +7486,25 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (creep.sabnoxLeft > 0 && tickSabnoxBurn(creep)) return;
     if (creep.rank > 0 && creep.monsterId === ZAGNOID_ID) tickRegeneration(creep);
     if (creep.rank > 0 && creep.monsterId === BRAIN_ID) tickCloak(creep);
+    // Stunned by Gorgo's Ground Slam: it stands, and swings at nothing.
+    if (creep.stunUntil > tick) {
+      creep.attacking = false;
+      return;
+    }
     if (creep.champion) {
       tickAura(creep);
       creep.frame += 1;
       if (creep.monsterId === KORATH_ID && quakeCheck(creep)) {
         moveCreep(creep);
         return;
+      }
+      if (creep.abilities > 0) {
+        // Drull mid-Pounce does nothing but fly.
+        if (creep.leapStart >= 0) {
+          tickLeap(creep);
+          return;
+        }
+        tickAbilities(creep);
       }
     }
     if (creep.monsterId === REZGHUL_ID) tickRaise(creep);
@@ -7052,6 +7560,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (!hunting) return;
     // A Bolt that blinks spends the tick on its hop (issue #352).
     if (creep.rank > 0 && creep.monsterId === BOLT_ID && tickBlink(creep)) return;
+    // Drull's Pounce: at a building far enough along his route, he leaps to it.
+    if (creep.abilities > 0 && abilityOn(creep, "pounce") && tryPounce(creep)) return;
 
     // A ranged creep or a champion stops as soon as its target is inside its
     // reach, with no wall in the way on foot (`CreepBase.as:735-748`): from
@@ -7149,6 +7659,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       return;
     }
     if (building.hp <= 0) return;
+    // Stunned by Gorgo's Ground Slam: it holds its fire, its clock standing still.
+    if (tower.stunUntil > tick) return;
     const stats = towerStats(building.type, building.level, yard.kind);
     const base = stats?.damage;
     if (stats?.range === undefined || base === undefined) return;
@@ -7182,6 +7694,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       return;
     }
     const scan = scanOf(tower);
+    // Gorgo's Chest Pound: a taunted tower shoots only him.
+    if (tower.tauntBy >= 0) tauntTarget(tower, scan);
     const live = liveTargets(tower, scan);
     if (live.length === 0) {
       // With nobody to shoot, the hose if it can reach it (`:181-185`).
@@ -8366,6 +8880,14 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       }
       return;
     }
+    // Drull's Pounce at a foe far enough off.
+    if (creep.abilities > 0 && abilityOn(creep, "pounce") && tick >= creep.pounceReady) {
+      const squared = screenPxCreepsSquared(creep, foe);
+      if (squared >= POUNCE_MIN * POUNCE_MIN && squared <= POUNCE_MAX * POUNCE_MAX) {
+        startLeap(creep, foe.ix, foe.iy);
+        return;
+      }
+    }
     walkTo(creep, { x: foe.ix, y: foe.iy });
   };
 
@@ -8567,7 +9089,31 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       ...(creep.weakUntil > tick ? { weakened: true } : {}),
       ...(creep.splitCopy ? { splitCopy: true } : {}),
       ...(creep.zombie ? { zombie: true } : {}),
+      ...(creep.stoneUntil > tick ? { stone: true } : {}),
+      ...(creep.stunUntil > tick ? { stunned: true } : {}),
+      ...(creep.shield > 0 && creep.shieldUntil > tick ? { shield: creep.shield } : {}),
+      ...(creep.markedUntil > tick ? { marked: true } : {}),
+      ...(creep.leapStart >= 0 ? { leap: (tick - creep.leapStart) / POUNCE_TICKS } : {}),
     }));
+
+  const abilityMarks = (): {
+    stunned: number[];
+    marked: number[];
+    taunted: { tower: number; by: number }[];
+  } => ({
+    stunned: towers
+      .filter((tower) => tower.stunUntil > tick && tower.building.hp > 0)
+      .map((tower) => tower.building.id)
+      .sort((one, other) => one - other),
+    marked: [...buildingMarks.entries()]
+      .filter(([id, mark]) => mark.until > tick && (buildingOf(id)?.hp ?? 0) > 0)
+      .map(([id]) => id)
+      .sort((one, other) => one - other),
+    taunted: towers
+      .filter((tower) => tower.tauntBy >= 0 && tower.tauntUntil > tick && tower.building.hp > 0)
+      .map((tower) => ({ tower: tower.building.id, by: tower.tauntBy }))
+      .sort((one, other) => one.tower - other.tower),
+  });
 
   const weakenedTowers = (): number[] =>
     towers
@@ -8772,6 +9318,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     siege: siegeSnapshot,
     bunkerPools,
     weakenedTowers,
+    abilityMarks,
     cagedChampions,
   };
 };

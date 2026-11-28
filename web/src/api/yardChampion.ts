@@ -16,6 +16,12 @@ import {
   thawGate,
 } from "@/game/yard/championModel";
 import { actionKey, type YardActionResult, type YardStore, type YardStoreReader } from "@/game/yard/YardStore";
+import {
+  ABILITIES_PER_CHAMPION,
+  CRYSTAL_CHAMPION_TYPES,
+  abilitiesUnlocked,
+  crystalsHeld,
+} from "@/game/events/crystals";
 import { post } from "./http";
 import type { ChampionSaveEntry, YardResponse } from "./types";
 import { yardBody, type YardRefusal } from "./yard";
@@ -25,6 +31,7 @@ import { yardBody, type YardRefusal } from "./yard";
  * contract in `docs/server-api.md` "Yard actions"):
  *
  *   POST /api/:apiVersion/bm/yard/champion/raise    type (1..4): in the cage at once
+ *   POST /api/:apiVersion/bm/yard/champion/crystal  type (1..4): a Monster Madness crystal's ability
  *   POST /api/:apiVersion/bm/yard/champion/feed     mode = monsters | shiny
  *   POST /api/:apiVersion/bm/yard/champion/evolve
  *   POST /api/:apiVersion/bm/yard/champion/heal
@@ -68,6 +75,18 @@ export const championRaise = (
     `${CHAMPION_PATH}/raise`,
     yardBody({ type: String(type) }, baseid),
   );
+
+/** `report` of `champion/crystal`: the champion's unlocked count, the crystals left, the yard's `rewards`. */
+export interface ChampionCrystalReport {
+  type: number;
+  abilities: number;
+  crystals: number;
+  hasChampion: boolean;
+  rewards: Record<string, unknown>;
+}
+
+export const championCrystal = (type: number): Promise<YardResponse<ChampionCrystalReport>> =>
+  post<YardResponse<ChampionCrystalReport>>(`${CHAMPION_PATH}/crystal`, yardBody({ type: String(type) }));
 
 export const championFeed = (
   mode: FeedMode,
@@ -142,6 +161,7 @@ export interface ChampionApi {
   forget: typeof championForget;
   freeze: typeof championFreeze;
   thaw: typeof championThaw;
+  crystal: typeof championCrystal;
 }
 
 export const championApi: ChampionApi = {
@@ -153,6 +173,7 @@ export const championApi: ChampionApi = {
   forget: championForget,
   freeze: championFreeze,
   thaw: championThaw,
+  crystal: championCrystal,
 };
 
 /** The queue keys, for `store.isRunning`. */
@@ -167,6 +188,7 @@ export const ChampionKey = {
   healSpecial: actionKey("champion", "healSpecial"),
   freezeSpecial: actionKey("champion", "freezeSpecial"),
   thaw: (type: number): string => actionKey("championThaw", type),
+  crystal: actionKey("champion", "crystal"),
 } as const;
 
 export interface ChampionActions {
@@ -183,6 +205,8 @@ export interface ChampionActions {
   /** Freezes Krallen into the Chamber. */
   freezeSpecial(): Promise<YardActionResult<ChampionReport>>;
   thaw(type: number): Promise<YardActionResult<ChampionReport>>;
+  /** Spends a Monster Madness crystal on champion type `t`'s next ability (1..4, not Krallen). */
+  crystal(type: number): Promise<YardActionResult<ChampionCrystalReport>>;
 }
 
 const refuse = (reason: string, message: string, detail: Record<string, unknown> = {}): YardRefusal => ({
@@ -371,4 +395,24 @@ export const championActions = (store: YardStore, api: ChampionApi = championApi
       },
       send: (_api, ...yard) => api.thaw(type, ...yard),
     }),
+  crystal: async (type) => {
+    const result = await store.run({
+      key: ChampionKey.crystal,
+      check: (reader) => {
+        if (!CRYSTAL_CHAMPION_TYPES.includes(type)) {
+          return refuse("notCrystalChampion", "Crystals unlock Gorgo, Drull, Fomor and Korath only.");
+        }
+        if (crystalsHeld(reader.save.rewards) < 1) return refuse("noCrystal", "You have no crystal to spend.");
+        if (abilitiesUnlocked(reader.save.rewards, type) >= ABILITIES_PER_CHAMPION) {
+          return refuse("allAbilities", "That champion has all three abilities already.");
+        }
+        return null;
+      },
+      // Main yard only: the crystals live there.
+      send: () => api.crystal(type),
+    });
+    // The yard's prizes are not a yard-answer slice: keep the report's.
+    if (result.ok) store.mergeWrite({ rewards: result.report.rewards });
+    return result;
+  },
 });

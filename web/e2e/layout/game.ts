@@ -628,3 +628,22 @@ export const openMoveTray = async (page: Page, state: "in" | "out"): Promise<boo
     .catch(() => undefined);
   return true;
 };
+
+/**
+ * The Champion tab's Abilities view (Monster Madness crystals, 27 Nov 2026):
+ * Monsters, then Champion, then Abilities. False without a Champion tab.
+ */
+export const openChampionAbilities = async (page: Page): Promise<boolean> => {
+  if (!(await pressDock(page, "monsters"))) return false;
+  const tab = page.locator(".monsters-screen").getByRole("tab", { name: "Champion" });
+  const shown = await tab
+    .waitFor({ state: "visible", timeout: BUSY_PAGE_TIMEOUT })
+    .then(() => true)
+    .catch(() => false);
+  if (!shown) return false;
+  await tab.click();
+  const abilities = page.locator(".champion-tab__view").nth(1);
+  if (!(await abilities.isVisible())) return false;
+  await abilities.click();
+  return true;
+};

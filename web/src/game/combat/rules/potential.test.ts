@@ -191,9 +191,10 @@ describe("championPotential", () => {
   });
 
   it("speeds the monsters and Krallen up under Fomor's enrage, not Fomor itself (issue #222)", () => {
-    // Fomor level 6, power level 3: buff 0.6 + 0.15, so swings come
-    // 1 + 2 * 0.75 = 2.5 times as fast: a Pokey's 30-tick swing every 12.
-    expect(enrageBound([{ id: "G3", level: 6, powerLevel: 3 }])).toBeCloseTo(2.5, 12);
+    // Fomor level 6, power level 3: buff 0.6 + 0.03 (only the first rung
+    // since the Monster Madness abilities), so swings come 1 + 2 * 0.63 =
+    // 2.26 times as fast.
+    expect(enrageBound([{ id: "G3", level: 6, powerLevel: 3 }])).toBeCloseTo(2.26, 12);
     expect(enrageBound([{ id: "G1", level: 6, powerLevel: 3 }])).toBe(1);
     const context = contextOf({
       flung: { C1: 1 },
@@ -209,7 +210,7 @@ describe("championPotential", () => {
     }).breakdown;
     expect(enraged.monsters).toBeGreaterThan(plain);
     expect(enraged.champion).toBe(
-      championPotential("G3", 6, 10, 3) + championPotential(KRALLEN_ID, 1, 10, 0, null, 2.5),
+      championPotential("G3", 6, 10, 3) + championPotential(KRALLEN_ID, 1, 10, 0, null, 2.26),
     );
   });
 });

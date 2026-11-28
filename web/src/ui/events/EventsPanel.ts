@@ -1,4 +1,5 @@
 import { classicLook } from "@/game/classicLook";
+import { CRYSTAL_ICON } from "@/game/events/crystals";
 import type { EventReward, EventView, LadderView, Mr2WelcomeStatus } from "@/api/events";
 import {
   calendarDays,
@@ -105,6 +106,12 @@ export interface EventsPanelOptions {
   onOpenWeekend?(run: WeekendRun): void;
   /** The weekend card's Check in. */
   onCheckInWeekend?(): void;
+  /**
+   * Monster Madness crystals the player holds (`game/events/crystals.ts`),
+   * and Spend: the card shows a line with both when given.
+   */
+  crystals?(): number;
+  onSpendCrystals?(): void;
 }
 
 /** A decoration's name, as the yard names it. */
@@ -221,6 +228,16 @@ export const rewardBadge = (reward: EventReward, gained = false): HTMLElement =>
       image.decoding = "async";
       pictures.append(image);
       figure = KORATH_POWER_SHORT[power - 1]!;
+      break;
+    }
+    case "crystal": {
+      // A Monster Madness crystal: it unlocks a champion's next ability.
+      const image = el("img", "events-reward__image events-reward__image--crystal");
+      image.src = `${import.meta.env.BASE_URL}${CRYSTAL_ICON.slice(1)}`;
+      image.alt = "";
+      image.decoding = "async";
+      pictures.append(image);
+      figure = reward.count > 1 ? `Crystal x${reward.count}` : "Crystal";
       break;
     }
     case "eventCoins":
@@ -727,10 +744,39 @@ export class EventsPanel {
       list.append(row);
       if (view.refusal?.key === key) list.append(refusalNote(view.refusal.message));
     });
+    // Why the player cannot take part ("Upgrade your Map Room to level 2 to take part."),
+    // first, before a counter they cannot raise (neon, 27 Nov).
+    if (event.locked !== null) {
+      const note = el("p", "events-ladder__locked");
+      note.append(eventsArt("lock", 18, "events-ladder__lock"), el("span", "", event.locked));
+      section.append(note);
+    }
     section.append(head);
     if (goalBar) section.append(goalsBar(ladder));
     section.append(list);
+    if (event.kind === "monster-madness" && this.options.crystals) section.append(this.crystalLine());
     return section;
+  }
+
+  /** Monster Madness's crystals: how many are held, and Spend (the Champion tab's Abilities). */
+  private crystalLine(): HTMLElement {
+    const held = this.options.crystals?.() ?? 0;
+    const line = el("div", "events-crystals");
+    const icon = el("img", "events-crystals__icon");
+    icon.src = `${import.meta.env.BASE_URL}${CRYSTAL_ICON.slice(1)}`;
+    icon.alt = "";
+    const words = el("span", "events-crystals__words");
+    words.append(
+      el("strong", "events-crystals__count", String(held)),
+      document.createTextNode(
+        held > 0 ? ` ${held === 1 ? "crystal" : "crystals"} ready to spend` : " crystals: clear the goal for one",
+      ),
+    );
+    const spend = el("button", `btn ${held > 0 ? "btn--primary" : "btn--outline"} events-crystals__spend`, held > 0 ? "Spend ›" : "Abilities ›");
+    spend.type = "button";
+    spend.addEventListener("click", () => this.options.onSpendCrystals?.());
+    line.append(icon, words, spend);
+    return line;
   }
 
   /** The Krallen Hunt: the prize, then the bar toward the goal and the claim, or why the player cannot take part. */

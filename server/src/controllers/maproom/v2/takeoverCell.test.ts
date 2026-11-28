@@ -593,6 +593,8 @@ describe("takeoverCell: Monster Madness points", () => {
     progress = memoryProgressStore();
     useTakeoverStore(progress);
     takerSave.tutorialstage = 205;
+    // Only a player on Map Room 2 takes part (`requires.mapRoom2`).
+    takerSave.mapversion = 2;
   });
 
   afterEach(() => {
@@ -602,7 +604,7 @@ describe("takeoverCell: Monster Madness points", () => {
 
   const startRun = () => {
     const startsAt = now() - 60;
-    setMonsterMadnessRuns([{ startsAt, endsAt: startsAt + 4 * 86_400 }]);
+    setMonsterMadnessRuns([{ startsAt, endsAt: startsAt + 7 * 86_400 }]);
     return `monster-madness-${startsAt}`;
   };
 
@@ -612,11 +614,12 @@ describe("takeoverCell: Monster Madness points", () => {
     expect(progress.rows.size).toBe(0);
   });
 
-  test("a player's outpost scores its empire value, and the answer says so", async () => {
+  test("a player's outpost scores its empire value, at most 3.2M, and the answer says so", async () => {
     const event = startRun();
     const result = await run({ baseid: OUTPOST });
-    // The Regular Starter Kit's value (outpostValue.test.ts).
-    expect(result.body).toEqual({ error: 0, eventPoints: [{ event, points: 3_222_316, total: 3_222_316 }] });
+    // The Regular Starter Kit's value (outpostValue.test.ts), 3,222,316, capped
+    // at a top camp's 3.2M (owner, 27 Nov 2026).
+    expect(result.body).toEqual({ error: 0, eventPoints: [{ event, points: 3_200_000, total: 3_200_000 }] });
   });
 
   test("a wild camp scores by its level; the total grows across takeovers", async () => {
@@ -625,7 +628,7 @@ describe("takeoverCell: Monster Madness points", () => {
     const result = await run({ baseid: CAMP, shiny: "1" });
     const points = (result.body!.eventPoints as { points: number }[])[0]!.points;
     expect(points).toBeGreaterThan(0);
-    expect(result.body!.eventPoints).toEqual([{ event, points, total: 3_222_316 + points }]);
+    expect(result.body!.eventPoints).toEqual([{ event, points, total: 3_200_000 + points }]);
   });
 
   test("a player still in the guided start scores nothing", async () => {

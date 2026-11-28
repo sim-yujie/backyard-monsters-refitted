@@ -10,6 +10,7 @@ import { krallenAuraOn } from "../../services/events/krallenReward.js";
 import { memoryCoinStore, useCoinStore, type EventCoinStore } from "../../services/events/eventCoins.js";
 import { DEFAULT_WEEKEND_SETTINGS, type WeekendSettings } from "../../game-data/events/weekendEvents.js";
 import { setWeekendSettings, weekendSettings } from "../../services/events/weekendSettings.js";
+import { yardChampionCrystalAction } from "./champion.js";
 import { eventsActions } from "./eventsActions.js";
 import { yardSpeedupAction } from "./speedup.js";
 import { yardUpgradeAction } from "./upgrade.js";
@@ -564,46 +565,73 @@ describe("event coins through the claims", () => {
   });
 });
 
-describe("Monster Madness: Korath's powers by ladder claim", () => {
+describe("Monster Madness: a clear's crystal, spent on a champion (owner, 27 Nov 2026)", () => {
   const RUN = monsterMadnessRun(START);
   const madness = () => eventsActions(store, [RUN]);
-  const claimGoal = (tier: number) => call(madness().ladderClaim, { event: RUN.id, tier });
+  const claimClear = () => call(madness().ladderClaim, { event: RUN.id, tier: 0 });
+  const spend = (type: number) => call(yardChampionCrystalAction, { type });
   const korath = { t: 4, hp: 28_000, l: 5, ft: START + DAY, fd: 0, fb: 0, pl: 0, status: 0 };
+  const gorgo = { t: 1, hp: 40_000, l: 6, ft: START + DAY, fd: 0, fb: 0, pl: 1, status: 0 };
+  const frozenDrull = { t: 2, hp: 12_000, l: 3, ft: START + DAY, fd: 0, fb: 0, pl: 1, status: 1 };
 
-  test("a reached goal lifts the Korath in the yard and keeps the power", async () => {
-    db.row = rowOf({ champion: [korath], rewards: {} });
+  test("a clear pays one crystal, kept in the yard, and only once a run", async () => {
+    db.row = rowOf({ champion: [gorgo], rewards: {} });
+    expect(await claimClear()).toMatchObject({ status: 409, body: { reason: "tierLocked", need: 100_000_000 } });
     await store.addTakeover({} as never, 2, RUN.id, "900", 100_000_000);
-
-    const first = await claimGoal(1);
-    expect(first.status).toBe(200);
-    expect(first.body.report).toMatchObject({ granted: [{ kind: "korath", power: 2, raised: true, hasKorath: true }] });
-    expect(db.row!.champion).toEqual([{ ...korath, pl: 2 }]);
-    expect(db.row!.rewards).toEqual({ korathPower: { id: "korathPower", value: 2 } });
-
-    // The lower goal claimed after pays nothing more and lowers nothing.
-    const lower = await claimGoal(0);
-    expect(lower.body.report).toMatchObject({ granted: [{ kind: "korath", power: 2, raised: false }] });
-    expect(db.row!.champion).toEqual([{ ...korath, pl: 2 }]);
-
-    expect(await claimGoal(2)).toMatchObject({ status: 409, body: { reason: "tierLocked", need: 160_125_000 } });
+    const answer = await claimClear();
+    expect(answer.status).toBe(200);
+    expect(answer.body.report).toMatchObject({
+      granted: [{ kind: "crystal", count: 1, held: 1 }],
+      rewards: { mmCrystals: { id: "mmCrystals", value: 1 } },
+    });
+    expect(db.row!.rewards).toEqual({ mmCrystals: { id: "mmCrystals", value: 1 } });
+    expect(db.row!.champion).toEqual([gorgo]);
+    expect(await claimClear()).toMatchObject({ status: 409, body: { reason: "tierClaimed" } });
   });
 
-  test("without Korath the power is kept for him", async () => {
-    db.row = rowOf({ champion: [], rewards: {} });
-    await store.addTakeover({} as never, 2, RUN.id, "900", 42_000_000);
-    const answer = await claimGoal(0);
-    expect(answer.body.report).toMatchObject({ granted: [{ kind: "korath", power: 1, hasKorath: false }] });
+  test("a crystal unlocks the next ability: Gorgo lifted in the yard, frozen Drull too", async () => {
+    db.row = rowOf({ champion: [gorgo, frozenDrull], rewards: { mmCrystals: { id: "mmCrystals", value: 3 } } });
+    const first = await spend(1);
+    expect(first.status).toBe(200);
+    expect(first.body.report).toMatchObject({ type: 1, abilities: 1, crystals: 2, hasChampion: true });
+    expect(db.row!.champion).toEqual([{ ...gorgo, pl: 2 }, frozenDrull]);
+    await spend(1);
+    expect(db.row!.champion).toEqual([{ ...gorgo, pl: 3 }, frozenDrull]);
+    await spend(2);
+    expect(db.row!.champion).toEqual([{ ...gorgo, pl: 3 }, { ...frozenDrull, pl: 2 }]);
+    expect(db.row!.rewards).toEqual({
+      mmCrystals: { id: "mmCrystals", value: 0 },
+      championAbilities: { id: "championAbilities", value: { "1": 2, "2": 1, "3": 0 } },
+    });
+    expect(await spend(3)).toMatchObject({ status: 409, body: { reason: "noCrystal" } });
+  });
+
+  test("never Krallen, never a fourth ability", async () => {
+    db.row = rowOf({ rewards: { mmCrystals: { id: "mmCrystals", value: 5 } } });
+    expect(await spend(5)).toMatchObject({ status: 409, body: { reason: "notCrystalChampion" } });
+    for (let i = 0; i < 3; i += 1) expect((await spend(3)).status).toBe(200);
+    expect(await spend(3)).toMatchObject({ status: 409, body: { reason: "allAbilities" } });
+    expect(db.row!.rewards).toMatchObject({ mmCrystals: { value: 2 } });
+  });
+
+  test("Korath's crystals are his Flash powers, kept for him before he hatches", async () => {
+    db.row = rowOf({ champion: [korath], rewards: { mmCrystals: { id: "mmCrystals", value: 2 } } });
+    expect((await spend(4)).body.report).toMatchObject({ type: 4, abilities: 1, hasChampion: true });
+    expect(db.row!.champion).toEqual([{ ...korath, pl: 1 }]);
+    expect(db.row!.rewards).toMatchObject({ korathPower: { id: "korathPower", value: 1 } });
+
+    db.row = rowOf({ champion: [], rewards: { mmCrystals: { id: "mmCrystals", value: 1 } } });
+    expect((await spend(4)).body.report).toMatchObject({ abilities: 1, hasChampion: false });
     expect(db.row!.champion).toEqual([]);
-    expect(db.row!.rewards).toEqual({ korathPower: { id: "korathPower", value: 1 } });
   });
 
   test("claims stay open for 7 days after the run, then close", async () => {
     db.row = rowOf({ rewards: {} });
-    await store.addTakeover({} as never, 2, RUN.id, "900", 42_000_000);
-    at(START + 4 * DAY + 7 * DAY + 1);
-    expect(await claimGoal(0)).toMatchObject({ status: 409, body: { reason: "eventNotActive" } });
-    at(START + 4 * DAY + 6 * DAY);
-    expect((await claimGoal(0)).status).toBe(200);
+    await store.addTakeover({} as never, 2, RUN.id, "900", 100_000_000);
+    at(START + 7 * DAY + 7 * DAY + 1);
+    expect(await claimClear()).toMatchObject({ status: 409, body: { reason: "eventNotActive" } });
+    at(START + 7 * DAY + 6 * DAY);
+    expect((await claimClear()).status).toBe(200);
   });
 });
 

@@ -46,6 +46,8 @@ export interface EventRequirements {
   readonly townHall?: number;
   /** Whether the guided start must be finished (`tutorialstage` 205). */
   readonly tutorial?: boolean;
+  /** Whether the main yard must be on Map Room 2 (Monster Madness: only Map Room 2 outposts score). */
+  readonly mapRoom2?: boolean;
 }
 
 /** What raises a ladder's counter: the event's own code, or every attack's loot. */

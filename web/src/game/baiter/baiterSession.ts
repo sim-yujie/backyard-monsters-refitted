@@ -5,7 +5,7 @@ import { ownYardTarget } from "@/game/attack/ownYardTarget";
 import { academyRanks } from "@/game/combat/rules/defence";
 import {
   CHAMPION_MAX_FOOD_BONUS,
-  CHAMPION_MAX_POWER_LEVEL,
+  championMaxPower,
   KRALLEN_MAX_POWER_LEVEL,
   championByType,
   championStatWithFood,
@@ -171,9 +171,13 @@ export const maxOf = (army: TestArmy, id: string, cap: number): number => {
 /** The highest evolution level of champion type `t`: 6, Krallen 5; 0 for an unknown type. */
 export const championLevels = (t: number): number => championEntry(t)?.levels ?? 0;
 
-/** The highest power level of champion type `t`: 3, Krallen 2. */
+/**
+ * The highest power level of champion type `t` (`championMaxPower`): Korath
+ * 3, Krallen 2, and 4 for Gorgo, Drull and Fomor, who hatch at 1 and gain one
+ * per ability (Monster Madness, `championAbilities.ts`).
+ */
 export const championPowerLevels = (t: number): number =>
-  t === KRALLEN_TYPE ? KRALLEN_MAX_POWER_LEVEL : CHAMPION_MAX_POWER_LEVEL;
+  t === KRALLEN_TYPE ? KRALLEN_MAX_POWER_LEVEL : championMaxPower(championByType(t) ?? "");
 
 /**
  * A champion pick made whole: its level and power level in range, and its

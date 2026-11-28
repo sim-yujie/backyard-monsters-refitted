@@ -29,6 +29,9 @@ import type { ResourceAmounts } from "../../services/yardplanner/costs.js";
  *   level to at least `power`, never lower, and is kept in the yard's
  *   `rewards` so a Korath raised later hatches with it
  *   (`services/events/korathPower.ts`).
+ * - `crystal`: Monster Madness crystals, `count` of them, kept in the
+ *   yard's `rewards` until the player spends each on a champion's next
+ *   ability (`services/events/championCrystals.ts`).
  * - `eventCoins`: event coins (`services/events/eventCoins.ts`), the
  *   currency the decorations shop takes. They live in `bym.event_coins`,
  *   not in the yard, and never expire. Only big events pay them, through
@@ -44,6 +47,7 @@ export type EventReward =
   | { readonly kind: "krallen" }
   | { readonly kind: "krallenAura"; readonly until: number }
   | { readonly kind: "korath"; readonly power: number }
+  | { readonly kind: "crystal"; readonly count: number }
   | { readonly kind: "eventCoins"; readonly amount: number };
 
 /**

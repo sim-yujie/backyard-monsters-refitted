@@ -69,17 +69,29 @@ export const STATUS_EFFECTS: readonly StatusEffect[] = [
   // Lab "Split" (owner, beta 7): the copies a ranked Slimeattikus leaves wear
   // this mark for as long as they live.
   { id: "split", label: "Split copy", stacks: (c) => (c.splitCopy ? 1 : 0) },
+  // The Monster Madness abilities (27 Nov 2026): Gorgo's Stone Skin and
+  // Ground Slam, a Fomor's Bubble and Acid Spit.
+  { id: "stone", label: "Stone Skin", stacks: (c) => (c.stone ? 1 : 0) },
+  { id: "shielded", label: "Bubble", stacks: (c) => ((c.shield ?? 0) > 0 ? 1 : 0) },
+  { id: "marked", label: "Acid", stacks: (c) => (c.marked ? 1 : 0) },
+  { id: "stunned", label: "Stunned", stacks: (c) => (c.stunned ? 1 : 0) },
 ];
 
 /** What a tower's stickers read: the engine's word on it this frame. */
 export interface TowerStatusState {
   /** It killed a ranked Octo-ooze and deals less for a while (`Battle.weakenedTowers`). */
   readonly weakened: boolean;
+  /** Gorgo's Ground Slam holds its fire (`Battle.abilityMarks`). */
+  readonly stunned?: boolean;
+  /** A Fomor's Acid Spit: every blow on it does more (`Battle.abilityMarks`). */
+  readonly marked?: boolean;
 }
 
 /** Every effect a tower can show, left to right. */
 export const TOWER_STATUS_EFFECTS: readonly StatusEffect<TowerStatusState>[] = [
   { id: "weakened", label: "Weakened", stacks: (t) => (t.weakened ? 1 : 0) },
+  { id: "stunned", label: "Stunned", stacks: (t) => (t.stunned ? 1 : 0) },
+  { id: "marked", label: "Acid", stacks: (t) => (t.marked ? 1 : 0) },
 ];
 
 /** The pictures in `public/status-icons/`: the effects above and the ones still waiting for the engine. */
@@ -92,6 +104,9 @@ export const STATUS_ICON_FILES = [
   "swarming",
   "weakened",
   "split",
+  "stone",
+  "shielded",
+  "marked",
   "slowed",
   "stunned",
   "frozen",
@@ -290,9 +305,12 @@ export class TowerStatusIcons {
     return out;
   }
 
-  /** Shows the stickers of the towers in `weakened` and hides every other row. */
-  sync(weakened: readonly number[]): void {
-    const on = new Set(weakened);
+  /** Shows the stickers of the buildings in `weakened`, `stunned` or `marked`; hides every other row. */
+  sync(weakened: readonly number[], stunned: readonly number[] = [], marked: readonly number[] = []): void {
+    const weak = new Set(weakened);
+    const dazed = new Set(stunned);
+    const acid = new Set(marked);
+    const on = new Set([...weakened, ...stunned, ...marked]);
     for (const [id, row] of this.rows) if (!on.has(id)) row.hide();
     for (const id of on) {
       const bar = this.barOf(id);
@@ -303,7 +321,8 @@ export class TowerStatusIcons {
         this.rows.set(id, row);
         this.root.addChild(row.container);
       }
-      row.show(activeOf({ weakened: true }, TOWER_STATUS_EFFECTS), bar.x, bar.y);
+      const state = { weakened: weak.has(id), stunned: dazed.has(id), marked: acid.has(id) };
+      row.show(activeOf(state, TOWER_STATUS_EFFECTS), bar.x, bar.y);
     }
   }
 

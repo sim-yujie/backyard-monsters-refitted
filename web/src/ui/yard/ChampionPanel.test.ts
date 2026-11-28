@@ -77,6 +77,7 @@ const setup = (
     thaw: vi.fn(actions.thaw ?? (() => never())),
     healSpecial: vi.fn(actions.healSpecial ?? (() => never())),
     freezeSpecial: vi.fn(actions.freezeSpecial ?? (() => never())),
+    crystal: vi.fn(actions.crystal ?? (() => never())),
   };
   const panel = new ChampionPanel({ store, actions: spies as ChampionActions });
   document.body.replaceChildren(panel.element);

@@ -1,5 +1,6 @@
-import { CHAMPION_MAX_POWER_LEVEL, championStat } from "./stats.js";
+import { championStat } from "./stats.js";
 import { CHAMPION_PROPS } from "./combatStatsData.js";
+import { championBasePower, championMaxPower } from "./championAbilities.js";
 
 /**
  * The champions' own abilities, as the Flash champions use them (issue #222).
@@ -28,10 +29,14 @@ export const KRALLEN_ID = "G5";
 /** Krallen clamps her power level to 2 before anything reads it (`Krallen.as:15`, `:25`). */
 export const KRALLEN_MAX_POWER_LEVEL = 2;
 
-/** A champion's power level as its own class reads it: whole, 0 to 3, Krallen's at most 2. */
+/**
+ * A champion's power level as its own class reads it: whole, 0 to its most
+ * (`championMaxPower`): Korath's 3, Krallen's 2, and 4 for Gorgo, Drull and
+ * Fomor, who hatch at 1 and gain one per ability (`championAbilities.ts`).
+ */
 export const championPower = (id: string, powerLevel: number | undefined): number => {
-  const whole = Math.min(Math.max(Math.floor(powerLevel ?? 0), 0), CHAMPION_MAX_POWER_LEVEL);
-  return id === KRALLEN_ID ? Math.min(whole, KRALLEN_MAX_POWER_LEVEL) : whole;
+  const whole = Math.max(Math.floor(powerLevel ?? 0), 0);
+  return Math.min(whole, id === KRALLEN_ID ? KRALLEN_MAX_POWER_LEVEL : championMaxPower(id));
 };
 
 /* ── Frames ───────────────────────────────────────────────────────────────── */
@@ -195,11 +200,16 @@ export const UNTARGETABLE_TYPES: readonly number[] = [27, 127, 139];
 /**
  * Fomor's `_buff`: its `buffs` rung plus the power level's `bonusBuffs`
  * (`ChampionBase.as:154-159`), which its enrage aura is built from.
+ *
+ * Only the first rung is still added, at the power level every Fomor hatches
+ * with (1, `CHAMPION_BASE_POWER`): the power levels above it are his new
+ * abilities now (Monster Madness redesign, 27 Nov 2026), not Flash's bigger
+ * rage, so a Fomor with abilities rages exactly as every live Fomor does.
  */
 export const fomorBuff = (level: number, power: number): number => {
   const base = championStat(FOMOR_ID, "buffs", level);
-  if (power <= 0) return base;
-  const bonus = CHAMPION_PROPS[FOMOR_ID]?.props.bonusBuffs?.[power - 1];
+  if (power < championBasePower(FOMOR_ID) || power <= 0) return base;
+  const bonus = CHAMPION_PROPS[FOMOR_ID]?.props.bonusBuffs?.[0];
   return base + (typeof bonus === "number" ? bonus : 0);
 };
 

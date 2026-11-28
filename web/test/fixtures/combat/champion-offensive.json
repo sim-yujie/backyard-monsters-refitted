@@ -1,6 +1,6 @@
 {
   "name": "champion-offensive",
-  "description": "A level 4 Gorgo at power level 3 flung in the offensive Mode with forty Pokeys: the Mode scores Flash's own target lists (issue #220).",
+  "description": "A level 4 Gorgo at power level 1 flung in the offensive Mode with forty Pokeys: the Mode scores Flash's own target lists (issue #220).",
   "yard": "sandbox",
   "without": [
     52,
@@ -37,7 +37,7 @@
         "champion": {
           "t": 1,
           "l": 4,
-          "pl": 3,
+          "pl": 1,
           "s": "offensive"
         }
       }

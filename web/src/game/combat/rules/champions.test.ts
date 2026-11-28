@@ -272,15 +272,18 @@ describe("Korath (issue #222)", () => {
 });
 
 describe("Fomor (issue #222)", () => {
-  it("enrages its own side within 250: faster, and a hit costs them a quarter at buff 0.75", () => {
+  it("enrages its own side within 250: faster, and a hit costs them 37% at buff 0.63", () => {
     // A Cannon Tower (20 a shot, 30 splash) beside a harvester.
     const yard = yardOf({
       "1": { id: 1, t: 1, l: 1, X: 0, Y: 0, st: 100_000 },
       "2": { id: 2, t: 20, l: 1, X: 100, Y: 0 },
     });
     const battle = createBattle(yard, { seed: 4 });
-    fling(battle, -60, { C1: 6 }, { t: 3, l: 6, pl: 3 });
-    expect(fomorBuff(6, 3)).toBeCloseTo(0.75, 12);
+    // Power level 1, every live Fomor's: buff 0.6 + 0.03. The power levels
+    // above it are his Monster Madness abilities now, not a bigger rage.
+    fling(battle, -60, { C1: 6 }, { t: 3, l: 6, pl: 1 });
+    expect(fomorBuff(6, 1)).toBeCloseTo(0.63, 12);
+    expect(fomorBuff(6, 3)).toBeCloseTo(0.63, 12);
     const fomorId = championOf(battle, false)!.id;
     const shotsOnEnraged: number[] = [];
     watch(battle, 600, (event, current) => {
@@ -289,8 +292,8 @@ describe("Fomor (issue #222)", () => {
       if (creep?.enraged) shotsOnEnraged.push(event.amount);
     });
     expect(shotsOnEnraged.length).toBeGreaterThan(0);
-    // 20 a shot, 6 of splash at least, each cut to a quarter.
-    for (const amount of shotsOnEnraged) expect(amount).toBeLessThanOrEqual(5);
+    // 20 a shot, 6 of splash at least, each cut to 37%.
+    for (const amount of shotsOnEnraged) expect(amount).toBeLessThanOrEqual(7.4);
   });
 
   it("enrages nothing before its aura first looks, 30 ticks in", () => {

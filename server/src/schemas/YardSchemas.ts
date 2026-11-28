@@ -362,6 +362,9 @@ export const YardChampionSchema = z.object({});
 /** `POST /bm/yard/champion/heal` and `/freeze`: `type` 5 names Krallen; none means the basic champion. */
 export const YardChampionTypedSchema = z.object({ type: z.coerce.number().int().min(1).max(5).optional() });
 
+/** `POST /bm/yard/champion/crystal`: the champion type a Monster Madness crystal is spent on. */
+export const YardChampionCrystalSchema = z.object({ type: z.coerce.number().int().min(1).max(5) });
+
 /** `POST /bm/yard/champion/rename`: the new name, checked for length and language by the route. */
 export const YardChampionRenameSchema = z.object({
   name: z.string().max(200),
