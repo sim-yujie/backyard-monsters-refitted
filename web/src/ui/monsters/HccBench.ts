@@ -438,6 +438,18 @@ export class HccBench {
       el("span", "hcc-housing__compact", `${short(housed)}/${short(room)}`),
       el("span", "hcc-housing__coming", `+${short(coming)}`),
     );
+    // The batch's space as a number too, as the tab's own housing box says it
+    // ("+35"): a small batch is only a sliver on the bar (owner, desk card
+    // hatch-preview B, 28 Nov 2026). In the bar's colour for it: after the
+    // queue's number where the row has room, at the bar's end on a phone
+    // (neon: the row is full there; the short form, as the queue's).
+    const batchOver = housed + coming + adding > room;
+    const batchNumber = (where: "row" | "track", text: string): HTMLElement => {
+      const batch = el("span", `hcc-housing__batch hcc-housing__batch--${where}${batchOver ? " hcc-housing__batch--over" : ""}`, text);
+      batch.title = `This add ${adding.toLocaleString("en-US")}`;
+      return batch;
+    };
+    if (adding > 0) numbers.append(batchNumber("row", `+${adding.toLocaleString("en-US")}`));
     const bar = el("span", "hcc-housing__bar");
     const fill = el("span", "hcc-housing__fill");
     // With no batch the bar is as it was: cut at the room.
@@ -450,12 +462,16 @@ export class HccBench {
     more.style.width = `${Math.max(0, +(queued - now).toFixed(2))}%`;
     bar.append(fill, more);
     if (adding > 0) {
-      const batch = el("span", `hcc-housing__adding${housed + coming + adding > room ? " hcc-housing__adding--over" : ""}`);
+      const batch = el("span", `hcc-housing__adding${batchOver ? " hcc-housing__adding--over" : ""}`);
       batch.style.width = `${Math.max(0, +(percent(housed + coming + adding) - queued).toFixed(2))}%`;
       bar.append(batch);
     }
     box.title = `Housing ${housed.toLocaleString("en-US")} of ${room.toLocaleString("en-US")}; the queue and the hatcheries add ${coming.toLocaleString("en-US")} more${adding > 0 ? `; this add ${adding.toLocaleString("en-US")}` : ""}`;
-    box.append(numbers, bar);
+    const track = el("span", "hcc-housing__track");
+    track.append(bar);
+    // Only one of the two batch numbers shows at a time (CSS), so one is read.
+    if (adding > 0) track.append(batchNumber("track", `+${short(adding)}`));
+    box.append(numbers, track);
     box.addEventListener("click", () => this.root.classList.toggle("hcc-show-housing"));
     return box;
   }
