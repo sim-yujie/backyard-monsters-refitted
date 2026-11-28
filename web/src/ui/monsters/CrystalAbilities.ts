@@ -35,17 +35,21 @@ import "@/ui/styles/crystals.css";
 const BASE = import.meta.env.BASE_URL;
 const url = (path: string): string => `${BASE}${path.replace(/^\//, "")}`;
 
-/** Each ability's painted icon: the fight's stickers where one fits, else its own. */
+/**
+ * Each ability's painted icon, one set in the style of Obsidian Hide's (owner's pick C1, 28 Nov 2026):
+ * a dark subject with a cold rim light on one colour field, in a thin bronze frame. The fight's status
+ * stickers (`/status-icons/`) stay as they are; the abilities no longer borrow them.
+ */
 const ABILITY_ICON: Readonly<Record<AbilityInfo["id"], string>> = {
-  stoneSkin: "/status-icons/stone.webp",
+  stoneSkin: "/ui/abilities/stone-skin.webp",
   chestPound: "/ui/abilities/chest-pound.webp",
   groundSlam: "/ui/abilities/ground-slam.webp",
   bloodthirst: "/ui/abilities/bloodthirst.webp",
   twinBite: "/ui/abilities/twin-bite.webp",
   obsidianHide: "/ui/abilities/obsidian-hide.webp",
   healingMist: "/ui/abilities/healing-mist.webp",
-  bubble: "/status-icons/shielded.webp",
-  acidSpit: "/status-icons/marked.webp",
+  bubble: "/ui/abilities/bubble.webp",
+  acidSpit: "/ui/abilities/acid-spit.webp",
   burn: "/ui/abilities/burn.webp",
   breathOfFire: "/ui/abilities/breath-of-fire.webp",
   fistsOfDoom: "/ui/abilities/fists-of-doom.webp",

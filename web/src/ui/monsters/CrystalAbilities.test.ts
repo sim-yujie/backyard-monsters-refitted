@@ -107,4 +107,8 @@ describe("ability icons", () => {
     expect(new Set(files).size).toBe(files.length);
     expect(file(all.find((a) => a.id === "obsidianHide")!)).toBe("ui/abilities/obsidian-hide.webp");
   });
+
+  it("keeps all twelve in the one painted set, not the fight's status stickers", () => {
+    for (const ability of all) expect(file(ability), ability.id).toMatch(/^ui\/abilities\/[a-z-]+\.webp$/);
+  });
 });
