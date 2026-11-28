@@ -108,7 +108,9 @@
  * housing, Zafreeti's speed, Ichi's Thorns (7/10/13%) and the main yard's
  * Spurtz brood (at most 2 a cannon) move battles, so no replay stamped with
  * beta 9's 15bf255b01aafabc plays the same any more; the Defences list says
- * "Recorded before beta 10" instead (`defenceWatch.ts`).
+ * "Recorded before beta 10" instead (`defenceWatch.ts`). Beta 10's wave
+ * events (Wild Monster Invasion) add `level`, `rank` and `rage` to a raid
+ * wave (`RaidEvent`); a wave without them spawns as before.
  *
  * Add the version a change replaces only when that change moves no battle.
  * A change that moves any battle result must empty this list.

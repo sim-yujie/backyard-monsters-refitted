@@ -215,6 +215,9 @@ export const REAL_ACTION_ROUTES: readonly RealActionRoute[] = [
   // The Trojan Horse's spring (#306 WP3, issue #326): a click, same as the raid routes above.
   { method: "POST", path: "/api/:apiVersion/bm/raid/trojan" },
   { method: "POST", path: "/api/:apiVersion/bm/raid/finish" },
+  // A wave event's "Next wave" (beta 10): a click, same as the raid routes above.
+  { method: "POST", path: "/api/:apiVersion/bm/events/wave/next" },
+  { method: "POST", path: "/api/:apiVersion/bm/events/wave/surrender" },
   { method: "POST", path: "/api/:apiVersion/bm/raid/frequency" },
   // The in-game check (#273), answered right: the player is there after all.
   { method: "POST", path: "/api/:apiVersion/bm/presence/check/answer", when: isSolvedCheck },

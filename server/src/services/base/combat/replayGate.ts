@@ -23,7 +23,7 @@
  *   (`log`), so live logs can count them.
  */
 
-export type GateKind = "repeat" | "raid" | "trojan" | "baiter" | "test";
+export type GateKind = "repeat" | "raid" | "trojan" | "wave" | "baiter" | "test";
 
 /** How a wait ended. */
 export type GateOutcome = "served" | "refused" | "gone";

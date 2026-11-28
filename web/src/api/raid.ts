@@ -1,3 +1,4 @@
+import type { WaveResult } from "./waves";
 import type { RaidEvent, Roster } from "@/game/combat/rules";
 import { ApiError, postJson } from "./http";
 import type { ApiEnvelope, BuildingDataMap, BuildingHealthData, Resources } from "./types";
@@ -80,6 +81,8 @@ export interface RaidResult {
   readonly damaged: readonly number[];
   /** Housed monsters lost with fallen Housings. */
   readonly housedLost: number;
+  /** A wave event's wave (beta 10): its own result. */
+  readonly wave?: WaveResult;
   /** The threat this raid came at and the next raid's (beta 10); wild raids only. */
   readonly threat?: number;
   readonly nextThreat?: number;

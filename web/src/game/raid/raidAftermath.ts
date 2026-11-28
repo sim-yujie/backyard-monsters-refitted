@@ -19,6 +19,8 @@ import { TROJAN_TRIBE } from "@/game/trojan/trojanHorse";
 export interface RaidAftermathView {
   /** Shows the result; resolves once the player has closed it. */
   result(result: RaidResult): Promise<void>;
+  /** A wave event's wave (`result.wave`): its own result in place of the raid's; resolves once closed. */
+  wave(result: RaidResult): Promise<void>;
   /** Asks more, same or less; resolves with the answer, or null when closed without one. */
   frequency(tribe: string, defended: boolean): Promise<RaidPreference | null>;
   /** A short line when the answer could not be saved. */
@@ -33,6 +35,13 @@ export interface RaidAftermathOptions {
 /** Runs the two popups for one landed raid; resolves when both are done. */
 export const runRaidAftermath = async (options: RaidAftermathOptions, result: RaidResult): Promise<void> => {
   const { api, view } = options;
+  // A wave event's wave has its own result and is no recurring raid to tune.
+  // A late answer kept without its wave part (`landedResult`) shows nothing;
+  // the Events card has the new count.
+  if (result.wave || result.tribe === "wave") {
+    if (result.wave) await view.wave(result);
+    return;
+  }
   await view.result(result);
   if (result.tribe === TROJAN_TRIBE) return;
   const preference = await view.frequency(result.tribe, result.defended);
