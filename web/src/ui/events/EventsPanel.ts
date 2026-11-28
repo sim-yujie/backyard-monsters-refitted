@@ -883,7 +883,9 @@ export class EventsPanel {
         end.append(eventsArt("tick", 18, "events-tier__mark"), el("span", "events-track__state", "Claimed"));
       } else if (isReady) {
         // "Claim 50": it takes this goal only, even with more ready (neon round 2).
-        const button = el("button", "btn btn--primary events-track__claim", `Claim ${shortAmount(tier.need)}`);
+        // "Claim [present] 50": the present beside the number, as in the dock's pill (neon round 3).
+        const button = el("button", "btn btn--primary events-track__claim", "Claim ");
+        button.append(el("span", "events-track__claim-need", shortAmount(tier.need)));
         button.type = "button";
         button.dataset["claim"] = key;
         button.disabled = view.claiming !== null;

@@ -927,7 +927,9 @@
 
 /* The goal the dock shows, lifted a little over the other ready ones (neon round 2). */
 .events-track__node--focus .events-track__prize {
-  transform: scale(1.08);
+  /* Grown upward from its foot and raised 2 px, so it stays clear of the dot on the bar (neon round 3). */
+  transform: translateY(-2px) scale(1.08);
+  transform-origin: 50% 100%;
 }
 
 @keyframes events-track-ready {
@@ -1079,6 +1081,14 @@
   line-height: 1.2;
 }
 
+/* The same present inside the Claim button: "Claim [present] 50" (neon round 3). */
+.events-track__claim-need {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.events-ladder--christmas .events-track__claim-need::before,
 .events-ladder--christmas .events-track__goal-need::before {
   content: "";
   flex: none;
@@ -1159,6 +1169,12 @@
   white-space: nowrap;
 }
 
+/* Modern: a light glow behind a dark decoration (the lamp post), so it parts from the dark tile (neon round 3). */
+:root:not([data-skin="flash"]) .events-track__prize .events-reward--decoration .events-reward__image,
+:root:not([data-skin="flash"]) .events-track__chips .events-reward--decoration .events-reward__image {
+  filter: drop-shadow(0 0 2px rgb(255 255 255 / 60%)) drop-shadow(0 0 1px rgb(255 255 255 / 50%));
+}
+
 .events-track__refusal:empty {
   display: none;
 }
@@ -1200,6 +1216,12 @@
 
 :root[data-skin="flash"] .events-track__node--claimed .events-track__prize {
   border: 2px solid #2f7a1f;
+  /* Claimed recedes: a soft sage fill and a dimmer prize, under the ready ones (neon round 3). */
+  background: linear-gradient(180deg, rgb(226 232 205 / 85%), rgb(200 208 172 / 85%));
+}
+
+:root[data-skin="flash"] .events-track__node--claimed .events-track__prize .events-reward {
+  opacity: 0.75;
 }
 
 /* Classic: the dock's edge and its pointer a shade darker, so the pointer shows on parchment. */
