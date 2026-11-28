@@ -172,9 +172,11 @@ import {
   TESLA_WIND_END,
   TESLA_ZAP_FRAMES,
   SPURTZ_CULL_FRAMES,
+  FLASH_SPURTZ_HATCH,
+  MAIN_YARD_SPURTZ_HATCH,
+  type SpurtzHatchRule,
   SPURTZ_CULL_ROLL,
   SPURTZ_CULL_TICKS,
-  SPURTZ_HATCH_CHANCE,
   SPURTZ_ID,
   SPURTZ_LOOK,
   SPURTZ_MAX_TARGETS,
@@ -553,7 +555,11 @@ const ownCellMiddle = (value: number, anchor: number, size: number): number => {
  *    hunting; a raider with nothing left to attack retreats and is gone (note
  *    7), so the two agree. A spawn off the pathing grid has no route, so the
  *    raider walks straight at its target until a look from on the grid
- *    routes it.
+ *    routes it. Beta 10 (owner 27 Nov 2026, `wild-raids.md` §11): a
+ *    threat-raised wild raid lands in timed groups from up to four sides,
+ *    held open the same way (`raidSpawnsUntilOf`); a wave may bring a wild
+ *    champion ({@link RaidEvent.champion}, which may leave after a set time)
+ *    and a last wave with `retreat` sends every raider still here home.
  * 18. **The Spurtz Cannon (issue #313, `SpurtzCannon.as`).** Its burst, the
  *    shells' flight and the hatching are Flash's, and its shells, unlike
  *    note 1, are in the air until they land. Where it is not Flash: a shell
@@ -720,6 +726,12 @@ export interface BattleOptions {
   readonly descentYard?: number;
   /** Overrides {@link SHELL_BLASTS_WHERE_IT_LANDS} for this battle; absent, it holds. */
   readonly shellBlastsWhereItLands?: boolean;
+  /**
+   * Overrides {@link MAIN_YARD_SPURTZ_HATCH}, how a Spurtz Cannon hatches
+   * Spurtz on a player's main yard, for this battle (tests and balance runs);
+   * absent, it holds. Other yards hatch as Flash's whatever this says.
+   */
+  readonly spurtzHatch?: SpurtzHatchRule;
   /**
    * Whether an attacking Krallen fights by Flash's two rules of patch 8.6
    * (owner, 25 Nov 2026; fidelity note 9): she keeps her route on her walking
@@ -2370,6 +2382,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   /** The other towers' shells in the air, in the order fired (fidelity note 1). */
   const towerShells: TowerShell[] = [];
   const blastWhereItLands = options.shellBlastsWhereItLands ?? SHELL_BLASTS_WHERE_IT_LANDS;
+  // How the Spurtz Cannons hatch here: the main-yard rule on a player's main yard (beta 10).
+  const spurtzHatch: SpurtzHatchRule =
+    yard.kind === "main" ? (options.spurtzHatch ?? MAIN_YARD_SPURTZ_HATCH) : FLASH_SPURTZ_HATCH;
   /** Spurtz hatched this step, on their feet at its end: screen points, whole. */
   const pendingSpurtz: Array<{ readonly tower: Tower; readonly x: number; readonly y: number }> =
     [];
@@ -3143,6 +3158,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       { x: screenX / 2 + screenY, y: screenY - screenX / 2 },
       true,
       "defend",
+      -1,
+      spurtzHatch.strength,
     );
     spurtz.disposable = true;
     spurtz.hatchedBy = tower.building.id;
@@ -3738,19 +3755,73 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * ({@link RaidEvent.strength}, absent 1).
    */
   const raidWave = (event: RaidEvent): void => {
+    if (event.retreat === true) {
+      // The raid's time is up (beta 10): every raider still here leaves.
+      retreated = true;
+      for (const creep of creeps) {
+        if (!creep.friendly) creep.gone = true;
+      }
+    }
     const radius = Math.max(0, event.r);
     const strength = event.strength ?? 1;
+    const rage = Math.max(0, Math.round((event.rage ?? 0) * TICKS_PER_SECOND));
     for (const monsterId of Object.keys(event.monsters).sort()) {
       const count = Math.max(0, Math.floor(event.monsters[monsterId] ?? 0));
-      const level = clampLevel(options.defenderLevels, monsterId);
+      const level =
+        event.level !== undefined && event.level > 0
+          ? Math.floor(event.level)
+          : clampLevel(options.defenderLevels, monsterId);
       const at = (): Cart => dropPoint(event.x, event.y, radius);
       // Moloch's raiders keep the strength they had before the Infernal Lab
       // (owner, 21 Nov 2026): Balthazar at rank 2, King Wormzer at rank 3.
-      const rank = rankOf(MOLOCH_RAID_RANKS, monsterId);
+      const rank =
+        event.rank !== undefined
+          ? Math.max(0, Math.min(3, Math.floor(event.rank)))
+          : rankOf(MOLOCH_RAID_RANKS, monsterId);
       for (let spawned = 0; spawned < count; spawned += 1) {
-        spawnCreep(monsterId, level, at(), false, "attack", -1, strength, rank);
+        const creep = spawnCreep(monsterId, level, at(), false, "attack", -1, strength, rank);
         creepsFlung += 1;
+        if (rage > 0) {
+          // Flash's `Enrage(2, 0)` on a timer, as a putty boost lands one.
+          creep.puttySpeed = 2;
+          creep.puttyArmour = 0;
+          creep.puttyUntil = tick + rage;
+          puttied += 1;
+        }
       }
+    }
+    // A wild champion (beta 10): after the monsters, so a wave without one
+    // draws as before; Hybrid with no brain, full health unless `hp`. It counts
+    // as flung, so a wave of only a champion still ends the raid when it goes.
+    if (event.champion) {
+      const champion = spawnChampion(
+        event.champion.t,
+        Math.max(1, Math.min(6, Math.floor(event.champion.l) || 1)),
+        dropPoint(event.x, event.y, radius),
+        Math.max(0, Math.min(3, Math.floor(event.champion.pl ?? 0))),
+        Math.max(0, Math.min(3, Math.floor(event.champion.fb ?? 0))),
+        undefined,
+        undefined,
+        event.champion.hp,
+      );
+      if (champion) {
+        creepsFlung += 1;
+        const leave = event.champion.leave;
+        if (leave !== undefined && Number.isFinite(leave) && leave >= 0) {
+          wildChampionsLeave.push({ creep: champion, at: tick + Math.floor(leave) });
+        }
+      }
+    }
+  };
+
+  /** Wild champions that leave at a tick (`RaidChampion.leave`). */
+  const wildChampionsLeave: { readonly creep: Creep; readonly at: number }[] = [];
+
+  /** A wild champion whose time is up leaves, as one called back does. */
+  const tickWildChampions = (): void => {
+    for (const leaving of wildChampionsLeave) {
+      const creep = leaving.creep;
+      if (tick >= leaving.at && !creep.gone && creep.hp > 0) creep.gone = true;
     }
   };
 
@@ -7557,9 +7628,19 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       report.damageDealt += towerHurt(report, hit.creep, dealt);
       if (before > 0 && hit.creep.hp <= 0) report.kills += 1;
     }
-    if (rng.float() > SPURTZ_HATCH_CHANCE) {
+    // Flash rolls `Math.random() > 0.5`; a chance c hatches above 1 - c, so
+    // Flash's own chance draws and decides exactly as before.
+    if (rng.float() > 1 - spurtzHatch.chance && broodRoom(tower)) {
       pendingSpurtz.push({ tower, x: Math.trunc(shell.x), y: Math.trunc(shell.y) });
     }
+  };
+
+  /** Whether this cannon may hatch another Spurtz under {@link spurtzHatch}'s `most`. */
+  const broodRoom = (tower: Tower): boolean => {
+    if (!Number.isFinite(spurtzHatch.most)) return true;
+    const alive = tower.gun?.hatched.filter((one) => one.hp > 0 && !one.gone).length ?? 0;
+    const waiting = pendingSpurtz.filter((one) => one.tower === tower).length;
+    return alive + waiting < spurtzHatch.most;
   };
 
   /**
@@ -8365,6 +8446,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     tickLeaving();
     landRaiseOrbs();
     tickTowerShells();
+    if (wildChampionsLeave.length > 0) tickWildChampions();
 
     if (creeps.length > 0) {
       let write = 0;

@@ -60,7 +60,7 @@ import { getAllianceData } from "../../../services/alliance/allianceData.js";
 import { cellRelationship, findRelationships } from "../../../services/alliance/relationships.js";
 import { INFERNO_CHAT_CHANNEL, countryChannelFor } from "../../../config/ChatConfig.js";
 import { finaliseBeforeLoad } from "../../../services/base/finaliseAttack.js";
-import { requirePageRules, stampOf } from "../../../services/base/combat/rulesStamp.js";
+import { requirePageRules, requirePageStats, stampForLog, stampOf, statsStampOf } from "../../../services/base/combat/rulesStamp.js";
 import { infernoConfig } from "../../../config/InfernoConfig.js";
 import { quietLoginOn } from "../../../config/QuietLoginConfig.js";
 import { loginPromptFields } from "./loginPrompts.js";
@@ -128,7 +128,18 @@ export const baseLoad: KoaController = async (ctx) => {
   // An attack from a page with older battle rules is refused before anything
   // below runs (owner's fix 1, 23 Nov 2026, `rulesStamp.ts`).
   const attacking = type === BaseMode.ATTACK || type === BaseMode.WMATTACK;
-  if (attacking) requirePageRules(ctx, user, stampOf(ctx.request.body), `base/load:${type}`);
+  if (attacking) {
+    requirePageRules(ctx, user, stampOf(ctx.request.body), `base/load:${type}`);
+    // And one whose monster and champion stats are another release's, the
+    // training and hatching ladders the rules leave out above all (beta 10).
+    requirePageStats(ctx, user, statsStampOf(ctx.request.body), `base/load:${type}`);
+  }
+  /** What the "old page" line of `validateAttack` says besides the player. */
+  const oldPageLog = {
+    route: `base/load:${type}`,
+    sent: stampForLog(statsStampOf(ctx.request.body)),
+    ip: ctx.ip,
+  };
 
   // An attack the player left without saving is finished before anything
   // below reads a row it writes — the player's own save above all — so their
@@ -200,7 +211,7 @@ export const baseLoad: KoaController = async (ctx) => {
     case BaseMode.ATTACK:
       if (!ctx.meetsDiscordAgeCheck) throw discordAgeErr();
 
-      await validateAttack(user, attackData, mapversion);
+      await validateAttack(user, attackData, mapversion, oldPageLog);
       ({ save: baseSave, defenderForces, championBrains, championHealth, attackerAcademy, attackerRanks } =
         await baseModeAttack({
         user,
@@ -218,7 +229,7 @@ export const baseLoad: KoaController = async (ctx) => {
       // Not for a Map Room 1 tribe or a Brukkarg event yard: no other player is touched.
       if (!ctx.meetsDiscordAgeCheck && !MR1_TRIBE_IDS.has(baseid) && !isEventYardId(baseid)) throw discordAgeErr();
       
-      await validateAttack(user, attackData, mapversion);
+      await validateAttack(user, attackData, mapversion, oldPageLog);
       const start = () => baseModeAttack({ user, baseid, mapversion, attackerLevel });
       // Smart moving (beta 9): the saved plan's army moves into the yards in
       // range first, in this same request, and goes back should the attack

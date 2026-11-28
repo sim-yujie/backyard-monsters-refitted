@@ -49,6 +49,7 @@ const {
   finishRaid,
   prepareRaid,
   raidOnPing,
+  raidView,
   setRaidPreference,
   settleRaidOnYardLoad,
   startRaid,
@@ -1223,4 +1224,29 @@ describe("Moloch's emergence raid (docs/design/inferno.md §2.3, owner I14/R5)",
     },
     FIGHT_TIMEOUT_MS
   );
+});
+
+/** Beta 10: what the alert is told of a threat-raised raid. */
+describe("raidView: the threat's fields", () => {
+  const open = (plan: Record<string, unknown>) =>
+    ({ id: "r_t", phase: "warning", tribe: "Kozu", plan, seed: 1, attackAt: 100, warned: 0 }) as never;
+
+  test("threat, sides (two or more) and the champion's type and level", () => {
+    const view = raidView(
+      open({ army: { C1: 3 }, threat: 9, sides: [0, 90, 180], champion: { t: 2, l: 2, pl: 0, leave: 9600 }, log: { v: 1, seed: 1, events: [] } }),
+    );
+    expect(view.threat).toBe(9);
+    expect(view.sides).toBe(3);
+    expect(view.champion).toEqual({ t: 2, l: 2 });
+  });
+
+  test("one side, no champion and a raid from before beta 10 say nothing of them", () => {
+    const one = raidView(open({ army: { C1: 3 }, threat: 0, sides: [45], log: { v: 1, seed: 1, events: [] } }));
+    expect(one.threat).toBe(0);
+    expect(one.sides).toBeUndefined();
+    expect(one.champion).toBeUndefined();
+    const old = raidView(open({ army: { C1: 3 }, log: { v: 1, seed: 1, events: [] } }));
+    expect(old.threat).toBeUndefined();
+    expect(old.monsters).toEqual({ C1: 3 });
+  });
 });

@@ -58,8 +58,8 @@ describe("monsterCatalogue", () => {
     expect(monsterEntry("C1")?.resource).toBe(4000);
     expect(monsterEntry("C1")?.time).toBe(600);
     expect(monsterEntry("C200")).toBeUndefined();
-    expect(hatchCost("C19", 3)).toBe(1000000);
-    expect(trainingStep("C15", 4)).toEqual([18000000, 136 * 3600]);
+    expect(hatchCost("C19", 3)).toBe(600000);
+    expect(trainingStep("C15", 4)).toEqual([12600000, 136 * 3600]);
     expect(trainingStep("C15", 5)).toBeUndefined();
   });
 

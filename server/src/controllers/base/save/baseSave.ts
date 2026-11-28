@@ -85,7 +85,7 @@ import { battleReplayInput, battleTick, foughtLoot } from "../../../services/bas
 import { awardLootPoints } from "../../../services/base/combat/lootPoints.js";
 import { buildingDataWithout } from "../../../services/base/combat/abandonedAttack.js";
 import { recordBattleMismatches, replayBattleForSave } from "../../../services/base/combat/saveBattle.js";
-import { startedOnOldPage, stampOf } from "../../../services/base/combat/rulesStamp.js";
+import { startedOnOldPage, startedOnOtherStats, stampOf } from "../../../services/base/combat/rulesStamp.js";
 import { recordMonsterUsage, rowFacts } from "../../../services/stats/monsterUsage.js";
 import { combatCellHeight } from "../../../services/base/combat/cellHeight.js";
 import { championsAfterAttack, championsAfterBattle, siegeAfterAttack } from "../../../services/base/combat/attackerRow.js";
@@ -269,7 +269,23 @@ const saveBase = async (
     ? await requireAttackBinding(ctx, user, baseSave, saveData.attackid, now)
     : null;
 
-  await validateSave(user, baseSave, body);
+  // The private anticheat (`scripts/anticheat`, not in this repository) is
+  // not shown a save of an attack started under other battle rules or other
+  // monster numbers: only a page left open across a release sends one (an
+  // attack in flight while the server restarted), and a stale page must never
+  // be banned (beta 10, owner's pick B+). The replay and the audits below
+  // still judge it, as any save.
+  if (session && (startedOnOldPage(session.rules) || startedOnOtherStats(session.stats))) {
+    logger.info("Save of an attack started on an older page: the anticheat skips it", {
+      event: "save-old-page",
+      userid: user.userid,
+      attackid: session.attackid,
+      sessionRules: session.rules ?? null,
+      sessionStats: session.stats ?? null,
+    });
+  } else {
+    await validateSave(user, baseSave, body);
+  }
 
   // What the attack's resource bombs cost the attacker (issue #90), worked out
   // from the fling log and the bomb table before any key is applied, so a

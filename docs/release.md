@@ -46,3 +46,29 @@ A release happens only when the owner says "release". Versions are tagged
    schedules both checks; `release.sh` prints the reminder at the end.
 
 Never deploy by hand from `revamp` or a feature branch.
+
+## Old tabs after a release (beta 10)
+
+A tab left open across a release is told "New version, reload", never banned:
+
+- Its attack start is refused with "New version" when its battle rules
+  (`rules`, the combat MANIFEST version) or its monster and champion numbers
+  (`stats`, `server/src/game-data/stats/attackStatsVersion.ts`; training,
+  hatching and feeding costs included) are not the server's.
+- A page from before a stamp existed is caught by the stat check itself
+  (`validateAttack.ts`): a stat the battle does not read, or one that a
+  shipped table held, is refused with "New version". Only a combat stat that
+  no table ever held bans.
+- **Shipped tables are kept in `server/src/game-data/stats/pastAttackStats/`.**
+  There is no release step for them: whenever `monsterStats.ts` or
+  `championStats.ts` changes, CI fails (`pastAttackStats.test.ts`) until
+  `bun run stats:snapshot "<branch or release>"` is run in `server/` and the
+  new file is committed with the change. So the live table is always kept
+  when the next release goes out. Files older than about a month may be
+  deleted; keep the newest few.
+- An attack in flight across the restart is landed as usual; its save skips
+  the private anticheat (`baseSave.ts`, `save-old-page` in the log).
+
+Count old tabs after a release from the server log: `attack-start-old-page`
+(refused starts) and the `pageBuild` field on every request record (the
+page's bundle hash; pages from before beta 10 send none).

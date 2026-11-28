@@ -1,7 +1,7 @@
 import { damagePercent, derivedDestroyed } from "./damagePercent.js";
 import { createDigest } from "./digest.js";
 import { createBattle } from "./engine.js";
-import { ATTACK_MAX_SECONDS, RAID_MAX_SECONDS, ticks } from "./stats.js";
+import { ATTACK_MAX_SECONDS, RAID_MAX_SECONDS, ticks, type SpurtzHatchRule } from "./stats.js";
 import { toCombatYard } from "./types.js";
 import { buildEngineYard } from "./yard.js";
 import type {
@@ -103,11 +103,45 @@ export interface ReplayInput {
    * always on a main yard, whatever {@link kind} says.
    */
   readonly raid?: boolean;
+  /**
+   * A raid's last wave's tick (`BattleOptions.raidSpawnsUntil`); absent, the
+   * log's own ({@link raidSpawnsUntilOf}), so a raid whose waves land over
+   * time is not over while one is still to come.
+   */
+  readonly raidSpawnsUntil?: number;
   /** False fights Krallen by the rules before patch 8.6's (`BattleOptions.flashKrallen`). */
   readonly flashKrallen?: boolean;
   /** False keeps the fractions of health the rules before kept (`BattleOptions.wholeHealth`). */
   readonly wholeHealth?: boolean;
+  /** Another main-yard Spurtz rule (`BattleOptions.spurtzHatch`), for tests and balance runs. */
+  readonly spurtzHatch?: SpurtzHatchRule;
 }
+
+/**
+ * The tick a raid log's last wave that lands a monster or champion comes on
+ * (`BattleOptions.raidSpawnsUntil`), 0 for one whose waves all land at once.
+ * The server's fight, its replay and the client's playback all read it from
+ * the log, so they end on one tick
+ * (beta 10's timed drops, `docs/design/wild-raids.md` "Beta 10 threat").
+ */
+export const raidSpawnsUntilOf = (
+  events: readonly {
+    readonly kind: string;
+    readonly t: number;
+    readonly monsters?: Readonly<Record<string, number>>;
+    readonly champion?: unknown;
+  }[],
+): number => {
+  let last = 0;
+  for (const event of events) {
+    if (event.kind !== "raid" || !Number.isFinite(event.t)) continue;
+    // Only a wave that lands something: a retreat wave lands nobody.
+    const lands = event.champion !== undefined
+      || Object.values(event.monsters ?? {}).some((count) => count > 0);
+    if (lands) last = Math.max(last, Math.floor(event.t));
+  }
+  return last;
+};
 
 /** What {@link replayRaid} is handed: the defender's side only (issue #226). */
 export interface RaidReplayInput {
@@ -123,6 +157,8 @@ export interface RaidReplayInput {
   /** The player's Lab ranks for their bunkers' defenders; the raiders have none (issue #352). */
   readonly defenderRanks?: MonsterRanks;
   readonly defenderChampions?: readonly DefenderChampion[] | null;
+  /** The last wave's tick; absent, the log's own ({@link raidSpawnsUntilOf}). */
+  readonly raidSpawnsUntil?: number;
 }
 
 /** One checkpoint: the tick it was taken at and the digest of the state. */
@@ -224,8 +260,12 @@ export const replayAttack = (input: ReplayInput): ReplayOutcome => {
     ...(input.defenceBonus ? { defenceBonus: input.defenceBonus } : {}),
     ...(input.learn ? { learn: true } : {}),
     ...(input.raid ? { raid: input.raid } : {}),
+    ...(input.raid
+      ? { raidSpawnsUntil: input.raidSpawnsUntil ?? raidSpawnsUntilOf(input.log.events) }
+      : {}),
     ...(input.flashKrallen === false ? { flashKrallen: false } : {}),
     ...(input.wholeHealth === false ? { wholeHealth: false } : {}),
+    ...(input.spurtzHatch ? { spurtzHatch: input.spurtzHatch } : {}),
   };
 
   const battle = createBattle(yard, options);
@@ -314,5 +354,6 @@ export const replayRaid = (input: RaidReplayInput): ReplayOutcome =>
     ...(input.defenderLevels ? { defenderLevels: input.defenderLevels } : {}),
     ...(input.defenderRanks ? { defenderRanks: input.defenderRanks } : {}),
     ...(input.defenderChampions ? { defenderChampions: input.defenderChampions } : {}),
+    ...(input.raidSpawnsUntil === undefined ? {} : { raidSpawnsUntil: input.raidSpawnsUntil }),
     raid: true,
   });

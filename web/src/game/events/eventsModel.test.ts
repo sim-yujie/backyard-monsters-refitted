@@ -141,6 +141,12 @@ describe("sortEvents", () => {
     expect(sorted.active.map((one) => one.id)).toEqual(["b", "a"]);
     expect(sorted.upcoming.map((one) => one.id)).toEqual(["d", "c"]);
   });
+
+  it("puts a wave event first among the events on: its waves start from its card", () => {
+    const a = event({ id: "a", endsAt: 5 });
+    const wave = event({ id: "w", kind: "wave", endsAt: 9 });
+    expect(sortEvents([a, wave]).active.map((one) => one.id)).toEqual(["w", "a"]);
+  });
 });
 
 describe("shortAmount", () => {

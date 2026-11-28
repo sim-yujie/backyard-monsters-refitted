@@ -1,16 +1,4 @@
 import { devConfig } from "../config/GameConfig.js";
-import { getActiveInvasion } from "../services/events/wmi/getActiveInvasion.js";
-import { setupInvasionEvent } from "../services/events/wmi/setupInvasionEvent.js";
-
-/**
- * Gets the current invasion flags.
- * These flags are used to determine the state of Wild Monster Invasion events.
- */
-const getInvasionFlags = () => {
-  const activeInvasion = getActiveInvasion();
-  const invasionPhases = setupInvasionEvent(activeInvasion).phases;
-  return { ...invasionPhases, activeInvasion };
-};
 
 /**
  * Configuration flags for game settings.
@@ -60,7 +48,6 @@ export const getFlags = () => ({
   gifts: 0, // Disable gifts
   event1: 1,
   event2: 0,
-  ...getInvasionFlags(),
   iframestart_override: 0,
   mushrooms: 1,
   chatwhitelist: "",

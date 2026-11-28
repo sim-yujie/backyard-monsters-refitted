@@ -3,7 +3,6 @@ import { User } from "../../../../database/models/user.model.js";
 import { postgres } from "../../../../server.js";
 import { BaseMode } from "../../../../enums/Base.js";
 import { logger } from "../../../../utils/logger.js";
-import { resetInvasionWaves } from "../../../../services/events/wmi/invasionUtils.js";
 import { isAttackActive } from "../../../../services/base/isAttackActive.js";
 import { baseNotFoundErr, baseUnderAttackErr, permissionErr } from "../../../../errors/errors.js";
 
@@ -33,8 +32,6 @@ export const baseModeBuild = async (user: User, baseid: string) => {
     // The Town Hall 7 Korath gift (`balancedReward`) is gone: it wrote a
     // `KorathReward` nothing read. Korath comes from an Inferno yard and his
     // powers from Monster Madness (`services/events/korathPower.ts`).
-
-    if (userSave.stats?.other) resetInvasionWaves(userSave.stats.other);
 
     postgres.em.persist(userSave);
     await postgres.em.flush();

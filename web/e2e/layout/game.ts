@@ -234,7 +234,40 @@ const WINDOW_CLASSES = [
   ".auto-attack--result",
   ".xfer-tray",
   ".attack-window",
+  // A wave event's arrival pop-up (beta 10): it opens by itself on a yard
+  // while a wave event is on, so it is closed with the rest.
+  ".wave-intro",
 ];
+
+/**
+ * Shows a wave event's arrival pop-up again (beta 10): forgets that this
+ * device saw it and reloads; it opens on its own while a wave event is on.
+ * False when no wave event is on (the sandbox yard outside one).
+ *
+ * Not `waitForYard`: its quiet-start check presses Escape on any pop-up at
+ * boot, which closed this one and marked it seen, so the case was always
+ * skipped, even with a wave event on (wmi-events, 27 Nov 2026).
+ */
+export const openWaveIntro = async (page: Page): Promise<boolean> => {
+  await page.evaluate(() => {
+    try {
+      window.localStorage.removeItem("bymr.waveIntroSeen");
+    } catch {
+      /* no storage: no pop-up either */
+    }
+  });
+  await page.reload();
+  await page
+    .locator('.yard-dock__button[data-dock="build"]:not([disabled])')
+    .first()
+    .waitFor({ state: "visible", timeout: settings.bootTimeout });
+  return page
+    .locator(".overlay__layer .wave-intro")
+    .first()
+    .waitFor({ state: "visible", timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false);
+};
 
 const openWindows = (page: Page) =>
   page.locator(`.overlay__layer :is(${WINDOW_CLASSES.join(", ")})`);
@@ -554,6 +587,30 @@ export const openBaiterPreview = async (page: Page, view: string): Promise<boole
  * build's preview (`__transferPreview`, VITE_LAYOUT_CHECK): the sandbox yard
  * has no outposts. `closeAll` closes it with its close button.
  */
+/**
+ * The wild monster alert (beta 10) at its busiest, from the build's preview
+ * (`__raidAlert`, VITE_LAYOUT_CHECK): Threat 14, 4 sides, a level 3 Fomor.
+ * It has no close button (the player must answer); `closeAll` closes it the
+ * way it opened.
+ */
+export const openRaidAlert = async (page: Page): Promise<boolean> => {
+  const opened = await page.evaluate(() => {
+    const open = (globalThis as Record<string, unknown>)["__raidAlert"];
+    if (typeof open !== "function") return false;
+    const shut = (open as (champion: number, level: number) => unknown)(3, 3);
+    (globalThis as Record<string, unknown>)["__repeatSheetClose"] = shut;
+    return typeof shut === "function";
+  });
+  if (!opened) return false;
+  await page.locator(".overlay__layer .raid-alert").first().waitFor({ timeout: 10_000 });
+  await page
+    .waitForFunction(() => [...document.querySelectorAll(".overlay__layer .raid-alert img")].every((image) => (image as HTMLImageElement).complete), null, {
+      timeout: 10_000,
+    })
+    .catch(() => undefined);
+  return true;
+};
+
 export const openMoveTray = async (page: Page, state: "in" | "out"): Promise<boolean> => {
   const opened = await page.evaluate(async (which) => {
     const open = (globalThis as Record<string, unknown>)["__transferPreview"];

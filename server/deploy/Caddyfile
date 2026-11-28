@@ -32,6 +32,9 @@
 	handle /chat* {
 		reverse_proxy web:3010 {
 			header_up CF-Connecting-IP {client_ip}
+			# While the game server restarts, a reconnect waits for it (see below).
+			lb_try_duration 45s
+			lb_try_interval 250ms
 		}
 	}
 
@@ -48,6 +51,17 @@
 		# connection came from Cloudflare.
 		reverse_proxy web:3001 {
 			header_up CF-Connecting-IP {client_ip}
+			# A release restarts the game server (beta 10, owner's pick B+).
+			# While it is down, a request waits here, trying again every
+			# 250 ms for up to 45 s, instead of failing with a 502: players see
+			# a pause, not an error. Caddy retries any request whose connection
+			# could not be made, a POST too, but it can only resend a body it
+			# kept: request_buffers keeps up to 2 MB, the server's own body
+			# limit (BODY_LIMIT, src/middleware/bodyLimits.ts). A bigger body
+			# (the picture routes) still fails during a restart.
+			lb_try_duration 45s
+			lb_try_interval 250ms
+			request_buffers 2MB
 		}
 	}
 }
@@ -63,6 +77,9 @@
 		encode zstd gzip
 		reverse_proxy web:3001 {
 			header_up CF-Connecting-IP {client_ip}
+			# Art asked for during a restart waits too (see API_DOMAIN above).
+			lb_try_duration 45s
+			lb_try_interval 250ms
 		}
 	}
 

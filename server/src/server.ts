@@ -1,7 +1,7 @@
 import { startWeekendSettingsRefresh } from "./services/events/weekendSettings.js";
 import { startMaintenanceRefresh } from "./services/admin/maintenance.js";
 import { startMonsterMadnessRefresh } from "./services/events/monsterMadnessRuns.js";
-import { startYardEventRefresh } from "./services/events/yards/yardEventRun.js";
+import { startWaveRunsRefresh } from "./services/events/waves/waveRuns.js";
 import { getCurrentDateTime } from "./utils/getCurrentDateTime.js";
 import { ensureWelcomeLaunch } from "./services/events/mr2Welcome.js";
 import Koa, { type Next } from "koa";
@@ -30,6 +30,9 @@ import { Env } from "./enums/Env.js";
 import { initAnticheat } from "./scripts/anticheat/anticheat.js";
 import { initialize as initVersionManifest } from "./config/VersionManifestConfig.js";
 import { startChatServer } from "./chat/chatServer.js";
+import { pageBuildContext } from "./middleware/pageBuild.js";
+import { stopGracefullyOnSigterm } from "./utils/gracefulShutdown.js";
+import { dispose as disposeLogs } from "@logtape/logtape";
 import { startLiveMap } from "./services/maproom/live/startLiveMap.js";
 import { publishMailNudge } from "./chat/chatControl.js";
 import { setMailNudge } from "./services/mail/mailNudge.js";
@@ -53,7 +56,7 @@ import { trustedProxies } from "./config/ProxyConfig.js";
 import { startupRefusals } from "./config/StartupSafety.js";
 import { redisActivityRecorder, setActivityRecorder } from "./services/stats/activity.js";
 import { getDailySummary, startDailyStats } from "./services/stats/dailyStats.js";
-import { startServerErrorFlush } from "./services/errors/errorStore.js";
+import { flushServerErrors, startServerErrorFlush } from "./services/errors/errorStore.js";
 
 // `ctx.ip` comes from the clientIp middleware, which believes CF-Connecting-IP
 // only from a trusted proxy (issue #214), so Koa's own proxy trust stays off.
@@ -101,7 +104,7 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
   // lets anyone in; then every few seconds.
   await startMaintenanceRefresh(() => postgres.em.fork());
 
-  startChatServer();
+  const chatServer = startChatServer();
   // The live map (beta 9): zone versions bumped by every write a map cell shows, published once a
   // second (`services/maproom/live/liveZones.ts`), and the online flag's check every 15 s.
   startLiveMap();
@@ -121,6 +124,8 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
 
   // Logs
   app.use(logMissingAssets);
+  // The page's build id (`pb`) into the log context, before the request logger writes its record (beta 10).
+  app.use(pageBuildContext);
   if (process.env.ENV !== Env.LOCAL) app.use(requestLogging);
 
   // Serve static files
@@ -158,8 +163,7 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
   // (`services/events/weekendSettings.ts`); the dashboard changes them.
   startWeekendSettingsRefresh(() => postgres.em.fork());
   startMonsterMadnessRefresh(() => postgres.em.fork());
-  // Brukkarg attack events (beta 10, `yardEventRun.ts`): until the generic event control merges.
-  startYardEventRefresh(() => postgres.em.fork());
+  startWaveRunsRefresh(() => postgres.em.fork());
 
   // "New to Map Room 2": players already on Map Room 2 get their 10 days from
   // the first start of a server with this feature (`services/events/mr2Welcome.ts`).
@@ -293,11 +297,24 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
     }`
   );
 
-  app.listen(PORT, () => {
+  const httpServer = app.listen(PORT, () => {
     console.log(`
 ${ascii_node}
 Server running on: ${BASE_URL}:${PORT}
     `);
+  });
+
+  // A release's restart lets open requests finish instead of cutting them off
+  // (beta 10, `utils/gracefulShutdown.ts`); Caddy holds new ones meanwhile.
+  stopGracefullyOnSigterm({
+    http: httpServer,
+    closers: [
+      ["chat sockets", () => chatServer.stop(true)],
+      ["server error buffer", () => flushServerErrors(postgres.em.fork())],
+      ["database", () => postgres.orm.close()],
+      ["Redis", () => redis.close()],
+      ["log files", () => disposeLogs()],
+    ],
   });
 })().catch((e) => {
   logger.error(`Startup failed: ${e}`);

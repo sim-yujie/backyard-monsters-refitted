@@ -192,6 +192,12 @@ export interface BaseLoadRequest {
    */
   rules?: string;
   /**
+   * This page's attack-stat table version, on an attack load
+   * (`game/attack/attackStatsVersion.ts`): the server refuses an attack from a
+   * page holding another release's monster numbers with "New version".
+   */
+  stats?: string;
+  /**
    * Smart moving (beta 9): on a `wmattack`, the key of the moves the player
    * agreed to ("Move & attack"). The server makes exactly those moves before
    * it starts the attack, or refuses with nothing moved (`smartMove.ts`).

@@ -18,11 +18,15 @@ import {
 import { raidCountdownText, type RaidBusy, type RaidStage, type RaidYardView } from "@/game/raid/raidYardFlow";
 import { TROJAN_TRIBE } from "@/game/trojan/trojanHorse";
 import { versionedArt } from "@/game/yard/retryLoad";
+import { CHAMPION_PROPS, championByType } from "@/game/combat/rules";
+import { championCrop, championPortrait, showPortrait } from "@/game/portraits";
 import { alarmPulse } from "@/ui/alarmPulse";
+import { gameIcon } from "@/ui/gameIcon";
 import { formatAmount } from "@/ui/format";
 import { Popup } from "@/ui/Popup";
 import { RESOURCE_KEYS, resourceAmount } from "@/ui/resourceIcon";
 import "@/ui/styles/raid.css";
+import { showWaveResult } from "@/ui/waves/WaveScreens";
 import { artUrl } from "../../artUrl";
 
 /**
@@ -99,6 +103,66 @@ export interface RaidAlertActions {
  * Neither Escape nor the scrim closes it (D6): the player must answer. Its
  * border pulses with the alarm glow while it is up.
  */
+/** What the alert shows of a raid: its tribe and army, and beta 10's threat, sides and champion. */
+export interface RaidAlertRaid {
+  readonly id: string;
+  readonly tribe: string;
+  readonly monsters: Readonly<Record<string, number>>;
+  readonly threat?: number;
+  readonly sides?: number;
+  readonly champion?: { readonly t: number; readonly l: number };
+}
+
+/** The threat pill's tier: amber up to 7, red from 8 (3 sides and Zafreetis; the champion from 10), pulsing red from 15. */
+export const threatTier = (threat: number): "warn" | "danger" | "extreme" =>
+  threat >= 15 ? "extreme" : threat >= 8 ? "danger" : "warn";
+
+/** What the threat pill's hint says (beta 10, `docs/design/wild-raids.md` "Beta 10 threat"). */
+export const THREAT_HINT = "+1 Threat after a 90%+ defence, −1 after a loss.";
+
+/** A champion's name from the stat table, or `G<t>`. */
+const championName = (t: number): string => {
+  const id = championByType(t);
+  return (id && CHAMPION_PROPS[id]?.name) || `G${t}`;
+};
+
+/**
+ * The champion's portrait for its card: the Champion Cage's picture
+ * (painted, or the original with the Classic look on), cropped to the
+ * creature. The whole frame left a level-1 Fomor a speck that read as a
+ * battle sprite (owner, 27 Nov 2026).
+ */
+const championArt = (t: number, level: number): HTMLElement => {
+  const id = `G${t}`;
+  const box = element("span", "raid-alert__portrait raid-alert__art");
+  const picture = element("img", "raid-alert__art-picture");
+  picture.alt = "";
+  picture.decoding = "async";
+  showPortrait(picture, championPortrait(id, level, "card"));
+  const crop = championCrop(id, level);
+  if (crop) {
+    box.style.setProperty("--crop-size", `${crop.size}%`);
+    box.style.setProperty("--crop-x", `${crop.x}%`);
+    box.style.setProperty("--crop-y", `${crop.y}%`);
+  }
+  box.append(picture);
+  return box;
+};
+
+/**
+ * The WILD MONSTER ALERT (`AIATTACKPOPUP.as`): the tribe, up to three of its
+ * monster types, the time left, and "Engage now" or "Prepare defences".
+ * Neither Escape nor the scrim closes it (D6): the player must answer. Its
+ * border pulses with the alarm glow while it is up.
+ *
+ * Beta 10 (owner 27 Nov 2026; neon's direction 1 and three critique
+ * rounds): under the header a row of pills, "[claw] Threat 7 (?)",
+ * "[swords] 3 sides" and "[hourglass] 4:25", the first two only when there is
+ * something to say (threat 1+, 2+ sides); the threat pill floats a one-line
+ * hint under the row. A raid with a champion leads its card row with the
+ * champion's card, framed in gold with a CHAMPION tag and an "Lv N" chip;
+ * "+N more" under the cards counts the raiders they leave out.
+ */
 export class RaidAlert {
   readonly popup: Popup;
   private readonly eta: HTMLElement;
@@ -106,25 +170,81 @@ export class RaidAlert {
   private readonly prepare: HTMLButtonElement;
   readonly raidId: string;
 
-  constructor(raid: { readonly id: string; readonly tribe: string; readonly monsters: Readonly<Record<string, number>> }, actions: RaidAlertActions) {
+  constructor(raid: RaidAlertRaid, actions: RaidAlertActions) {
     this.raidId = raid.id;
-    this.popup = new Popup({ title: ALERT_TITLE, className: "raid-alert", dismissable: false });
+    this.popup = new Popup({
+      title: ALERT_TITLE,
+      className: raid.champion ? "raid-alert raid-alert--champion" : "raid-alert",
+      dismissable: false,
+    });
     alarmPulse(this.popup);
 
     const head = element("div", "raid-alert__head");
     const words = element("div", "raid-alert__words");
+    const coming = raiderCount(raid.monsters) + (raid.champion ? 1 : 0);
     words.append(
       element("p", "raid-alert__tribe", tribeTitle(raid.tribe)),
-      element("p", "raid-alert__lead", `${raiderCount(raid.monsters)} wild monsters are coming for your yard!`),
+      element("p", "raid-alert__lead", `${coming} wild monsters are coming for your yard!`),
     );
-    this.eta = element("p", "raid-alert__eta");
-    this.eta.setAttribute("role", "timer");
-    words.append(this.eta);
+
     head.append(splash(raid.tribe, "raid-alert__splash"), words);
+
+    // Beta 10: threat, sides and the time left in one full-width row (neon r1).
+    const stats = element("div", "raid-alert__stats");
+    const threat = raid.threat ?? 0;
+    if (threat > 0) {
+      const pill = element("button", `raid-alert__pill raid-alert__threat raid-alert__threat--${threatTier(threat)}`);
+      pill.type = "button";
+      pill.append(
+        gameIcon("damage", { size: 24, decorative: true }),
+        element("span", "", `Threat ${threat}`),
+        element("span", "raid-alert__info", "?"),
+      );
+      pill.title = THREAT_HINT;
+      pill.setAttribute("aria-label", `Threat ${threat}: what is this?`);
+      const hint = element("p", "raid-alert__hint", THREAT_HINT);
+      hint.hidden = true;
+      hint.id = `raid-threat-hint-${raid.id}`;
+      hint.setAttribute("role", "note");
+      pill.setAttribute("aria-expanded", "false");
+      pill.setAttribute("aria-controls", hint.id);
+      pill.addEventListener("click", () => {
+        hint.hidden = !hint.hidden;
+        pill.setAttribute("aria-expanded", String(!hint.hidden));
+      });
+      stats.append(pill, hint);
+    }
+    if ((raid.sides ?? 1) > 1) {
+      const sides = element("span", "raid-alert__pill raid-alert__sides");
+      sides.append(gameIcon("swords", { size: 24, decorative: true }), element("span", "", `${raid.sides} sides`));
+      sides.title = `They come in from ${raid.sides} sides.`;
+      stats.append(sides);
+    }
+    const eta = element("span", "raid-alert__pill raid-alert__eta");
+    eta.title = "They arrive when this runs out.";
+    eta.append(gameIcon("time", { size: 24, label: "Arrives in" }));
+    this.eta = element("span", "raid-alert__eta-time");
+    this.eta.setAttribute("role", "timer");
+    eta.append(this.eta);
+    stats.append(eta);
 
     const list = element("ul", "raid-alert__monsters");
     list.setAttribute("aria-label", "Monsters in the attack");
-    for (const monster of alertMonsters(raid.monsters)) {
+    if (raid.champion) {
+      list.classList.add("raid-alert__monsters--champion");
+      const { t, l } = raid.champion;
+      const item = element("li", "raid-alert__monster raid-alert__champion");
+      item.append(
+        element("span", "raid-alert__tag", "Champion"),
+        championArt(t, l),
+        element("span", "raid-alert__name", championName(t)),
+        element("span", "raid-alert__count raid-alert__level", `Lv ${l}`),
+      );
+      item.title = `The tribe's champion ${championName(t)}, level ${l}, leads the raid.`;
+      list.append(item);
+    }
+    const shown = alertMonsters(raid.monsters);
+    for (const monster of shown) {
       const item = element("li", "raid-alert__monster");
       const picture = element("img", "raid-alert__portrait");
       picture.alt = "";
@@ -133,6 +253,9 @@ export class RaidAlert {
       item.append(picture, element("span", "raid-alert__name", monster.name), element("span", "raid-alert__count", `×${monster.count}`));
       list.append(item);
     }
+    // The types the cards leave out, so the cards add up to the headline (neon r1).
+    const more = raiderCount(raid.monsters) - shown.reduce((sum, monster) => sum + monster.count, 0);
+    const moreLine = more > 0 ? element("p", "raid-alert__more", `+${more} more`) : null;
 
     const buttons = element("div", "raid-alert__actions");
     this.prepare = button("Prepare defences", "btn btn--ghost raid-alert__prepare", actions.onPrepare);
@@ -141,7 +264,7 @@ export class RaidAlert {
     this.engage.title = "Bring the attack on now.";
     buttons.append(this.prepare, this.engage);
 
-    this.popup.setContent(head, list, buttons);
+    this.popup.setContent(head, stats, list, ...(moreLine ? [moreLine] : []), buttons);
   }
 
   mount(host: HTMLElement): this {
@@ -150,7 +273,7 @@ export class RaidAlert {
   }
 
   update(secondsLeft: number, busy: RaidBusy): void {
-    this.eta.textContent = `ETA: ${raidCountdownText(secondsLeft)}`;
+    this.eta.textContent = raidCountdownText(secondsLeft);
     this.engage.disabled = busy !== null;
     this.prepare.disabled = busy !== null;
     this.engage.textContent = busy === "engage" ? "Engaging…" : "Engage now";
@@ -215,7 +338,11 @@ export class RaidLock {
     const actions = element("div", "yard-attack-lock__actions");
     actions.append(button("Open the map", "btn btn--ghost", onMap));
     banner.append(
-      element("h2", "yard-attack-lock__title", `The ${raidTribe(tribe).name} Tribe is raiding your yard!`),
+      element(
+        "h2",
+        "yard-attack-lock__title",
+        tribe === "wave" ? "An invasion wave is attacking your yard!" : `The ${raidTribe(tribe).name} Tribe is raiding your yard!`,
+      ),
       element("p", "", "Your yard opens again when the raid is over."),
       actions,
     );
@@ -437,11 +564,16 @@ export const raidAftermathView = (
   host: HTMLElement,
   repair: () => RaidRepairOffer | null,
   notice: (message: string) => void,
+  /** A wave event's "Next wave" / "Retry" from its result (`plugins/waves.ts`); absent, none offered. */
+  nextWave?: () => void,
+  /** A totem won into storage: Build opens on it ("Place now"). */
+  placeTotem?: (type: number) => void,
 ): RaidAftermathView => ({
   result: (result) =>
     new Promise<void>((resolve) => {
       raidResultPopup(result, repair(), resolve).mount(host);
     }),
+  wave: (result) => showWaveResult(host, result, { onNext: nextWave ?? null, onPlaceTotem: placeTotem ?? null }),
   frequency: (tribe, defended) =>
     new Promise<RaidPreference | null>((resolve) => {
       raidFrequencyPopup(tribe, defended, resolve).mount(host);

@@ -1589,7 +1589,7 @@ export const MONSTER_PROPS: Readonly<Record<string, MonsterCombatStat>> = {
   C8: {
     props: {
       speed: [1.1, 1.2, 1.3, 1.4, 1.5, 1.6],
-      health: [400],
+      health: [400, 440, 480, 520, 560, 600],
       damage: [600, 600, 620, 660, 720, 800],
       targetGroup: [1],
       bucket: [30],
@@ -1609,7 +1609,7 @@ export const MONSTER_PROPS: Readonly<Record<string, MonsterCombatStat>> = {
   C10: {
     props: {
       speed: [1, 1, 1, 1.2, 1.4, 1.5],
-      health: [4000, 4000, 4300, 4400, 4600, 4800],
+      health: [4800, 4800, 5160, 5280, 5520, 5760],
       damage: [100, 120, 130, 140, 150, 170],
       targetGroup: [4],
       bucket: [40],
@@ -1619,7 +1619,7 @@ export const MONSTER_PROPS: Readonly<Record<string, MonsterCombatStat>> = {
   C11: {
     props: {
       speed: [0.9, 0.9, 1, 1.2, 1.2, 1.3],
-      health: [800, 900, 950, 1000, 1100, 1200],
+      health: [1120, 1260, 1330, 1400, 1540, 1680],
       damage: [1200, 1400, 1600, 1800, 2000, 2200],
       targetGroup: [4],
       bucket: [70],
@@ -1641,11 +1641,11 @@ export const MONSTER_PROPS: Readonly<Record<string, MonsterCombatStat>> = {
     pathing: "direct",
     props: {
       speed: [3, 4],
-      health: [600, 800, 1100, 1300, 1500, 1700],
+      health: [750, 1000, 1375, 1625, 1875, 2125],
       damage: [300, 400, 550, 600, 650, 700],
       targetGroup: [1],
-      bucket: [70],
-      cStorage: [70],
+      bucket: [40],
+      cStorage: [40],
     },
   },
   C14: {
@@ -1666,7 +1666,7 @@ export const MONSTER_PROPS: Readonly<Record<string, MonsterCombatStat>> = {
     movement: "fly",
     pathing: "direct",
     props: {
-      speed: [0.75, 0.8, 0.85, 0.9, 0.95],
+      speed: [0.95, 1, 1.05, 1.1, 1.2],
       health: [8000],
       damage: [-400, -550, -700, -850, -1000],
       range: [150],

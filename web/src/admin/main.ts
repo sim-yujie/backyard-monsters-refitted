@@ -45,6 +45,7 @@ import {
 import { QueueView } from "./queue";
 import { ShinyView } from "./shiny";
 import { MonsterMadnessView } from "./monsterMadness";
+import { WaveEventsView } from "./waveEvents";
 import { MaintenanceView } from "./maintenance";
 import { MonstersView } from "./monsters";
 import { WeekendView } from "./weekend";
@@ -242,6 +243,7 @@ class Dashboard {
   private readonly weekend = new WeekendView({ say: (message) => this.say(message) });
   /** Monster Madness (owner-started only), above the weekend events. */
   private readonly monsterMadness = new MonsterMadnessView({ say: (message) => this.say(message) });
+  private readonly waveEvents = new WaveEventsView({ say: (message) => this.say(message) });
   /** The maintenance switch (owner, 22 Nov 2026), at the top of Server health. */
   private readonly maintenance = new MaintenanceView({ say: (message) => this.say(message) });
   /** Game activity's Monsters tab (owner, 23 Nov 2026), loaded the first time it is opened. */
@@ -409,7 +411,7 @@ class Dashboard {
     replace(this.sections.chat.body, this.chat.element);
     replace(this.sections.shiny.body, this.shiny.element);
     replace(this.sections.announcements.body, this.announcements.element);
-    replace(this.sections.events.body, this.monsterMadness.element, this.weekend.element);
+    replace(this.sections.events.body, this.waveEvents.element, this.monsterMadness.element, this.weekend.element);
     replace(this.sections.health.body, this.maintenance.element, this.errorsBox);
     replace(this.sections.monsters.body, this.monsters.element);
     // Since when monsters are counted, under the page's own line.
@@ -520,6 +522,7 @@ class Dashboard {
       this.photos.refresh(),
       this.weekend.refresh(),
       this.monsterMadness.refresh(),
+      this.waveEvents.refresh(),
       this.maintenance.refresh(),
     ]);
   }
@@ -610,6 +613,7 @@ class Dashboard {
       this.photos.refresh(),
       this.weekend.refresh(),
       this.monsterMadness.refresh(),
+      this.waveEvents.refresh(),
       this.maintenance.refresh(),
       this.monsters.reload(),
     ]);

@@ -6,6 +6,7 @@ import {
   createBattle,
   damagePercent,
   digestState,
+  raidSpawnsUntilOf,
   ticks,
   toCombatYard,
   type BuildingHealthMap,
@@ -52,12 +53,20 @@ export interface RaidFightInput {
   readonly defence?: DefenderForces | null;
   /**
    * The tick every spawn has happened by, for a fight spread over more than
-   * one instant (`BattleOptions.raidSpawnsUntil`); absent for an ordinary
-   * raid, whose waves all land at `t: 0`. The Trojan Horse passes
+   * one instant (`BattleOptions.raidSpawnsUntil`); absent, the log's own
+   * last wave's tick (`raidSpawnsUntilOf`, 0 when every wave lands at
+   * `t: 0`). The Trojan Horse passes
    * `TROJAN_LAST_SPAWN_TICK` (`docs/design/trojan-horse.md` §5,
    * `trojanArmy.ts`).
    */
   readonly raidSpawnsUntil?: number;
+  /**
+   * The tick the fight is cut off at, for a wave event's surrender (beta 10,
+   * owner's pick A, 27 Nov 2026): waves due after it never land, and the
+   * outcome is the yard as it stood then; the raiders left go home. Absent,
+   * the fight runs to its end.
+   */
+  readonly stopAt?: number;
 }
 
 /** What the landing needs of the fight, kept with the open raid until finish. */
@@ -105,21 +114,26 @@ export const fightRaid = (input: RaidFightInput): RaidFightOutcome => {
     seed: input.log.seed,
     ...battleDefence(input.defence),
     raid: true,
-    ...(input.raidSpawnsUntil !== undefined ? { raidSpawnsUntil: input.raidSpawnsUntil } : {}),
+    // Every wave must land before the raid can end: the log's last wave's
+    // tick unless the caller says (beta 10's timed drops; the replay and the
+    // client read the same, `raidSpawnsUntilOf`).
+    raidSpawnsUntil: input.raidSpawnsUntil ?? raidSpawnsUntilOf(input.log.events),
   });
   // A raid's waves all land at once (`raidPlan.ts`); kept in log order, as the replay's sort keeps ties.
   const events = input.log.events
     .map((event, at) => ({ event, at }))
     .sort((one, other) => (one.event.t === other.event.t ? one.at - other.at : one.event.t - other.event.t))
     .map(({ event }) => event);
+  const stopAt = input.stopAt === undefined ? null : Math.max(0, Math.floor(input.stopAt));
   let last = 0;
   for (const event of events) {
     const at = Math.max(0, Math.floor(event.t));
+    if (stopAt !== null && at > stopAt) break;
     battle.runTo(at);
     battle.apply(event);
     last = Math.max(last, at);
   }
-  battle.runTo(last + ticks(RAID_MAX_SECONDS));
+  battle.runTo(stopAt ?? last + ticks(RAID_MAX_SECONDS));
 
   const state = battle.state();
   const fired = new Set(state.firedTraps);

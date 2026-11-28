@@ -1,3 +1,4 @@
+import type { WaveResult } from "./waves";
 import type { RaidEvent, Roster } from "@/game/combat/rules";
 import { ApiError, postJson } from "./http";
 import type { ApiEnvelope, BuildingDataMap, BuildingHealthData, Resources } from "./types";
@@ -37,6 +38,12 @@ export interface RaidView {
   readonly startedAt?: number;
   /** The earliest finish the server takes. */
   readonly finishFrom?: number;
+  /** The raid's threat (beta 10); absent for the Trojan Horse, Moloch and older raids. */
+  readonly threat?: number;
+  /** How many sides it lands from (beta 10); absent 1. */
+  readonly sides?: number;
+  /** The wild champion it brings (beta 10): its type (1-4) and level. */
+  readonly champion?: { readonly t: number; readonly l: number };
 }
 
 /** What `/raid/start` hands over: the fight the server fought, to play again here. */
@@ -74,6 +81,11 @@ export interface RaidResult {
   readonly damaged: readonly number[];
   /** Housed monsters lost with fallen Housings. */
   readonly housedLost: number;
+  /** A wave event's wave (beta 10): its own result. */
+  readonly wave?: WaveResult;
+  /** The threat this raid came at and the next raid's (beta 10); wild raids only. */
+  readonly threat?: number;
+  readonly nextThreat?: number;
 }
 
 /** The frequency popup's three answers. */
@@ -176,5 +188,23 @@ export const parseRaidView = (raw: unknown): RaidView | null => {
     warned: warned === 1 ? 1 : 0,
     ...(typeof value["startedAt"] === "number" ? { startedAt: value["startedAt"] } : {}),
     ...(typeof value["finishFrom"] === "number" ? { finishFrom: value["finishFrom"] } : {}),
+    ...wholeField(value, "threat", 0),
+    ...wholeField(value, "sides", 2),
+    ...parseChampion(value["champion"]),
   };
+};
+
+/** `{ [key]: n }` for a whole number at least `least`, else nothing. */
+const wholeField = <K extends string>(value: Record<string, unknown>, key: K, least: number): Partial<Record<K, number>> => {
+  const n = value[key];
+  return typeof n === "number" && Number.isInteger(n) && n >= least ? ({ [key]: n } as Record<K, number>) : {};
+};
+
+/** A raid's wild champion, checked: type 1-5 and level 1-6. */
+const parseChampion = (raw: unknown): { champion?: { t: number; l: number } } => {
+  if (typeof raw !== "object" || raw === null) return {};
+  const { t, l } = raw as { t?: unknown; l?: unknown };
+  if (typeof t !== "number" || !Number.isInteger(t) || t < 1 || t > 5) return {};
+  if (typeof l !== "number" || !Number.isInteger(l) || l < 1 || l > 6) return {};
+  return { champion: { t, l } };
 };
