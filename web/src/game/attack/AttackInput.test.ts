@@ -297,6 +297,39 @@ describe("overlap rule", () => {
     expect((edge.x / ring.rx) ** 2 + (edge.y / ring.ry) ** 2).toBeCloseTo(1, 6);
   });
 
+  it("lets a damage bomb land exactly where its ring reaches a building", () => {
+    // A sizeless Laser Tower alone: the drop is allowed just inside the ring,
+    // across and up, and refused just outside, as the engine's hit test reads
+    // it, so the ring is never green over nothing nor red over a hit.
+    const load = fixtureLoad();
+    const laser = { id: 1, t: 23, l: 1, X: 0, Y: 0 };
+    const obstacles = obstaclesOf(readYard({ ...load, buildingdata: { "1": laser } } as BaseLoadResponse));
+    const middle = obstacles[0]!.middle;
+    for (const bomb of BOMBS.filter((one) => one.damage > 0)) {
+      const zone = dropZoneOf({ kind: "bomb", bomb }, 100);
+      const ring = zone.ring;
+      const probes: Array<[number, number, boolean]> = [
+        [2 * Math.floor((ring.rx - 1) / 2), 0, true],
+        [2 * Math.ceil((ring.rx + 1) / 2), 0, false],
+        [0, Math.floor(ring.ry - 1), true],
+        [0, Math.ceil(ring.ry + 1), false],
+      ];
+      for (const [dx, dy, legal] of probes) {
+        // The building's middle sits (dx, dy) from the drop on screen: x = sy + sx / 2.
+        const sx = -dx;
+        const sy = middle - dy;
+        const point = { x: sy + sx / 2, y: sy - sx / 2 };
+        expect({ bomb: bomb.id, dx, dy, legal: judgeDrop(zone, point, obstacles, []).legal }).toEqual({
+          bomb: bomb.id,
+          dx,
+          dy,
+          legal,
+        });
+        expect(bombReaches(bomb, dx, dy, 0)).toBe(legal);
+      }
+    }
+  });
+
   it("gives the fling, putty and damage bomb rings one shape: a ground circle, 2:1 on screen", () => {
     const rings = [
       dropZoneOf({ kind: "fling" }, 100).ring,

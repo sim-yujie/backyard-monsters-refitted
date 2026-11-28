@@ -1,6 +1,7 @@
 import type { Camera } from "@/game/Camera";
 import {
   BOMBS,
+  blastTouching,
   bombBlast,
   buildingClass,
   cellOf,
@@ -347,7 +348,8 @@ export const judgeDrop = (
         : { legal: false, reason: "Too close to a building. Drop on open ground.", touching };
     }
     case "buildings": {
-      const touching = overlappingBuildings(point, zone.size, obstacles);
+      // A damage bomb: allowed where its blast, the ring, reaches a building.
+      const touching = blastTouching(point, zone.ring, obstacles);
       return touching.length > 0
         ? { legal: true, reason: "", touching }
         : { legal: false, reason: "A bomb has to land on a building.", touching };
