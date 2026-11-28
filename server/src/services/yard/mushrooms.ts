@@ -87,6 +87,15 @@ export const MUSHROOM_CLEARANCE = 10;
  */
 export const NUDGE_ATTEMPTS = 200;
 
+/**
+ * Yard units a present keeps from the plot's edge while Christmas's present
+ * hunt is on (neon, 28 Nov 2026: a present on the edge line reads as one of
+ * the props round the plot, and sits under the zoom bar): about three of the
+ * planner's 20-unit squares. A plot with no such spot left still grows on
+ * any free one. Other finds (mushrooms, pumpkins, turkeys) keep the whole plot.
+ */
+export const PRESENT_EDGE_INSET = 60;
+
 /** Shiny a golden mushroom gives: `MUSHROOM1` 3, `MUSHROOM2` 8 (`game-data/store/purchaseKeys.ts`). */
 export const GOLDEN_SMALL = 3;
 export const GOLDEN_BIG = 8;
@@ -222,17 +231,19 @@ const freeSpot = (
   obstacles: Obstacles,
   expansion: number,
   random: Random,
-  { attempts = SPAWN_ATTEMPTS, loose = true }: { attempts?: number; loose?: boolean } = {}
+  { attempts = SPAWN_ATTEMPTS, loose = true, inset = 0 }: { attempts?: number; loose?: boolean; inset?: number } = {}
 ): [number, number] | null => {
   const [width, height] = yardSize(expansion);
   const { w, h } = rectOf(MUSHROOM_TYPE, 0, 0);
-  const spanX = width - w;
-  const spanY = height - h;
+  // Kept off the edge by `inset` on every side, when the plot is big enough for it.
+  const edge = Math.max(0, Math.min(inset, (width - w) / 2, (height - h) / 2));
+  const spanX = width - w - 2 * edge;
+  const spanY = height - h - 2 * edge;
   let fallback: [number, number] | null = null;
 
   for (let attempt = 0; attempt < attempts; attempt++) {
-    const x = Math.floor(-width / 2 + random() * spanX);
-    const y = Math.floor(-height / 2 + random() * spanY);
+    const x = Math.floor(-width / 2 + edge + random() * spanX);
+    const y = Math.floor(-height / 2 + edge + random() * spanY);
     const rect = rectOf(MUSHROOM_TYPE, x, y);
     if (obstacles.mushrooms.some((other) => overlaps(rect, other))) continue;
     if (clearOf(rect, obstacles.buildings)) return [x, y];
@@ -240,7 +251,15 @@ const freeSpot = (
       fallback = [x, y];
     }
   }
+  if (!fallback && edge > 0 && loose) return freeSpot(obstacles, expansion, random, { attempts, loose });
   return fallback;
+};
+
+/** Whether a mushroom's footprint comes within `inset` of the plot's edge. */
+const nearEdge = (rect: FootprintRect, expansion: number, inset: number): boolean => {
+  if (inset <= 0) return false;
+  const [width, height] = yardSize(expansion);
+  return rect.x < -width / 2 + inset || rect.y < -height / 2 + inset || rect.x + rect.w > width / 2 - inset || rect.y + rect.h > height / 2 - inset;
 };
 
 /**
@@ -253,7 +272,8 @@ export const spawnMushrooms = (
   save: MushroomYardSave,
   existing: readonly MushroomEntry[],
   count: number,
-  random: Random
+  random: Random,
+  inset = 0
 ): MushroomEntry[] => {
   const list = [...existing];
   const obstacles: Obstacles = {
@@ -263,7 +283,7 @@ export const spawnMushrooms = (
   const expansion = currentExpansion(save.storedata);
 
   for (let i = 0; i < count; i++) {
-    const spot = freeSpot(obstacles, expansion, random);
+    const spot = freeSpot(obstacles, expansion, random, { inset });
     if (!spot) break;
     const entry: MushroomEntry = [Math.floor(random() * 5) + 1, spot[0], spot[1]];
     list.push(entry);
@@ -294,22 +314,28 @@ export const spawnMushrooms = (
  *
  * @param save - The yard, mutated in place: `mushrooms` may change.
  * @param random - The spot source.
+ * @param inset - With the present hunt on, {@link PRESENT_EDGE_INSET}: a find
+ *   nearer the plot's edge than this moves in too, but only to a clear spot.
  * @returns How many mushrooms moved or, covered with no room, were removed.
  */
 export const moveMushroomsOffBuildings = (
   save: MushroomYardSave,
-  random: Random = Math.random
+  random: Random = Math.random,
+  inset = 0
 ): number => {
   const { l, s } = readMushrooms(save.mushrooms);
   if (l.length === 0) return 0;
 
   const buildings = buildingRects(save.buildingdata);
+  const expansion = currentExpansion(save.storedata);
   const rects = l.map(mushroomRect);
   const covered = rects.map((rect) => buildings.some((building) => overlaps(rect, building)));
-  const crowded = rects.map((rect, index) => !covered[index] && !clearOf(rect, buildings));
+  // Too close to a building, or (with `inset`, the present hunt) to the plot's edge.
+  const crowded = rects.map(
+    (rect, index) => !covered[index] && (!clearOf(rect, buildings) || nearEdge(rect, expansion, inset))
+  );
   if (!covered.includes(true) && !crowded.includes(true)) return 0;
 
-  const expansion = currentExpansion(save.storedata);
   // A crowded mushroom that cannot move keeps its ground, so it stays an
   // obstacle until it has found somewhere else.
   const obstacles: Obstacles = {
@@ -329,6 +355,7 @@ export const moveMushroomsOffBuildings = (
       const spot = freeSpot({ buildings, mushrooms: others }, expansion, random, {
         attempts: NUDGE_ATTEMPTS,
         loose: false,
+        inset,
       });
       if (!spot) {
         list.push(entry);
@@ -341,7 +368,7 @@ export const moveMushroomsOffBuildings = (
       return;
     }
     changed++;
-    const spot = freeSpot(obstacles, expansion, random);
+    const spot = freeSpot(obstacles, expansion, random, { inset });
     if (!spot) return;
     const moved: MushroomEntry = [entry[0], spot[0], spot[1]];
     list.push(moved);
