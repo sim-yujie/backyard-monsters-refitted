@@ -25,8 +25,8 @@ import "@/ui/styles/repeat-bar.css";
  * battlefield: the army the attack sends (its plan, as the confirm sheet
  * showed it) marches as a tidy block along the road to the camp's tribe,
  * then fights at its gate. Over it, the army's size on the left and the
- * camp on the right; under it, a slim rail with the cue (chevrons on the
- * march, swords in the fight, the hourglass in line).
+ * camp on the right; under it, a slim rail with the phase ("Marching" with
+ * chevrons, "Fighting" with swords).
  *
  * `--repeat-progress` (0 to 1), `--march` (0 to 1, the travelling part, up
  * to {@link FIGHT_AT}) and the classes `repeat-bar--fighting`, `--waiting`,
@@ -211,12 +211,24 @@ const waitOf = (): HTMLElement => {
   return badge;
 };
 
-/** The cue at the rail's end: chevrons on the march, swords in the fight, the hourglass in line. */
+/**
+ * The cue at the rail's end: chevrons and "Marching" on the march, swords and
+ * "Fighting" in the fight (a word too, so the phase reads without motion or
+ * colour, neon round 2). Nothing in line: the badge over the field says it.
+ */
 const cueOf = (): HTMLElement => {
   const cue = part("repeat-bar__cue");
+  const march = part("repeat-bar__phase repeat-bar__phase--march", "span");
   const chevrons = part("repeat-bar__chevrons");
   for (let i = 0; i < 3; i++) chevrons.append(part("repeat-bar__chevron", "span"));
-  cue.append(chevrons, gameIcon("swords", { size: 24, decorative: true, className: "repeat-bar__cue-swords" }), picture("repeat-bar__cue-glass", QUEUE_ICON));
+  const marching = part("", "span");
+  marching.textContent = "Marching";
+  march.append(chevrons, marching);
+  const fight = part("repeat-bar__phase repeat-bar__phase--fight", "span");
+  const fighting = part("", "span");
+  fighting.textContent = "Fighting";
+  fight.append(gameIcon("swords", { size: 24, decorative: true, className: "repeat-bar__cue-swords" }), fighting);
+  cue.append(march, fight);
   return cue;
 };
 

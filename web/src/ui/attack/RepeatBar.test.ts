@@ -390,6 +390,9 @@ describe("the marching army", () => {
     fight.update();
     expect(fight.element.style.getPropertyValue("--march")).toBe("1.0000");
     expect(fight.element.classList.contains("repeat-bar--fighting")).toBe(true);
+    // The phase in words too, so it reads without motion or colour (neon round 2).
+    expect(bar.element.querySelector(".repeat-bar__phase--march")?.textContent).toBe("Marching");
+    expect(bar.element.querySelector(".repeat-bar__phase--fight")?.textContent).toBe("Fighting");
   });
 
   it("the place in the battle line on the scene's badge", () => {

@@ -29,7 +29,7 @@
   --rb-fill-a: #ffc83a;
   --rb-fill-b: #e8820c;
   --rb-fight-b: #c4301a;
-  --rb-trough: rgb(90 55 20 / 28%);
+  --rb-trough: rgb(74 48 22 / 24%);
   --rb-chip: rgb(52 30 10 / 82%);
 }
 
@@ -137,8 +137,9 @@
 
   position: absolute;
   bottom: 18px;
-  /* From the left edge to just short of the camp: never past it, never backwards. */
-  left: calc(10px + var(--march) * max(0px, 100% - var(--block-w) - var(--goal-w) - 40px));
+  /* From the left edge to 48 px short of the camp, room for the clash
+     between them (neon round 2): never past it, never backwards. */
+  left: calc(10px + var(--march) * max(0px, 100% - var(--block-w) - var(--goal-w) - 58px));
   z-index: 1;
   display: grid;
   grid-template-columns: repeat(var(--cols), var(--cell));
@@ -149,7 +150,7 @@
 .repeat-bar__block--two {
   --cell: 34px;
   --gap-x: 5px;
-  --gap-y: 8px;
+  --gap-y: 10px;
 
   bottom: 12px;
 }
@@ -198,7 +199,7 @@
 .repeat-bar__count {
   position: absolute;
   left: 50%;
-  bottom: -6px;
+  bottom: -4px;
   z-index: 1;
   min-width: 16px;
   padding: 0 4px;
@@ -284,7 +285,7 @@
 .repeat-bar__clash {
   position: absolute;
   top: 50%;
-  right: calc(var(--goal-w) - 3px);
+  right: calc(var(--goal-w) + 6px);
   z-index: 2;
   display: grid;
   place-items: center;
@@ -341,22 +342,23 @@
   animation: none;
 }
 
-/* ── In the server's battle line: the army halts under a shade, and a badge
-   in the middle of the field shows the place (a "paused" overlay, so it may
-   cover the halted army) ───────────────────────────────────────────────── */
+/* ── In the server's battle line: the field goes dark, the army waits at the
+   start with the rail empty (nothing is spent yet), and the words sit on the
+   shade itself, no card of their own (neon round 2) ─────────────────────── */
 
 .repeat-bar__stage::after {
   content: "";
   position: absolute;
   inset: 0;
   z-index: 2;
-  background: rgb(6 10 16 / 42%);
+  background: rgb(14 20 28 / 76%);
   opacity: 0;
   pointer-events: none;
+  transition: opacity 250ms ease-out;
 }
 
 :root[data-skin="flash"] .repeat-bar__stage::after {
-  background: rgb(60 36 12 / 30%);
+  background: rgb(42 26 12 / 80%);
 }
 
 .repeat-bar--waiting .repeat-bar__stage::after {
@@ -365,21 +367,17 @@
 
 .repeat-bar__wait {
   position: absolute;
-  top: 50%;
-  left: 50%;
+  inset: 0;
   z-index: 3;
   display: none;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  max-width: calc(100% - 16px);
-  box-sizing: border-box;
-  padding: 6px 14px 6px 10px;
-  transform: translate(-50%, -50%);
-  border-radius: var(--radius-pill);
-  background: rgb(10 16 24 / 88%);
-  color: #ffffff;
-  white-space: nowrap;
-  box-shadow: 0 2px 8px rgb(0 0 0 / 50%);
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 12px;
+  text-align: center;
+  color: #fff8eb;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 80%);
 }
 
 .repeat-bar--waiting .repeat-bar__wait {
@@ -391,6 +389,7 @@
   width: 26px;
   height: 26px;
   object-fit: contain;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 60%));
   animation: repeat-bar-breathe 1.6s ease-in-out infinite;
 }
 
@@ -398,25 +397,45 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
-  line-height: 1.2;
+  line-height: 1.25;
 }
 
 .repeat-bar__wait-place {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
 
 .repeat-bar__wait-note {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
-  opacity: 0.9;
+  opacity: 0.92;
+}
+
+/* The army back at the start and the rail empty while it waits; it glides
+   on from where it was when the turn comes. */
+.repeat-bar__block,
+.repeat-bar__fill,
+.repeat-bar__road::after {
+  transition:
+    left 300ms ease-out,
+    width 300ms ease-out;
 }
 
 .repeat-bar--waiting .repeat-bar__block {
+  left: 10px;
   filter: saturate(0.6);
+}
+
+.repeat-bar--waiting .repeat-bar__fill,
+.repeat-bar--waiting .repeat-bar__road::after {
+  width: 0;
+}
+
+.repeat-bar--waiting .repeat-bar__rail {
+  background-image: linear-gradient(90deg, transparent 0%, rgb(255 200 110 / 22%) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: repeat-bar-shimmer 2.2s ease-in-out infinite;
 }
 
 .repeat-bar--stopped .repeat-bar__stage {
@@ -467,44 +486,54 @@
   box-shadow: none;
 }
 
-/* The cue: chevrons on the march, the swords once fighting, the hourglass in line. */
+/* The phase at the rail's end: chevrons and "Marching", then swords and
+   "Fighting"; nothing in line (the words over the field say it). */
 .repeat-bar__cue {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  justify-content: center;
-  min-width: 28px;
+  justify-content: flex-end;
+  min-width: 96px;
   height: 28px;
+  font-size: 13px;
+  font-weight: 800;
 }
 
-.repeat-bar__cue .game-icon,
-.repeat-bar__cue-glass {
-  width: 24px;
-  height: 24px;
-  object-fit: contain;
-  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 55%));
+.repeat-bar__phase {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
-.repeat-bar__cue-glass,
-.repeat-bar__cue-swords,
-.repeat-bar--waiting .repeat-bar__chevrons,
-.repeat-bar--fighting .repeat-bar__chevrons,
-.repeat-bar--full .repeat-bar__chevrons {
+.repeat-bar__phase--fight,
+.repeat-bar--fighting .repeat-bar__phase--march,
+.repeat-bar--full .repeat-bar__phase--march,
+.repeat-bar--waiting .repeat-bar__phase {
   display: none;
 }
 
-.repeat-bar--fighting:not(.repeat-bar--waiting) .repeat-bar__cue-swords,
-.repeat-bar--full .repeat-bar__cue-swords {
-  display: block;
+.repeat-bar--fighting:not(.repeat-bar--waiting) .repeat-bar__phase--fight,
+.repeat-bar--full .repeat-bar__phase--fight {
+  display: inline-flex;
+}
+
+.repeat-bar__cue .game-icon {
+  width: 22px;
+  height: 22px;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 55%));
 }
 
 .repeat-bar--fighting .repeat-bar__cue-swords {
   animation: repeat-bar-clash 420ms ease-in-out infinite;
 }
 
-.repeat-bar--waiting .repeat-bar__cue-glass {
+.repeat-bar__chevrons {
+  display: none;
+}
+
+.repeat-bar--fighting:not(.repeat-bar--waiting) .repeat-bar__cue-swords,
+.repeat-bar--full .repeat-bar__cue-swords {
   display: block;
-  animation: repeat-bar-breathe 1.6s ease-in-out infinite;
 }
 
 .repeat-bar__chevrons {
@@ -567,6 +596,17 @@
   background: radial-gradient(circle at 50% 40%, #fffaf0, rgb(255 244 222 / 92%) 60%, #e9d3a8);
 }
 
+:root[data-skin="flash"] .repeat-bar__unit--champion .repeat-bar__unit-pic {
+  border-color: #b56500;
+  box-shadow:
+    0 0 0 2px rgb(255 206 68 / 75%),
+    0 2px 4px rgb(58 38 20 / 35%);
+}
+
+:root[data-skin="flash"] .repeat-bar__rail {
+  box-shadow: inset 0 1px 2px rgb(42 26 12 / 35%);
+}
+
 :root[data-skin="flash"] .repeat-bar__more {
   border-color: #8a6a43;
   background: rgb(255 244 222 / 92%);
@@ -588,7 +628,7 @@
   .repeat-bar__block--two {
     --cell: 27px;
     --gap-x: 3px;
-    --gap-y: 7px;
+    --gap-y: 9px;
 
     bottom: 10px;
   }
@@ -691,6 +731,16 @@
   }
 }
 
+@keyframes repeat-bar-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+
+  100% {
+    background-position: -100% 0;
+  }
+}
+
 @keyframes repeat-bar-breathe {
   0%,
   100% {
@@ -711,7 +761,7 @@
 }
 
 .repeat-bar--waiting .repeat-bar__wait-icon,
-.repeat-bar--waiting .repeat-bar__cue-glass {
+.repeat-bar--waiting .repeat-bar__rail {
   animation-play-state: running;
 }
 
