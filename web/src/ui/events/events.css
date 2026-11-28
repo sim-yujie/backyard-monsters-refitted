@@ -727,6 +727,330 @@
   color: var(--colour-success);
 }
 
+/* ── A prize track (Christmas's presents; owner 28 Nov 2026, neon direction A) ──
+   One bar with the goals evenly spaced along it, each goal's main prize over
+   it and its number under it, then one dock for the chosen goal: its need,
+   all its prizes, and Claim (or how many are left). As the Wild Monster
+   Invasion card's totem track and Start row. */
+
+.events-ladder--track {
+  gap: var(--space-1);
+}
+
+.events-track {
+  position: relative;
+  height: 64px;
+  /* The last goal stands at the bar's end: room for its 48 px button. */
+  margin: 2px 26px 0 14px;
+}
+
+.events-track__bar {
+  position: absolute;
+  top: 37px;
+  left: 0;
+  right: 0;
+  height: 10px;
+  border-radius: var(--radius-pill, 999px);
+  background: rgb(0 0 0 / 35%);
+  box-shadow: inset 0 1px 3px rgb(0 0 0 / 50%);
+}
+
+.events-track__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #f0a13a, #ffd34d);
+}
+
+.events-track__fill:not([style*="width: 0%"]) {
+  min-width: 10px;
+}
+
+/* Each goal a 48 x 64 button centred on its place: the prize (34 px), the pip on the bar, the number. */
+.events-track__node {
+  position: absolute;
+  top: 0;
+  display: block;
+  width: 48px;
+  height: 64px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transform: translateX(-50%);
+}
+
+.events-track__node:focus-visible {
+  outline: 2px solid #ffd34d;
+  outline-offset: 1px;
+}
+
+.events-track__prize {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  height: 34px;
+}
+
+/* Only the picture over the bar: the dock below says the amounts. */
+.events-track__prize .events-reward__figure {
+  display: none;
+}
+
+.events-track__prize .events-reward__image {
+  width: 30px;
+  height: 32px;
+}
+
+.events-track__prize .events-reward__image--tall {
+  height: 34px;
+}
+
+.events-track__node--locked .events-track__prize {
+  filter: grayscale(0.8) brightness(1.1);
+  opacity: 0.55;
+}
+
+/* Ready to claim: lit, with a warm gold halo that breathes. */
+.events-track__node--ready .events-track__prize {
+  filter: drop-shadow(0 0 4px rgb(255 205 70 / 95%)) drop-shadow(0 0 2px rgb(255 160 30 / 90%));
+  animation: events-track-ready 1.6s ease-in-out infinite;
+}
+
+@keyframes events-track-ready {
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .events-track__node--ready .events-track__prize {
+    animation: none;
+  }
+}
+
+.events-track__pip {
+  position: absolute;
+  top: 35px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+  margin-left: -7px;
+  border: 2px solid rgb(255 255 255 / 70%);
+  border-radius: 50%;
+  background: #4a5563;
+}
+
+.events-track__node--ready .events-track__pip {
+  border-color: #fff3c4;
+  background: #ff9f1c;
+}
+
+.events-track__node--claimed .events-track__pip {
+  width: 18px;
+  height: 18px;
+  top: 33px;
+  margin-left: -9px;
+  border-color: #fff;
+  background: var(--colour-success, #48c759);
+}
+
+.events-track__tick {
+  width: 12px;
+  height: 12px;
+}
+
+.events-track__need {
+  position: absolute;
+  top: 50px;
+  left: 0;
+  right: 0;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 14px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--colour-text-muted);
+}
+
+.events-track__node--ready .events-track__need,
+.events-track__node--claimed .events-track__need {
+  color: var(--colour-text);
+}
+
+/* The goal shown in the dock: its number in a gold pill, as the dock's own number. */
+.events-track__node--focus .events-track__need {
+  left: 6px;
+  right: 6px;
+  border-radius: 4px;
+  background: linear-gradient(#ffe27a, #d9a21c);
+  color: #2c1a04;
+}
+
+.events-track__dock {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 52px;
+  box-sizing: border-box;
+  padding: 4px 6px 4px 10px;
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.events-track__dock--ready {
+  border-color: #ffb347;
+}
+
+.events-track__goal {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 40px;
+}
+
+.events-track__goal-need {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: linear-gradient(#ffe27a, #d9a21c);
+  color: #2c1a04;
+  font-size: var(--text-sm);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.events-track__more {
+  color: #ffb347;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.events-track__chips {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* Prizes side by side: picture and number in one line, as the wave card's chips. */
+.events-track__chips > .events-reward {
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+.events-track__chips .events-reward__image {
+  width: 28px;
+  height: 30px;
+}
+
+.events-track__chips .events-reward__image--tall {
+  height: 36px;
+}
+
+/* A decoration is known by its picture (its name stays in the row's title and the button's label). */
+.events-track__chips .events-reward--decoration .events-reward__figure {
+  display: none;
+}
+
+.events-track__chips .events-reward__figure {
+  font-size: var(--text-sm);
+}
+
+.events-track__end {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-inline-start: auto;
+}
+
+.events-track__state {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--colour-text-muted);
+  white-space: nowrap;
+}
+
+.events-track__dock--claimed .events-track__state {
+  color: var(--colour-success);
+}
+
+.events-track__claim {
+  min-width: 96px;
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.events-track__refusal:empty {
+  display: none;
+}
+
+/* Classic: the bar sunk into the parchment, the numbers in the window's brown. */
+:root[data-skin="flash"] .events-track__bar {
+  background: rgb(74 45 20 / 25%);
+  box-shadow: inset 0 1px 2px rgb(60 30 5 / 45%);
+}
+
+:root[data-skin="flash"] .events-track__pip {
+  border-color: #fff3d6;
+  background: #8b6a45;
+}
+
+:root[data-skin="flash"] .events-track__node--ready .events-track__pip {
+  background: #ff9f1c;
+}
+
+:root[data-skin="flash"] .events-track__node--claimed .events-track__pip {
+  background: var(--colour-success, #3c9a2a);
+}
+
+:root[data-skin="flash"] .events-track__more {
+  color: #b45f06;
+}
+
+@media (max-width: 620px) {
+  .events-track {
+    margin-inline: 12px 24px;
+  }
+
+  .events-track__dock {
+    gap: var(--space-2);
+    padding-inline: 8px 4px;
+  }
+
+  .events-track__chips {
+    gap: var(--space-2);
+  }
+
+  .events-track__chips .events-reward__figure {
+    font-size: var(--text-xs);
+  }
+
+  .events-track__claim {
+    min-width: 76px;
+  }
+}
+
 /* ── The Krallen Hunt: the prize, the bar toward the goal, the claim ──── */
 
 .events-card--ended .events-card__countdown {
