@@ -73,84 +73,20 @@
   color: var(--colour-text-muted);
 }
 
-/* ── The working bar's sheet (Repeat attack, 15 Nov 2026) ─────────────────
- * Just the bar and one short line under it: no empty row for buttons, and
- * the body's gaps and the line's own margins taken in. Specific enough to
- * win over `.map-panel .panel__body` (maproom.css) and the window style's
- * padding (skin.css) whatever order the files load in. */
+/* ── The working sheet (Repeat attack, 15 Nov 2026; look A, the march
+ * scene, owner 28 Nov 2026) ───────────────────────────────────────────────
+ * Just the scene (repeat-bar.css) and no empty row for buttons; its words
+ * line is for a screen reader only. Specific enough to win over
+ * `.map-panel .panel__body` (maproom.css) and the window style's padding
+ * (skin.css) whatever order the files load in. */
 
 .map-panel.auto-attack--bar > .panel__body {
-  gap: var(--space-1);
-  padding-block: var(--space-2) var(--space-3);
+  gap: 0;
+  padding-block: var(--space-2);
 }
 
-.auto-attack__working {
-  /* Room for two rows always, so swapping to the place in line (patch 9.1)
-     and back never moves the sheet. */
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  row-gap: 4px;
-  min-height: 52px;
-  margin: 0;
-  text-align: center;
-}
-
-.auto-attack__line {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  min-height: 28px;
-  margin: 0;
-  font-size: var(--text-sm);
-}
-
-/* In the server's battle line: the painted hourglass, gently breathing so the
-   halted army never reads as a hang (neon round 1), and the place. */
-.auto-attack__line-icon {
-  width: auto;
-  height: 24px;
-  flex: 0 0 auto;
-  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 55%));
-  animation: auto-attack-hourglass 1.6s ease-in-out infinite;
-}
-
-.auto-attack__line-icon[hidden],
-.auto-attack__line-note[hidden] {
-  display: none;
-}
-
-@keyframes auto-attack-hourglass {
-  0%,
-  100% {
-    opacity: 0.75;
-    transform: scale(0.96);
-  }
-
-  50% {
-    opacity: 1;
-    transform: scale(1.04);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .auto-attack__line-icon {
-    animation: none;
-  }
-}
-
-.auto-attack__working--line .auto-attack__line {
-  font-size: var(--text-md);
-  font-weight: 700;
-  color: var(--colour-text);
-  font-variant-numeric: tabular-nums;
-}
-
-.auto-attack__line-note {
-  margin: 0;
-  font-size: var(--text-sm);
-  color: var(--colour-text-muted);
+.attack-end.auto-attack--bar {
+  width: min(92vw, 480px);
 }
 
 /* The working sheet blocks the map behind it: a darker scrim than a menu's. */
@@ -187,6 +123,19 @@
     max-height: 100%;
     border: 1px solid var(--colour-border);
     border-radius: var(--radius-lg);
+  }
+}
+
+/* iPad on its side and a small computer screen: every sheet of Repeat
+   attack (confirm, march, refusal, result) sits over the map left of the
+   camp's drawer (372 px and its 16 px margin, maproom.css), all in the same
+   place so none jumps sideways between them (neon, 28 Nov 2026: the
+   march's frame covered the drawer at 1024 x 768). From 1340 px a centred
+   sheet clears the drawer, bone corners included, and stays in the true
+   middle (centreWindow.ts). */
+@media (min-width: 900px) and (max-width: 1339px) and (min-height: 501px) {
+  .attack-end__backdrop.auto-attack__backdrop {
+    padding-right: calc(388px + var(--space-4));
   }
 }
 

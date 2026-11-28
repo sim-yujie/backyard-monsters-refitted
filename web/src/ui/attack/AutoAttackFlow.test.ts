@@ -624,9 +624,10 @@ describe("the Attacking bar (owner, 20 Nov 2026: a five-kind army showed four co
     button(modal, "Attack now")!.click();
     await settle();
     const kinds = Object.keys(BIG_PLAN.monsters).length;
-    expect(modal.querySelectorAll(".repeat-bar__marcher")).toHaveLength(kinds + BIG_PLAN.champions.length);
-    const counts = [...modal.querySelectorAll(".repeat-bar__count")].map((one) => one.textContent);
+    expect(modal.querySelectorAll(".repeat-bar__unit")).toHaveLength(kinds + BIG_PLAN.champions.length);
+    const counts = [...modal.querySelectorAll(".repeat-bar__unit:not(.repeat-bar__unit--champion) .repeat-bar__count")].map((one) => one.textContent);
     expect(counts).toHaveLength(kinds);
+    expect([...modal.querySelectorAll(".repeat-bar__unit--champion .repeat-bar__count")].map((one) => one.textContent)).toEqual(["Lv 6", "Lv 3"]);
     expect(counts).toContain("1.2K");
     flow.close();
   });

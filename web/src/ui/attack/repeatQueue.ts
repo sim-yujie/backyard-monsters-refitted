@@ -1,3 +1,4 @@
+import { artUrl } from "@/artUrl";
 import type { BarTimers } from "./repeatBarTiming";
 
 /**
@@ -49,3 +50,12 @@ export const watchQueuePlace = (
     stopped = true;
   };
 };
+
+/** The hourglass beside the place in the battle line: painted, as the game's icons are (patch 9.1). */
+export const QUEUE_ICON = artUrl("/assets/popups/hourglass.png");
+
+/** The words under the working bar: "Attacking…", or the place in line (neon round 1, 26 Nov 2026). */
+export const queueWords = (place: number | null): string => (place === null ? "Attacking…" : `Waiting in line · #${place}`);
+
+/** Under the place: that nothing is taken yet and the attack needs no tap. */
+export const QUEUE_NOTE = "Nothing spent yet · starts by itself";
