@@ -7,7 +7,9 @@ import {
   TESLA_TYPE,
   TOWER_STATS,
   towerRange,
+  towerRateScale,
   towerStats,
+  type CombatTargetKind,
 } from "@/game/combat/rules";
 import { outpostRange } from "@/game/maproom/rules/range";
 import { allowedAt, buildableTypesFor } from "@/game/yard/buildCatalogue";
@@ -189,6 +191,7 @@ const towerRows = (
   kind: YardKind,
   height: number,
   landPct = 0,
+  wild = false,
 ): InfoRow[] => {
   if (!TOWER_STATS[building.type] || buildingClass(building.type) !== "tower") return [];
   const level = shownLevel(building);
@@ -223,8 +226,15 @@ const towerRows = (
     return rows;
   }
   if (now.damage !== undefined && now.rate !== undefined) {
+    // A Spurtz Cannon on a player's main yard reloads slower than its table
+    // `rate` (beta 10, `MAIN_YARD_SPURTZ_RELOAD`); the card reads the same
+    // scale the engine fires by. A tribe camp reads as a main yard's props
+    // but is fought as a tribe yard, so it keeps Flash's rate.
+    const combat: CombatTargetKind = wild ? "tribe" : kind;
+    const scale = towerRateScale(building.type, combat);
+    const damagePerSecondHere = (damage: number, rate: number) => damagePerSecond(damage, rate * scale);
     const perSecond = (damage: number, rate: number) =>
-      text(`${damagePerSecond(damage, rate).toLocaleString("en-US")}/s`);
+      text(`${damagePerSecondHere(damage, rate).toLocaleString("en-US")}/s`);
     rows.push(
       row(
         "Damage",
@@ -233,9 +243,9 @@ const towerRows = (
           ? perSecond(next.damage, next.rate)
           : null,
         [
-          damagePerSecond(now.damage, now.rate),
+          damagePerSecondHere(now.damage, now.rate),
           next?.damage !== undefined && next.rate !== undefined
-            ? damagePerSecond(next.damage, next.rate)
+            ? damagePerSecondHere(next.damage, next.rate)
             : undefined,
         ],
       ),
@@ -448,12 +458,15 @@ const healthRow = (building: YardBuilding): InfoRow | null => {
  *
  * `height` is the outpost's map cell height (issue #262), 0 on the main
  * yard: the one thing a tower's Range row needs that nothing else here does.
+ * `wild` marks a tribe camp (`Yard.wild`), which reads the main props but is
+ * fought as a tribe yard, so its Spurtz Cannons keep Flash's reload.
  */
 export const buildingInfo = (
   building: YardBuilding,
   kind: YardKind = "main",
   height = 0,
   landPct = 0,
+  wild = false,
 ): BuildingInfo => {
   const rows: InfoRow[] = [];
   const health = healthRow(building);
@@ -470,7 +483,7 @@ export const buildingInfo = (
       rows.push(...hccRows(building, kind));
       break;
     default: {
-      rows.push(...towerRows(building, kind, height, landPct));
+      rows.push(...towerRows(building, kind, height, landPct, wild));
       if (TOWER_STATS[building.type]) {
         const room = capacityRow(building, "Holds monsters", kind);
         if (room) rows.push(room);
