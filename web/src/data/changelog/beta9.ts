@@ -11,13 +11,6 @@ import type { ChangelogRelease } from "./types";
  * and the sign-in screen. The Baiter card is a crop of the shot taken when
  * the friend tests were built (review desk b9-baitb-invite, 23 Nov, after
  * the last change to that window), whose test copy had friends to invite.
- *
- * Patch 9.1's two cards come first, in this release, not a release of their
- * own: a new release would pop the window up again for every player (the
- * patches before it added no cards). Shot in a test copy (yardtester given a
- * Frontier Pass started on 24 Nov with uses on days 1-4, only in that copy):
- * beta91-blast.webp (a Massive pebble bomb's ring over a level 35 camp) and
- * beta91-pass.webp.
  */
 export const BETA_9: ChangelogRelease = {
   version: "2.0.0-beta.9",
@@ -25,16 +18,6 @@ export const BETA_9: ChangelogRelease = {
   moreUrl: "https://www.patreon.com/TheMonsterLab/posts/beta-9-is-live-176417632",
   moreLabel: "Full details on Patreon",
   cards: [
-    {
-      image: "/whats-new/beta91-blast.webp",
-      title: "9.1: Catapult blast",
-      text: "Twig and pebble bombs now blast a circle on the ground, the same shape as the putty bomb's ring. Same area as before.",
-    },
-    {
-      image: "/whats-new/beta91-pass.webp",
-      title: "9.1: Frontier Pass days",
-      text: "A new pass starts at the next daily reset (00:00 UTC) and runs 10 reset days. Passes already running lose no time.",
-    },
     {
       image: "/whats-new/beta9-move.webp",
       title: "Move monsters on the map",
