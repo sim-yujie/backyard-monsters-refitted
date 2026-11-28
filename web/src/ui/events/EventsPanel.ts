@@ -882,7 +882,8 @@ export class EventsPanel {
       if (tier.claimed) {
         end.append(eventsArt("tick", 18, "events-tier__mark"), el("span", "events-track__state", "Claimed"));
       } else if (isReady) {
-        const button = el("button", "btn btn--primary events-track__claim", "Claim");
+        // "Claim 50": it takes this goal only, even with more ready (neon round 2).
+        const button = el("button", "btn btn--primary events-track__claim", `Claim ${shortAmount(tier.need)}`);
         button.type = "button";
         button.dataset["claim"] = key;
         button.disabled = view.claiming !== null;

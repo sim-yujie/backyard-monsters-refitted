@@ -159,6 +159,7 @@ describe("EventsPanel", () => {
     expect(nodes[3]!.querySelector(".events-track__badge--locked")).not.toBeNull();
     // The hint sits under the title, above the bar.
     expect(section.querySelector(".events-calendar__head + .events-card__extra")).not.toBeNull();
+    expect(dock.querySelector("[data-claim]")?.textContent).toBe("Claim 50");
     dock.querySelector<HTMLButtonElement>("[data-claim]")!.click();
     expect(options.onClaimTier).toHaveBeenCalledWith(expect.objectContaining({ id: "christmas-2026" }), 1);
     // A tap on the last goal shows how many are left, with no Claim.

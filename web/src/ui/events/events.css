@@ -777,6 +777,14 @@
   margin: 0;
 }
 
+/* The hint quieter than the title above it, so the title leads (neon round 2). */
+.events-ladder--track > .events-card__extra .events-hint {
+  font-size: var(--text-xs);
+  font-weight: 400;
+  color: var(--colour-text-muted);
+  opacity: 0.85;
+}
+
 .events-track {
   position: relative;
   height: 74px;
@@ -915,9 +923,14 @@
   border-color: rgb(72 199 89 / 70%);
 }
 
+/* The goal the dock shows, lifted a little over the other ready ones (neon round 2). */
+.events-track__node--focus .events-track__prize {
+  transform: scale(1.08);
+}
+
 @keyframes events-track-ready {
   50% {
-    transform: translateY(-2px);
+    translate: 0 -2px;
   }
 }
 
@@ -1054,7 +1067,7 @@
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  padding: 1px 6px 1px 3px;
+  padding: 1px 6px 1px 5px;
   border-radius: 4px;
   background: linear-gradient(#ffe27a, #d9a21c);
   color: #2c1a04;
@@ -1183,6 +1196,27 @@
   background: linear-gradient(180deg, #fff2bf, #f5cf6a);
 }
 
+:root[data-skin="flash"] .events-track__node--claimed .events-track__prize {
+  border: 2px solid #2f7a1f;
+}
+
+/* Classic: the dock's edge and its pointer a shade darker, so the pointer shows on parchment. */
+:root[data-skin="flash"] .events-track__dock {
+  border-color: #b48c5a;
+}
+
+:root[data-skin="flash"] .events-track__dock::before {
+  border-bottom-color: #b48c5a;
+}
+
+:root[data-skin="flash"] .events-track__dock--ready {
+  border-color: #e0a020;
+}
+
+:root[data-skin="flash"] .events-track__dock--ready::before {
+  border-bottom-color: #e0a020;
+}
+
 :root[data-skin="flash"] .events-track__badge--locked {
   border-color: #fff3d6;
   background: #8b6a45;
@@ -1202,6 +1236,7 @@
   .events-track__dock {
     --track-left: 12px;
     --track-right: 24px;
+    padding-top: 6px;
   }
 
   /* No room for a decoration's name on a phone: its picture, and the full words in the button's label. */
