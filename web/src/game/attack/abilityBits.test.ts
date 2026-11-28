@@ -109,8 +109,7 @@ describe("AbilityPainter", () => {
         const { bits } = await ready();
         const painter = new AbilityPainter(bits, false);
         const to = { at: { x: 180, y: 160 }, follow: null };
-        painter.cast(100, ability, gorgo, () => gorgo, 150, ability === "pounce" ? null : to, 7);
-        if (ability === "pounce") painter.cast(100, ability, gorgo, () => gorgo, 0, to, 7);
+        painter.cast(100, ability, gorgo, () => gorgo, 150, to, 7);
         if (ability === "bloodthirst") painter.bloodthirst(100, { x: 180, y: 160 }, () => gorgo, 7);
         counts.push(bits.bitCount);
         bits.destroy();

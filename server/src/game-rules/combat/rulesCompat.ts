@@ -120,6 +120,11 @@
  * without them while the server's replay used them, so such a page must
  * reload, as in patch 8.7 above.
  *
+ * The owner's balance picks (desk mm-balance, 28 Nov 2026: Bloodthirst 3-5%,
+ * Obsidian Hide in place of Pounce, Healing Mist a tenth on a champion) keep
+ * it empty for the same reason: they change only abilities no live champion
+ * holds yet.
+ *
  * Add the version a change replaces only when that change moves no battle.
  * A change that moves any battle result must empty this list.
  */

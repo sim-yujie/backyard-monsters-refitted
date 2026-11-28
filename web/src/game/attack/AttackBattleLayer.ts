@@ -67,7 +67,6 @@ import {
   TauntFx,
   TrailFx,
   abilityStateTint,
-  pounceLift,
   type BubbleAt,
   type CreepPlace,
   type StoneAt,
@@ -401,10 +400,6 @@ export const layoutCreep = (
   } else if (creep.flying) {
     altitude = flyerAltitude(creep.monsterId);
     y += options.reducedMotion ? -altitude : hoverOffset(pose.age, altitude);
-  } else if (creep.leap !== undefined && !options.reducedMotion) {
-    // Drull's Pounce: up and over in an arc, drawn over what he leaps.
-    altitude = pounceLift(creep.leap);
-    y -= altitude;
   } else if (creep.hop !== undefined && !options.reducedMotion) {
     // Malphus over a wall: its body sorts by the height it is drawn at, like a
     // flyer's, so it shows over the wall rather than behind it.
@@ -1821,13 +1816,12 @@ export class AttackBattleLayer {
   /**
    * The states the abilities leave on a creep, painted (owner, desk card
    * mm-abilities2): Gorgo's stone surface and its crumbling, a Bubble and its
-   * pop, a stunned creep's stars, an acid-marked one's drips, Drull's dust
-   * trail through a Pounce.
+   * pop, a stunned creep's stars, an acid-marked one's drips.
    */
   private paintAbilityStates(view: CreepView, tick: number, bubbled: boolean, stone: boolean): void {
     const id = view.id;
     const snapshot = view.snapshot;
-    const marked = snapshot?.stunned || snapshot?.marked || snapshot?.leap !== undefined;
+    const marked = snapshot?.stunned || snapshot?.marked;
     if (!bubbled && !stone && !marked && !this.wasStone.has(id) && !this.wasBubbled.has(id)) {
       if (view.stoneCoat) view.stoneCoat.root.visible = false;
       return;
@@ -1845,7 +1839,6 @@ export class AttackBattleLayer {
     }
     if (snapshot?.stunned) this.painter.dizzy(tick, { x: place.x, y: place.top - 4 }, id);
     if (snapshot?.marked) this.painter.acidOn(tick, { x: place.mid.x, y: place.mid.y - 6 }, id);
-    if (snapshot?.leap !== undefined) this.painter.pounceTrail(tick, place);
   }
 
   /**
@@ -3095,8 +3088,7 @@ export class AttackBattleLayer {
       this.punchy(event.tick, ground, Math.max(40, event.radius * 0.6), painted ? "flash" : look.punchy);
       if (painted && look.punchy === "full" && !this.classic) this.blastFx.jolt(event.tick, 5, 24);
     }
-    // A Pounce shows its word as he takes off, not again as he lands.
-    if (!look.word || (event.ability === "pounce" && !to)) return;
+    if (!look.word) return;
     // Two going off on one tick (Fomor's mist and spit) stack, not overlap.
     const last = this.abilityWords.get(event.creepId);
     const stacked = last && last.tick === event.tick ? last.count : 0;

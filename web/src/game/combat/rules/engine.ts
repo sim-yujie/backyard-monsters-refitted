@@ -49,11 +49,10 @@ import {
   CHEST_POUND_RETRY,
   FOMOR_ABILITY_RADIUS,
   GROUND_SLAM_BLOWS,
+  HEALING_MIST_CHAMPION_SHARE,
   HEALING_MIST_EVERY,
-  POUNCE_MAX,
-  POUNCE_MIN,
-  POUNCE_MULTIPLIER,
-  POUNCE_TICKS,
+  OBSIDIAN_HIDE_LAYERS,
+  OBSIDIAN_HIDE_TICKS,
   STONE_SKIN_BELOW,
   STONE_SKIN_COOLDOWN,
   STONE_SKIN_TICKS,
@@ -68,7 +67,7 @@ import {
   groundSlamTicks,
   hasAbility,
   healingMistShare,
-  pounceCooldown,
+  obsidianHideShare,
   stoneSkinCut,
   twinBiteShare,
   type ChampionAbilityId,
@@ -1114,8 +1113,8 @@ export interface CreepSnapshot {
   readonly shield?: number;
   /** Marked by a Fomor's Acid Spit: every blow on it does more. */
   readonly marked?: boolean;
-  /** Drull mid-Pounce: how far through the leap, 0 to 1. */
-  readonly leap?: number;
+  /** Drull's Obsidian Hide: the scale layers he wears, 1 to 5. */
+  readonly scales?: number;
 }
 
 /**
@@ -1353,7 +1352,7 @@ export type BattleVisualEvent =
        * One of Gorgo's, Drull's or Fomor's abilities went off
        * (`championAbilities.ts`), at the champion's yard point. `radius` is
        * its reach in screen px for a ring, 0 for none; `toIx`, `toIy` where it
-       * lands (a Pounce's landing, a Bubble's or Acid Spit's target).
+       * lands (a Bubble's or Acid Spit's target).
        */
       readonly kind: "ability";
       readonly tick: number;
@@ -1786,15 +1785,9 @@ interface Creep {
   nextMist: number;
   nextBubble: number;
   nextSpit: number;
-  /** Drull's Pounce: the tick he may leap again; the tick he took off, -1 when not leaping. */
-  pounceReady: number;
-  leapStart: number;
-  leapFromX: number;
-  leapFromY: number;
-  leapToX: number;
-  leapToY: number;
-  /** His next blow is a Pounce's doubled one. */
-  pounced: boolean;
+  /** Drull's Obsidian Hide: the scale layers he wears, and the tick they fall away. */
+  scales: number;
+  scalesUntil: number;
   /** Stunned by Gorgo's Ground Slam until this tick: it neither moves nor swings. */
   stunUntil: number;
   /** A Fomor's Bubble on it: the damage it still soaks up, and the tick it pops. */
@@ -1929,13 +1922,8 @@ const NO_ABILITIES = {
   nextMist: 0,
   nextBubble: 0,
   nextSpit: 0,
-  pounceReady: 0,
-  leapStart: -1,
-  leapFromX: 0,
-  leapFromY: 0,
-  leapToX: 0,
-  leapToY: 0,
-  pounced: false,
+  scales: 0,
+  scalesUntil: 0,
   stunUntil: 0,
   shield: 0,
   shieldUntil: 0,
@@ -3096,6 +3084,12 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (creep.markedUntil > tick && struck(blow)) raw *= 1 + creep.markShare;
     if (creep.stoneUntil > tick && raw > 0) {
       const cut = raw * stoneSkinCut(creep.level);
+      abilityCut += cut;
+      raw -= cut;
+    }
+    // Drull's Obsidian Hide: a fifth of its cut for each scale layer he wears.
+    if (creep.scales > 0 && creep.scalesUntil > tick && raw > 0) {
+      const cut = raw * obsidianHideShare(creep.level, creep.scales);
       abilityCut += cut;
       raw -= cut;
     }
@@ -6690,8 +6684,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
 
   /**
    * What follows a champion's blow that took `dealt` off `foe` or
-   * `building`: Gorgo's Ground Slam, and Drull's Pounce, Twin Bite and
-   * Bloodthirst. `by` is who the blow turns, as {@link strikeCreep} has it.
+   * `building`: Gorgo's Ground Slam, and Drull's Twin Bite, Bloodthirst and
+   * Obsidian Hide. `by` is who the blow turns, as {@link strikeCreep} has it.
    */
   const championBlow = (
     creep: Creep,
@@ -6722,10 +6716,6 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       }
       return more;
     };
-    if (creep.pounced) {
-      creep.pounced = false;
-      total += again(creep.damage * (POUNCE_MULTIPLIER - 1));
-    }
     if (abilityOn(creep, "twinBite") && creep.blows % TWIN_BITE_BLOWS === 0) {
       const at = foe ?? building;
       const bite = again(creep.damage * twinBiteShare(creep.level));
@@ -6737,54 +6727,14 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       });
     }
     if (abilityOn(creep, "bloodthirst")) restore(creep, total * bloodthirstShare(creep.level));
-  };
-
-  /** Drull takes off for `toX`, `toY` (yard units), over anything in the way. */
-  const startLeap = (drull: Creep, toX: number, toY: number): void => {
-    drull.leapStart = tick;
-    drull.leapFromX = drull.ix;
-    drull.leapFromY = drull.iy;
-    drull.leapToX = toX;
-    drull.leapToY = toY;
-    drull.pounceReady = tick + pounceCooldown(drull.level);
-    drull.attacking = false;
-    showAbility(drull, "pounce", 0, { toIx: toX, toIy: toY });
-  };
-
-  /**
-   * Pounce, attacking: with his route set and its end between
-   * {@link POUNCE_MIN} and {@link POUNCE_MAX} on screen, he leaps there.
-   */
-  const tryPounce = (drull: Creep): boolean => {
-    if (tick < drull.pounceReady || drull.atTarget || drull.targetBuilding < 0) return false;
-    const end = drull.waypoints[drull.waypoints.length - 1];
-    if (!end || drull.waypointIndex >= drull.waypoints.length) return false;
-    const squared = screenDistanceSquared(drull.ix, drull.iy, end.x, end.y);
-    if (squared < POUNCE_MIN * POUNCE_MIN || squared > POUNCE_MAX * POUNCE_MAX) return false;
-    startLeap(drull, end.x, end.y);
-    return true;
-  };
-
-  /**
-   * One tick of the leap: a straight line to where he lands, which he
-   * reaches on {@link POUNCE_TICKS}; then his next blow is doubled. An
-   * attacker lands at the end of his route, at his building.
-   */
-  const tickLeap = (drull: Creep): void => {
-    const share = Math.min((tick - drull.leapStart + 1) / POUNCE_TICKS, 1);
-    drull.ix = drull.leapFromX + (drull.leapToX - drull.leapFromX) * share;
-    drull.iy = drull.leapFromY + (drull.leapToY - drull.leapFromY) * share;
-    const cart = rangePointOf(drull.ix, drull.iy);
-    drull.x = cart.x;
-    drull.y = cart.y;
-    if (share < 1) return;
-    drull.leapStart = -1;
-    drull.pounced = true;
-    if (!drull.friendly) {
-      drull.waypointIndex = drull.waypoints.length;
-      drull.atTarget = true;
+    if (abilityOn(creep, "obsidianHide")) {
+      // A layer more for this blow; all fall away once he stops biting.
+      const worn = creep.scalesUntil > tick ? creep.scales : 0;
+      creep.scales = Math.min(OBSIDIAN_HIDE_LAYERS, worn + 1);
+      creep.scalesUntil = tick + OBSIDIAN_HIDE_TICKS;
+      // Its word once, as the first layer forms.
+      if (worn === 0) showAbility(creep, "obsidianHide", 0);
     }
-    showAbility(drull, "pounce", 40);
   };
 
   /**
@@ -6797,7 +6747,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     let count = 0;
     const near = index.inRange(FOMOR_ABILITY_RADIUS, fomor.x, fomor.y, alliesOf(fomor), fomor.id);
     for (const { creep: other } of near) {
-      if (restore(other, other.maxHp * share) > 0) count += 1;
+      const heal = other.maxHp * share * (other.champion ? HEALING_MIST_CHAMPION_SHARE : 1);
+      if (restore(other, heal) > 0) count += 1;
     }
     if (count === 0) {
       fomor.nextMist = tick + CHEST_POUND_RETRY;
@@ -7565,14 +7516,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         moveCreep(creep);
         return;
       }
-      if (creep.abilities > 0) {
-        // Drull mid-Pounce does nothing but fly.
-        if (creep.leapStart >= 0) {
-          tickLeap(creep);
-          return;
-        }
-        tickAbilities(creep);
-      }
+      if (creep.abilities > 0) tickAbilities(creep);
     }
     if (creep.monsterId === REZGHUL_ID) tickRaise(creep);
     if (creep.friendly) {
@@ -7629,8 +7573,6 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (!hunting) return;
     // A Bolt that blinks spends the tick on its hop (issue #352).
     if (creep.rank > 0 && creep.monsterId === BOLT_ID && tickBlink(creep)) return;
-    // Drull's Pounce: at a building far enough along his route, he leaps to it.
-    if (creep.abilities > 0 && abilityOn(creep, "pounce") && tryPounce(creep)) return;
 
     // A ranged creep or a champion stops as soon as its target is inside its
     // reach, with no wall in the way on foot (`CreepBase.as:735-748`): from
@@ -8949,14 +8891,6 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       }
       return;
     }
-    // Drull's Pounce at a foe far enough off.
-    if (creep.abilities > 0 && abilityOn(creep, "pounce") && tick >= creep.pounceReady) {
-      const squared = screenPxCreepsSquared(creep, foe);
-      if (squared >= POUNCE_MIN * POUNCE_MIN && squared <= POUNCE_MAX * POUNCE_MAX) {
-        startLeap(creep, foe.ix, foe.iy);
-        return;
-      }
-    }
     walkTo(creep, { x: foe.ix, y: foe.iy });
   };
 
@@ -9162,7 +9096,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       ...(creep.stunUntil > tick ? { stunned: true } : {}),
       ...(creep.shield > 0 && creep.shieldUntil > tick ? { shield: creep.shield } : {}),
       ...(creep.markedUntil > tick ? { marked: true } : {}),
-      ...(creep.leapStart >= 0 ? { leap: (tick - creep.leapStart) / POUNCE_TICKS } : {}),
+      ...(creep.scales > 0 && creep.scalesUntil > tick ? { scales: creep.scales } : {}),
     }));
 
   const abilityMarks = (): {

@@ -77,7 +77,7 @@ export type ChampionAbilityId =
   | "groundSlam"
   | "bloodthirst"
   | "twinBite"
-  | "pounce"
+  | "obsidianHide"
   | "healingMist"
   | "bubble"
   | "acidSpit";
@@ -85,7 +85,7 @@ export type ChampionAbilityId =
 /** Each champion's abilities, in unlock order. */
 export const CHAMPION_ABILITY_IDS: Readonly<Record<string, readonly ChampionAbilityId[]>> = {
   G1: ["stoneSkin", "chestPound", "groundSlam"],
-  G2: ["bloodthirst", "twinBite", "pounce"],
+  G2: ["bloodthirst", "twinBite", "obsidianHide"],
   G3: ["healingMist", "bubble", "acidSpit"],
 };
 
@@ -144,8 +144,12 @@ export const groundSlamTicks = (level: number): number =>
 
 /* ── Drull (G2), the hard hitter ──────────────────────────────────────────── */
 
-/** Bloodthirst (ability 1): every blow heals him by this share of the health it took. */
-export const BLOODTHIRST_SHARE: readonly number[] = [0.1, 0.1, 0.12, 0.12, 0.15, 0.15];
+/**
+ * Bloodthirst (ability 1): every blow heals him by this share of the health it
+ * took. 3-5% (owner, desk mm-balance B2, 28 Nov 2026; was 10-15%, which made
+ * him wreck about a third of a yard at level 6).
+ */
+export const BLOODTHIRST_SHARE: readonly number[] = [0.03, 0.03, 0.04, 0.04, 0.05, 0.05];
 export const bloodthirstShare = (level: number): number => atLevel(BLOODTHIRST_SHARE, level);
 
 /**
@@ -157,17 +161,21 @@ export const TWIN_BITE_SHARE: readonly number[] = [0.5, 0.5, 0.6, 0.6, 0.75, 0.7
 export const twinBiteShare = (level: number): number => atLevel(TWIN_BITE_SHARE, level);
 
 /**
- * Pounce (ability 3): when his next target is between {@link POUNCE_MIN} and
- * {@link POUNCE_MAX} screen px away, he leaps there in {@link POUNCE_TICKS},
- * over walls, and his first blow after landing is doubled. Ready again
- * {@link pounceCooldown} after he took off.
+ * Obsidian Hide (ability 3; owner, desk mm-balance P2, 28 Nov 2026, in place
+ * of Pounce): every blow he lands adds a layer of obsidian scales, up to
+ * {@link OBSIDIAN_HIDE_LAYERS}. Each layer takes a fifth of
+ * {@link obsidianHideCut} off every blow on him, so a full hide takes 10-15%.
+ * The layers all fall away {@link OBSIDIAN_HIDE_TICKS} after his last blow.
  */
-export const POUNCE_MIN = 120;
-export const POUNCE_MAX = 400;
-export const POUNCE_TICKS = ticks(0.6);
-export const POUNCE_MULTIPLIER = 2;
-export const POUNCE_SECONDS: readonly number[] = [12, 12, 11, 10, 9, 8];
-export const pounceCooldown = (level: number): number => ticks(atLevel(POUNCE_SECONDS, level));
+export const OBSIDIAN_HIDE_LAYERS = 5;
+export const OBSIDIAN_HIDE_TICKS = ticks(3);
+export const OBSIDIAN_HIDE_CUT: readonly number[] = [0.1, 0.1, 0.12, 0.12, 0.15, 0.15];
+export const obsidianHideCut = (level: number): number => atLevel(OBSIDIAN_HIDE_CUT, level);
+/** The share a hide of `layers` layers takes off a blow on a Drull of `level`. */
+export const obsidianHideShare = (level: number, layers: number): number => {
+  const worn = Math.min(Math.max(Math.floor(layers), 0), OBSIDIAN_HIDE_LAYERS);
+  return (obsidianHideCut(level) * worn) / OBSIDIAN_HIDE_LAYERS;
+};
 
 /* ── Fomor (G3), the support ──────────────────────────────────────────────── */
 
@@ -180,11 +188,14 @@ export const FOMOR_ABILITY_RADIUS = 250;
 /**
  * Healing Mist (ability 1): every {@link HEALING_MIST_EVERY} while he fights,
  * every hurt ally in his ring but himself heals {@link healingMistShare} of
- * its full health.
+ * its full health; a champion a tenth of that,
+ * {@link HEALING_MIST_CHAMPION_SHARE}, as Zafreeti's and Vorg's heals
+ * (owner, desk mm-balance F2, 28 Nov 2026).
  */
 export const HEALING_MIST_EVERY = ticks(8);
 export const HEALING_MIST_SHARE: readonly number[] = [0.04, 0.04, 0.05, 0.05, 0.06, 0.06];
 export const healingMistShare = (level: number): number => atLevel(HEALING_MIST_SHARE, level);
+export const HEALING_MIST_CHAMPION_SHARE = 0.1;
 
 /**
  * Bubble (ability 2): every {@link BUBBLE_EVERY} while he fights, the ally in
