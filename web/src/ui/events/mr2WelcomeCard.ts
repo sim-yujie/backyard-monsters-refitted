@@ -49,7 +49,7 @@ export const WELCOME_HELP = {
 
 /** The state words on a reward. */
 export const WELCOME_STATE_TEXT = {
-  soon: "Soon",
+  soon: "Ready soon",
   ready: "Ready today",
   today: "Used today, back tomorrow",
   done: "All used",
@@ -187,7 +187,8 @@ interface UsedKind {
 /**
  * The 10 days as marks in a row on a track: each day's number in a dot, the
  * days gone filled, today lit and bigger, the days left hollow; over each day
- * a reward was used, its picture (one per reward a day). Numbers and
+ * a reward was used, its picture (one per reward a day, the takeover over
+ * the kit in one narrow stamp centred on the dot). Numbers and
  * pictures, no words (the words on hover and for a screen reader).
  */
 const timeline = (status: Mr2WelcomeStatus, now: number): HTMLElement => {
@@ -207,8 +208,9 @@ const timeline = (status: Mr2WelcomeStatus, now: number): HTMLElement => {
       const image = picture(kind.src, "");
       image.className = "events-welcome__mark-picture";
       image.dataset["usedReward"] = kind.key;
-      image.width = 22;
-      image.height = 22;
+      // The takeover's tower over the kit's yard (sized in events.css).
+      image.width = kind.key === "kit" ? 20 : 16;
+      image.height = kind.key === "kit" ? 12 : 16;
       slot.append(image);
     }
     const dot = el("span", "events-welcome__mark-dot", String(day));
@@ -218,6 +220,8 @@ const timeline = (status: Mr2WelcomeStatus, now: number): HTMLElement => {
     mark.append(slot, dot);
     list.append(mark);
   }
+  // Nothing used yet: no empty stamp row over the dots.
+  list.classList.toggle("events-welcome__timeline--unused", kinds.every((kind) => kind.days.size === 0));
   paintWelcomeTimeline(list, now);
   return list;
 };

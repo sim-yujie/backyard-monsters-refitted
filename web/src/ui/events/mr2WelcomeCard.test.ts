@@ -169,6 +169,8 @@ describe("before the first reset (owner, 28 Nov: the pass starts at the next 00:
       expect(leftOf(card, key)).toBe("7/7 left");
     }
     expect(card.querySelector(".events-welcome__go")).toBeNull();
+    // Nothing used: no empty stamp row.
+    expect(card.querySelector(".events-welcome__timeline--unused")).not.toBeNull();
   });
 
   it("at the reset: day 1 lit and both rewards Ready today", () => {
