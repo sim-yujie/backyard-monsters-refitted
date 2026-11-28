@@ -27,13 +27,13 @@ export const BETA_9: ChangelogRelease = {
   cards: [
     {
       image: "/whats-new/beta91-blast.webp",
-      title: "9.1: Twig and pebble blast",
-      text: "Twig and pebble bombs now blast a flat circle on the ground, like the putty and fling rings. It covers the same area as before.",
+      title: "9.1: Catapult blast",
+      text: "Twig and pebble bombs now blast a circle on the ground, the same shape as the putty bomb's ring. Same area as before.",
     },
     {
       image: "/whats-new/beta91-pass.webp",
       title: "9.1: Frontier Pass days",
-      text: "A new pass starts at the next daily reset and runs 10 reset days. Each day's stamp sits on its own dot.",
+      text: "A new pass starts at the next daily reset (00:00 UTC) and runs 10 reset days. Passes already running lose no time.",
     },
     {
       image: "/whats-new/beta9-move.webp",
