@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ChampionSaveEntry } from "@/api/types";
 import { CHAMPION_ABILITIES, abilitiesUnlocked, crystalsHeld } from "@/game/events/crystals";
-import { CrystalAbilities, abilityIconUrl, gemStyleFrom, ownedChampion, unlockNote } from "./CrystalAbilities";
+import { CrystalAbilities, abilityIconUrl, ownedChampion, unlockNote } from "./CrystalAbilities";
 
 /**
  * The Champion tab's Abilities view (Monster Madness crystals, 27 Nov 2026):
@@ -93,42 +93,35 @@ describe("the Abilities view", () => {
 
 describe("ability icons", () => {
   const all = Object.values(CHAMPION_ABILITIES).flat();
-  const file = (ability: (typeof all)[number]) => abilityIconUrl(ability).replace(/^.*?\/(?=ui\/|status-icons\/)/, "");
+  const file = (ability: (typeof all)[number], locked = false) =>
+    abilityIconUrl(ability, locked).replace(/^.*?\/(?=ui\/|status-icons\/)/, "");
 
-  it("gives every ability a painted icon on disk", () => {
+  it("gives every ability its gem, lit and locked, on disk", () => {
     for (const ability of all) {
-      const onDisk = path.resolve(__dirname, "../../../public", file(ability));
-      expect(existsSync(onDisk), `${ability.id}: ${onDisk}`).toBe(true);
-    }
-  });
-
-  it("gives every ability its own icon (Obsidian Hide no longer borrows Stone Skin's)", () => {
-    const files = all.map(file);
-    expect(new Set(files).size).toBe(files.length);
-    expect(file(all.find((a) => a.id === "obsidianHide")!)).toBe("ui/abilities/obsidian-hide.webp");
-  });
-
-  it("keeps all twelve in the one painted set, not the fight's status stickers", () => {
-    for (const ability of all) expect(file(ability), ability.id).toMatch(/^ui\/abilities\/[a-z-]+\.webp$/);
-  });
-
-  it("reads the gem framing under review from the URL, square without it", () => {
-    expect(gemStyleFrom("?gemIcons=a")).toBe("a");
-    expect(gemStyleFrom("?x=1&gemIcons=c")).toBe("c");
-    expect(gemStyleFrom("?gemIcons=z")).toBeNull();
-    expect(gemStyleFrom("")).toBeNull();
-    expect(file(all[0]!)).not.toContain("gem-");
-  });
-
-  it("has every gem framing's lit and locked file on disk", () => {
-    for (const gem of ["a", "b", "c"] as const) {
-      for (const ability of all) {
-        for (const locked of [false, true]) {
-          const rel = abilityIconUrl(ability, locked, gem).replace(/^.*?\/(?=ui\/)/, "");
-          expect(rel).toMatch(new RegExp(`^ui/abilities/gem-${gem}/[a-z-]+${locked ? "\\.locked" : ""}\\.webp$`));
-          expect(existsSync(path.resolve(__dirname, "../../../public", rel)), rel).toBe(true);
-        }
+      for (const locked of [false, true]) {
+        const onDisk = path.resolve(__dirname, "../../../public", file(ability, locked));
+        expect(existsSync(onDisk), `${ability.id}${locked ? " (locked)" : ""}: ${onDisk}`).toBe(true);
       }
     }
+  });
+
+  it("gives every ability its own gem (Obsidian Hide no longer borrows Stone Skin's)", () => {
+    const files = all.map((ability) => file(ability));
+    expect(new Set(files).size).toBe(files.length);
+    expect(file(all.find((a) => a.id === "obsidianHide")!)).toBe("ui/abilities/gem-c/obsidian-hide.webp");
+  });
+
+  it("keeps all twelve in the one gem set (owner's pick C), not the fight's status stickers", () => {
+    for (const ability of all) {
+      expect(file(ability), ability.id).toMatch(/^ui\/abilities\/gem-c\/[a-z-]+\.webp$/);
+      expect(file(ability, true), ability.id).toMatch(/^ui\/abilities\/gem-c\/[a-z-]+\.locked\.webp$/);
+    }
+  });
+
+  it("ships only the gem set: no square icons or other framings left in the folder", () => {
+    const folder = path.resolve(__dirname, "../../../public/ui/abilities");
+    expect(readdirSync(folder)).toEqual(["gem-c"]);
+    const wanted = all.flatMap((ability) => [false, true].map((locked) => file(ability, locked).replace(/^.*\//, "")));
+    expect(readdirSync(path.join(folder, "gem-c")).sort()).toEqual(wanted.sort());
   });
 });

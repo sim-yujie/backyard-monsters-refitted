@@ -213,9 +213,9 @@
   color: var(--colour-text-muted);
 }
 
-.crystal-slot--locked .crystal-slot__icon {
-  opacity: 0.35;
-  filter: grayscale(0.8);
+/* A locked slot's gem is its own dull dark stone (`<name>.locked.webp`), so the icon is not faded here. */
+.crystal-slot--ready .crystal-slot__icon {
+  filter: drop-shadow(0 0 3px rgb(224 90 216 / 85%));
 }
 
 .crystal-slot[aria-pressed="true"] {
@@ -765,15 +765,4 @@
   .crystal-abilities__inspector {
     min-height: 22px;
   }
-}
-
-/* Gem framings under review (dev only, ?gemIcons=a|b|c): the locked gem is its own dull stone, so the
-   square icon's 35% grey ghost is off; the gem keeps the same box, so the slots do not move. */
-.crystal-slot--locked .crystal-slot__icon.ability-gem {
-  opacity: 1;
-  filter: none;
-}
-
-.crystal-slot--ready .crystal-slot__icon.ability-gem {
-  filter: drop-shadow(0 0 3px rgb(224 90 216 / 85%));
 }

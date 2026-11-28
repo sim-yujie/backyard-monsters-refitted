@@ -1,15 +1,14 @@
-// node ingame.mjs <round> <gem: sq|a|b|c> [look...] : Abilities view + Ability unlocked pop-up, both looks, desk + phone.
+// node ingame.mjs <round> [look...] : the gem icons (owner's pick C) in the Abilities view + Ability unlocked pop-up, both looks, desk + phone.
 // Resets yardtester's crystals/abilities (db/reset.sql) before each screen so every run unlocks Drull's third.
 import { createRequire } from "node:module";
 import { mkdirSync } from "node:fs";
 const require = createRequire("/home/yujiesim/.nvm/versions/node/v26.13.1/lib/node_modules/@playwright/cli/package.json");
 const { chromium } = require("playwright");
 const round = process.argv[2] ?? "r1";
-const gem = process.argv[3] ?? "sq";
-const looks = process.argv.length > 4 ? process.argv.slice(4) : ["modern", "classic"];
+const looks = process.argv.length > 3 ? process.argv.slice(3) : ["modern", "classic"];
 import { execSync } from "node:child_process";
 const HERE = "/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/hide-icon";
-const reset = () => execSync(`cd ${HERE}/server && DB_NAME=gem_icons_db bun ../shots/art4/db/q.ts "$(cat ../shots/art5/db/reset.sql)"`, { stdio: "ignore", shell: "/bin/bash" });
+const reset = () => execSync(`cd ${HERE}/server && DB_NAME=${process.env.DB_NAME ?? "gem_final_db"} bun ../shots/art4/db/q.ts "$(cat ../shots/art5/db/reset.sql)"`, { stdio: "ignore", shell: "/bin/bash" });
 const dir = `/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/hide-icon/shots/art5/ingame/${round}`;
 mkdirSync(dir, { recursive: true });
 const SIZES = (process.env.SIZES ? JSON.parse(process.env.SIZES) : null) ?? [
@@ -30,10 +29,10 @@ for (const look of looks) {
     const context = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: scale, hasTouch: touch, isMobile: touch && w < 900 });
     await context.addInitScript((l) => { try { if (l === "classic") localStorage.setItem("bymr.look", "classic"); else localStorage.removeItem("bymr.look"); } catch {} }, look);
     const page = await context.newPage();
-    const tag = `${gem}-${look}-${name}`;
+    const tag = `${look}-${name}`;
     reset();
     try {
-      await page.goto(`http://localhost:5361/${gem === "sq" ? "" : `?gemIcons=${gem}`}`);
+      await page.goto(`http://localhost:${process.env.VITE_PORT ?? 5361}/`);
       await page.getByRole("textbox", { name: "Email" }).fill("yardtester@test.com");
       await page.getByRole("textbox", { name: "Password" }).fill("Dev12345!");
       await page.getByRole("button", { name: "Play", exact: true }).click();

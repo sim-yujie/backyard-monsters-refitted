@@ -1,8 +1,8 @@
-# One option sheet per gem direction: python3 sheet.py <a|b|c|sq> "<title>"
+# The gem icons' sheet (owner's pick C): python3 sheet.py ["<title>"]
 # All 12 at real 30 px (1x) on the Modern and Classic slot colours, unlocked and locked, then each at 3x
 # (the file drawn at 90 px, as a 3x phone shows a 30 px slot) and the 52 px pop-up size at 3x (156 px).
 import sys, os
-from PIL import Image, ImageDraw, ImageFont, ImageOps, ImageEnhance
+from PIL import Image, ImageDraw, ImageFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 AB = os.path.join(HERE, "..", "..", "web", "public", "ui", "abilities")
@@ -15,16 +15,8 @@ NAMES = [("Stone Skin", "stone-skin"), ("Chest Pound", "chest-pound"), ("Ground 
 MOD_ON, MOD_OFF, CLA_ON, CLA_OFF = (48, 59, 71), (70, 79, 89), (249, 227, 191), (219, 196, 155)
 
 
-def load(style, name, locked):
-    if style == "sq":
-        im = Image.open(os.path.join(AB, f"{name}.webp")).convert("RGBA")
-        if locked:  # today's CSS: grayscale(0.8), opacity 0.35
-            g = ImageOps.grayscale(im).convert("RGBA")
-            im = Image.blend(im, g, 0.8)
-            im.putalpha(im.getchannel("A").point(lambda v: int(v * 0.35)))
-        return im
-    folder = os.path.join(HERE, "shield") if style == "shield" else os.path.join(AB, f"gem-{style}")
-    return Image.open(os.path.join(folder, f"{name}{'.locked' if locked else ''}.webp")).convert("RGBA")
+def load(name, locked):
+    return Image.open(os.path.join(AB, "gem-c", f"{name}{'.locked' if locked else ''}.webp")).convert("RGBA")
 
 
 def at(im, s):
@@ -32,7 +24,7 @@ def at(im, s):
 
 
 def main():
-    style, title = sys.argv[1], sys.argv[2]
+    title = sys.argv[1] if len(sys.argv) > 1 else "Ability gems (C): the picture inside a cushion-cut gem, seen through its facets"
     cw = 150
     W = 12 * cw + 40
     rows_small = [("Modern, unlocked", MOD_ON, False), ("Modern, locked", MOD_OFF, True),
@@ -50,7 +42,7 @@ def main():
             x = 20 + i * cw
             d.rectangle((x, y, x + cw - 10, y + 48), fill=bg)
             # 1x at 30 px, then the same 30 px blown up 2x with nearest (what the eye gets on a 1x screen)
-            small = at(load(style, n, locked), 30)
+            small = at(load(n, locked), 30)
             out.alpha_composite(small, (x + 8, y + 9))
             big = small.resize((60, 60), Image.NEAREST)
             tile = Image.new("RGBA", (60, 60), bg + (255,))
@@ -65,7 +57,7 @@ def main():
         for i, (_, n) in enumerate(NAMES):
             x = 20 + i * cw
             d.rectangle((x, y, x + cw - 10, y + 112), fill=bg)
-            out.alpha_composite(at(load(style, n, locked), 90), (x + 25, y + 11))
+            out.alpha_composite(at(load(n, locked), 90), (x + 25, y + 11))
         d.text((W - 16 - 200, y - 2), "", font=F(12))
         y += 120
     y += 4
@@ -75,10 +67,10 @@ def main():
         for i, (_, n) in enumerate(NAMES[:6] if bg[0] < 100 else NAMES[6:]):
             x = 20 + i * 2 * cw
             d.rectangle((x, y, x + 2 * cw - 10, y + 172), fill=bg)
-            out.alpha_composite(at(load(style, n, False), 156), (x + (2 * cw - 10 - 156) // 2, y + 8))
+            out.alpha_composite(at(load(n, False), 156), (x + (2 * cw - 10 - 156) // 2, y + 8))
         y += 180
     out = out.crop((0, 0, W, y + 10))
-    path = os.path.join(HERE, f"gem-option-{style}.png")
+    path = os.path.join(HERE, "gem-option-c.png")
     out.convert("RGB").save(path)
     print(path, out.size)
 

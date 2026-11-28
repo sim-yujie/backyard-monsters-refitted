@@ -1,6 +1,8 @@
-# Bake the 12 ability paintings into a painted gem setting: python3 bake.py <a|b|c> [sheet] [cell]
-# The setting is one cell of a Codex sheet (g1/sheet.png, 3x2 cells): magenta outside, flat green window.
-# Writes web/public/ui/abilities/gem-<x>/<name>.webp (lit) and <name>.locked.webp (dull stone), 192 px.
+# Bake the 12 ability paintings into the cushion-cut gem (owner's pick C, 28 Nov 2026):
+#   uv run --with numpy --with scipy --with pillow python bake.py
+# The gem is cell 1 of the Codex sheet g2/sheet.png (3x1 cells: magenta outside, flat green window); the
+# locked stone's cloud is cell 5 of g1/sheet.png. Writes web/public/ui/abilities/gem-c/<name>.webp (lit)
+# and <name>.locked.webp (dull stone), 192 px.
 import sys, os
 import numpy as np
 from PIL import Image, ImageFilter, ImageOps, ImageChops, ImageEnhance
@@ -21,12 +23,7 @@ SRC = {
     "breath-of-fire": "cut/breath-of-fire.full.png", "fists-of-doom": "cut/fists-of-doom.full.png",
 }
 
-STYLE = {  # style -> sheet, cell, tint the rim by the icon's colour, art shift up (share of the window), glass
-    "a": dict(sheet="g1", cell=0, tint=False, lift=0.0, glass=False),  # octagon socket
-    "b": dict(sheet="g1", cell=2, tint=True, lift=0.0, glass=False),  # hexagon crystal rim, icon's colour
-    "c": dict(sheet="g2", cell=1, tint=False, lift=0.0, glass=True),  # the picture inside a cut gem
-    "shield": dict(sheet="g1", cell=3, tint=False, lift=0.04, glass=False),  # neon's shield cut (not wired)
-}
+GEM_SHEET, GEM_CELL = "g2", 1  # the picture inside a cut gem, seen through its facets
 
 
 def cells(sheet, rows=2):
@@ -83,33 +80,6 @@ def keys(cell):
     frame = Image.fromarray(fa.astype(np.uint8), "RGBA")
     frame.putalpha(ImageChops.multiply(alpha, ImageOps.invert(win)))
     return frame, win
-
-
-def field_colour(art):
-    """The painting's colour field: the median of its outer ring, made a little richer."""
-    a = np.asarray(art.convert("RGB")).astype(float)
-    h, w, _ = a.shape
-    ring = np.concatenate([a[: h // 8].reshape(-1, 3), a[-h // 8:].reshape(-1, 3), a[:, : w // 8].reshape(-1, 3), a[:, -w // 8:].reshape(-1, 3)])
-    # the brightest half of the ring is the glow; the dark half is the subject's mass
-    lum = ring.mean(axis=1)
-    pick = ring[lum >= np.median(lum)]
-    c = np.median(pick, axis=0)
-    hsv = Image.fromarray(np.uint8([[c]])).convert("HSV")
-    hh, s, v = np.asarray(hsv)[0, 0]
-    return Image.fromarray(np.uint8([[[hh, min(255, int(s * 1.15) + 20), max(150, min(255, int(v * 1.4)))]]]), "HSV").convert("RGB").getpixel((0, 0))
-
-
-def tint(frame, colour):
-    """A colourless crystal rim painted in values, coloured by the icon's field (overlay-style)."""
-    rgb = np.asarray(frame.convert("RGB")).astype(float) / 255
-    lum = rgb.mean(axis=2, keepdims=True)
-    c = np.array(colour, float).reshape(1, 1, 3) / 255
-    # dark values take the colour deep, light values go toward white: a lit crystal
-    out = np.where(lum < 0.5, 2 * lum * c, 1 - 2 * (1 - lum) * (1 - c))
-    out = np.clip(out * 1.05, 0, 1)
-    img = Image.fromarray((out * 255).astype(np.uint8)).convert("RGBA")
-    img.putalpha(frame.getchannel("A"))
-    return img
 
 
 def sheen(win, strength=1.0):
@@ -183,49 +153,26 @@ def glass(art_layer, frame, win, sil):
 
 
 def main():
-    style = sys.argv[1]
-    st = STYLE[style]
-    rows = 1 if st["sheet"] == "g2" else 2
-    all_cells = cells(os.path.join(HERE, st["sheet"], "sheet.png"), rows)
-    frame, win = keys(all_cells[st["cell"]])
+    all_cells = cells(os.path.join(HERE, GEM_SHEET, "sheet.png"), rows=1)
+    frame, win = keys(all_cells[GEM_CELL])
     quartz_cell = cells(os.path.join(HERE, "g1", "sheet.png"))[5].astype(np.uint8)
     qh, qw, _ = quartz_cell.shape
     quartz = Image.fromarray(quartz_cell[qh // 6: -qh // 6, qw // 6: -qw // 6])
     frame = frame.resize((WORK, WORK), Image.LANCZOS)
     win = win.resize((WORK, WORK), Image.LANCZOS)
     sil = ImageChops.lighter(frame.getchannel("A"), win)
-    # the art runs a little under the bezel so no gap shows
-    win_under = win.filter(ImageFilter.MaxFilter(9))
-    out_dir = os.path.join(OUT_ROOT, f"gem-{style}") if style != "shield" else os.path.join(HERE, "shield")
+    out_dir = os.path.join(OUT_ROOT, "gem-c")
     os.makedirs(out_dir, exist_ok=True)
-    shadow, white = sheen(win)
+    _, white = sheen(win)
     for name, src in SRC.items():
-        if st["glass"]:
-            layer, art = art_in(sil, src, st["lift"])
-            lit = glass(layer, frame, win, sil)
-            lit.alpha_composite(white)
-            stone = dull(lit, quartz, win)
-        else:
-            layer, art = art_in(win, src, st["lift"])
-            masked = Image.new("RGBA", win.size, (0, 0, 0, 0))
-            masked.paste(layer, (0, 0), ImageChops.multiply(layer.getchannel("A"), win_under))
-            fr = tint(frame, field_colour(art)) if st["tint"] else frame
-            lit = masked.copy()
-            lit.alpha_composite(shadow)
-            lit.alpha_composite(white)
-            lit.alpha_composite(fr)
-            # locked: dull painting, dull setting, no glass shine
-            stone = dull(masked, quartz, win)
-            stone.alpha_composite(shadow)
-            if st["tint"]:
-                frd = dull(tint(frame, (120, 124, 130)), None, win)
-            else:
-                frd = Image.blend(frame, dull(frame, None, win), 0.75)
-            stone.alpha_composite(frd)
+        layer, _ = art_in(sil, src, 0.0)
+        lit = glass(layer, frame, win, sil)
+        lit.alpha_composite(white)
+        stone = dull(lit, quartz, win)
         for img, suffix in ((lit, ""), (stone, ".locked")):
             small = img.resize((SIZE, SIZE), Image.LANCZOS)
             small.save(os.path.join(out_dir, f"{name}{suffix}.webp"), quality=90, method=6)
-    print("baked", style, out_dir)
+    print("baked", out_dir)
 
 
 if __name__ == "__main__":

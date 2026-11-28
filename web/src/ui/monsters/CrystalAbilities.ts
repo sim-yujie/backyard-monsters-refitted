@@ -36,47 +36,29 @@ const BASE = import.meta.env.BASE_URL;
 const url = (path: string): string => `${BASE}${path.replace(/^\//, "")}`;
 
 /**
- * Each ability's painted icon, one set in the style of Obsidian Hide's (owner's pick C1, 28 Nov 2026):
- * a dark subject with a cold rim light on one colour field, in a thin bronze frame. The fight's status
- * stickers (`/status-icons/`) stay as they are; the abilities no longer borrow them.
+ * Each ability's icon: its painting (the Obsidian Hide style, owner's pick C1, 28 Nov 2026) seen through a
+ * cushion-cut gem's facets (owner's pick C of three gem framings, 28 Nov 2026), baked at 192 px by
+ * `shots/art5/bake.py`. A locked slot shows the same gem as dull dark stone (`<name>.locked.webp`).
+ * The fight's status stickers (`/status-icons/`) stay as they are; the abilities do not borrow them.
  */
 const ABILITY_ICON: Readonly<Record<AbilityInfo["id"], string>> = {
-  stoneSkin: "/ui/abilities/stone-skin.webp",
-  chestPound: "/ui/abilities/chest-pound.webp",
-  groundSlam: "/ui/abilities/ground-slam.webp",
-  bloodthirst: "/ui/abilities/bloodthirst.webp",
-  twinBite: "/ui/abilities/twin-bite.webp",
-  obsidianHide: "/ui/abilities/obsidian-hide.webp",
-  healingMist: "/ui/abilities/healing-mist.webp",
-  bubble: "/ui/abilities/bubble.webp",
-  acidSpit: "/ui/abilities/acid-spit.webp",
-  burn: "/ui/abilities/burn.webp",
-  breathOfFire: "/ui/abilities/breath-of-fire.webp",
-  fistsOfDoom: "/ui/abilities/fists-of-doom.webp",
+  stoneSkin: "stone-skin",
+  chestPound: "chest-pound",
+  groundSlam: "ground-slam",
+  bloodthirst: "bloodthirst",
+  twinBite: "twin-bite",
+  obsidianHide: "obsidian-hide",
+  healingMist: "healing-mist",
+  bubble: "bubble",
+  acidSpit: "acid-spit",
+  burn: "burn",
+  breathOfFire: "breath-of-fire",
+  fistsOfDoom: "fists-of-doom",
 };
 
-/**
- * Gem framings under review (owner 28 Nov 2026: "embed them into crystal/gems"), shown only on the dev
- * server with `?gemIcons=a|b|c`; without it the square icons above. Each is the same painting set into a
- * painted setting, baked per ability in `/ui/abilities/gem-<x>/`, with its own dull stone for a locked slot:
- * a = octagon socket, b = hexagon crystal rim in the icon's colour, c = the picture inside a cushion-cut gem.
- */
-export type GemStyle = "a" | "b" | "c";
-
-export const gemStyleFrom = (search: string): GemStyle | null => {
-  const asked = new URLSearchParams(search).get("gemIcons");
-  return asked === "a" || asked === "b" || asked === "c" ? asked : null;
-};
-
-const gemStyle: GemStyle | null = import.meta.env.DEV && typeof location !== "undefined" ? gemStyleFrom(location.search) : null;
-
-/** The icon's file; with a gem framing on, the gem (and its dull stone when `locked`). */
-export const abilityIconUrl = (ability: AbilityInfo, locked = false, gem: GemStyle | null = gemStyle): string => {
-  const square = ABILITY_ICON[ability.id];
-  if (!gem) return url(square);
-  const name = square.replace(/^.*\//, "").replace(/\.webp$/, "");
-  return url(`/ui/abilities/gem-${gem}/${name}${locked ? ".locked" : ""}.webp`);
-};
+/** The ability's gem; its dull stone when `locked`. */
+export const abilityIconUrl = (ability: AbilityInfo, locked = false): string =>
+  url(`/ui/abilities/gem-c/${ABILITY_ICON[ability.id]}${locked ? ".locked" : ""}.webp`);
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string) => {
   const element = document.createElement(tag);
@@ -93,12 +75,9 @@ const image = (src: string, className: string, alt = ""): HTMLImageElement => {
   return picture;
 };
 
-/** The icon as an image, marked as a gem when a gem framing is on (its CSS drops the square's grey ghost). */
-const abilityIcon = (ability: AbilityInfo, className: string, locked = false): HTMLImageElement => {
-  const picture = image(abilityIconUrl(ability, locked), className);
-  if (gemStyle) picture.classList.add("ability-gem", `ability-gem--${gemStyle}`);
-  return picture;
-};
+/** The ability's gem as an image (its dull stone when `locked`). */
+const abilityIcon = (ability: AbilityInfo, className: string, locked = false): HTMLImageElement =>
+  image(abilityIconUrl(ability, locked), className);
 
 export const crystalIcon = (className = "crystal-icon"): HTMLImageElement => image(url(CRYSTAL_ICON), className);
 
