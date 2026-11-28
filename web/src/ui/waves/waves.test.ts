@@ -7,7 +7,7 @@ import { startWave } from "@/game/yard/plugins/waves";
 import { ApiError } from "@/api/http";
 import { onWaveFeed, resetWaveFeed, setWaveFeed, snoozeWaveMark, waveMarkDue, waveReady } from "@/game/waves/waveFeed";
 import { scriptMonsters, yardHealth } from "./WaveFight";
-import { waveResultPopup, waveTrack } from "./WaveScreens";
+import { waveIntroPopup, waveResultPopup, waveTrack } from "./WaveScreens";
 import { waveCardBody } from "./waveEventCard";
 
 /** The wave events' screens (beta 10, Wild Monster Invasion). */
@@ -121,6 +121,36 @@ describe("the result pop-up", () => {
     waveResultPopup(result({ wave: 32, next: null, glimmers: 60 }), { onNext: vi.fn() }, vi.fn()).mount(document.body);
     expect(document.body.textContent).toContain("Bonus wave 2 beaten!");
     expect(document.body.querySelector(".wave-result__next")).toBeNull();
+  });
+});
+
+describe("the arrival pop-up", () => {
+  const facts = (popup: { element: HTMLElement }): string[] =>
+    [...popup.element.querySelectorAll(".wave-intro__fact")].map((one) => one.textContent ?? "");
+
+  it("an invasion: no loot lost, auto-repairs, Glimmers per wave, 2 bonus waves", () => {
+    const popup = waveIntroPopup(status(), () => {}, () => {});
+    expect(facts(popup)).toEqual(["No loot lost", "Auto-repairs", "Glimmers per wave", "2 bonus waves"]);
+  });
+
+  it("Brukkarg War (25 waves, no bonus, no Glimmers): only what is true of it", () => {
+    const popup = waveIntroPopup(
+      status({ event: "brukwar", title: "Brukkarg War", waves: 25, firstBonusWave: 26, prize: { glimmers: 0 }, totemType: null }),
+      () => {},
+      () => {},
+    );
+    expect(facts(popup)).toEqual(["No loot lost", "Auto-repairs"]);
+  });
+});
+
+describe("the Events card without a wave prize (Brukkarg War)", () => {
+  it("drops the Win chip: only Start wave N", () => {
+    const body = waveCardBody(
+      { status: status({ event: "brukwar", run: "brukwar-1", prize: { glimmers: 0 }, totemType: null }), busy: false, blocked: false },
+      () => {},
+    );
+    expect(body.querySelector(".wave-card__prize")).toBeNull();
+    expect(body.querySelector(".wave-card__start")?.textContent).toContain("Start wave 7");
   });
 });
 

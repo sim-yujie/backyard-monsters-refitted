@@ -68,7 +68,9 @@ export const waveCardBody = (feed: WaveFeedState & { status: WaveStatus }, onSta
     start.disabled = true;
     onStart();
   });
-  row.append(prize, start);
+  // Only "Win" and a prize: Brukkarg War's waves pay nothing (their prize is the yards they open).
+  if (prize.childElementCount > 1) row.append(prize);
+  row.append(start);
   body.append(row);
   return body;
 };
