@@ -1854,3 +1854,13 @@
     margin-left: auto;
   }
 }
+
+/* The batch chosen but not yet added, in its own colour as on the tab's own
+   housing bar (.hatch-housing__part--adding): the strip is the housing in
+   sight while the bench is on (regression fix, 28 Nov 2026). */
+.hcc-housing__adding {
+  background: var(--colour-accent);
+}
+.hcc-housing__adding--over {
+  background: var(--colour-warning);
+}

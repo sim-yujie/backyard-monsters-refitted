@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse, BuildingData, YardResponse } from "@/api/types";
-import type { YardApi } from "@/api/yard";
+import { yardApi, type YardApi } from "@/api/yard";
 import type { HatcheryActions } from "@/api/yardHatchery";
 import { monsterStat } from "@/game/combat/rules";
 import type { HatcheryMarks } from "@/game/yard/YardHatchMarks";
@@ -1352,6 +1352,60 @@ describe("the HCC's levels 2 and 3 (beta 9): switcher, presets", () => {
     click(element, /^Done/);
     await flush();
     expect(actions.presetSave).toHaveBeenCalledWith(0, [["C1", 7]]);
+  });
+
+  /** The strip's housing, where the tab's own housing box hides behind a tap. */
+  const stripHousing = (element: HTMLElement) => element.querySelector<HTMLElement>(".hcc-strip .hcc-housing")!;
+  const addingPart = (element: HTMLElement) => stripHousing(element).querySelector<HTMLElement>(".hcc-housing__adding");
+
+  it("the strip's housing bar shows the batch chosen in its own colour before Add (regression, 28 Nov)", () => {
+    const { element } = setup(hccAt(2), { monster: "C1" });
+    // Nothing chosen: the bar is housed and on the way only.
+    expect(addingPart(element)).toBeNull();
+    // 5 Pokeys take 50 of the yard's 1,080, and the bar grows with the count.
+    type(box(element), "5");
+    expect(addingPart(element)!.style.width).toBe("4.63%");
+    expect(addingPart(element)!.classList.contains("hcc-housing__adding--over")).toBe(false);
+    expect(stripHousing(element).title).toMatch(/this add 50$/);
+    more(element);
+    expect(addingPart(element)!.style.width).toBe("5.56%");
+    // Back to none: the batch's part goes.
+    type(box(element), "0");
+    expect(addingPart(element)).toBeNull();
+  });
+
+  it("past the room the batch still shows, in the warning colour, and the bar is scaled to fit", () => {
+    const { element } = setup(hccAt(2), { monster: "C1" });
+    type(box(element), "120");
+    const part = addingPart(element)!;
+    expect(part.classList.contains("hcc-housing__adding--over")).toBe(true);
+    // 1,200 of a 1,080 room: the whole bar is the batch.
+    expect(part.style.width).toBe("100%");
+  });
+
+  it("level 1's locked boxes and the dashed batch stay while the count changes", () => {
+    const { element } = setup(hccAt(1), { monster: "C1" });
+    type(box(element), "5");
+    expect(element.querySelectorAll(".hcc-box--locked")).toHaveLength(3);
+    expect(element.querySelectorAll(".hatch-line--hcc .hatch-slot--preview").length).toBeGreaterThan(0);
+    more(element);
+    expect(element.querySelectorAll(".hcc-box--locked")).toHaveLength(3);
+  });
+
+  it("run from home, the strip's batch is measured against the outpost's housing", async () => {
+    const outpost = loadOf(
+      { monsters: { saved: T0, housed: {}, hid: [30], h: [["", 0, []]], hstage: [0], hcc: [] } },
+      [building(30, 13, 3), building(40, 16, 3)],
+    );
+    // One housing of the two the main yard has: 540 room.
+    delete (outpost.buildingdata as Record<string, unknown>)["2"];
+    const state = vi.spyOn(yardApi, "state").mockResolvedValue(outpost as never);
+    const { tab, element } = setup(hccAt(2), { monster: "C1" });
+    await (tab as unknown as { goRemote(baseid: string): Promise<void> }).goRemote("o1");
+    expect(element.classList.contains("hcc-remote")).toBe(true);
+    type(box(element), "5");
+    expect(addingPart(element)!.style.width).toBe("9.26%");
+    state.mockRestore();
   });
 
   it("Send sends the slot and says what went in", async () => {
