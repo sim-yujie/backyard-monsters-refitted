@@ -1774,6 +1774,15 @@ interface Creep {
   stoneReady: number;
   /** The tick of a champion's next Chest Pound, Healing Mist, Bubble or Acid Spit. */
   nextPound: number;
+  /**
+   * An attacker a defending Gorgo's Chest Pound turned on him: that Gorgo, or
+   * -1; the tick the hold ends; and the creep and building it was on before,
+   * which it goes back to then ({@link releasePound}).
+   */
+  poundBy: number;
+  poundUntil: number;
+  poundCreep: number;
+  poundBuilding: number;
   nextMist: number;
   nextBubble: number;
   nextSpit: number;
@@ -1913,6 +1922,10 @@ const NO_ABILITIES = {
   stoneUntil: 0,
   stoneReady: 0,
   nextPound: 0,
+  poundBy: -1,
+  poundUntil: 0,
+  poundCreep: -1,
+  poundBuilding: -1,
   nextMist: 0,
   nextBubble: 0,
   nextSpit: 0,
@@ -2004,6 +2017,8 @@ interface Tower {
   /** Gorgo's Chest Pound on it: the Gorgo it shoots only, by creep id, or -1, and till when. */
   tauntBy: number;
   tauntUntil: number;
+  /** What it shot when the pound caught it, to go back to after ({@link tauntTarget}). */
+  tauntPrev: number[];
 }
 
 /**
@@ -2692,6 +2707,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       stunUntil: 0,
       tauntBy: -1,
       tauntUntil: 0,
+      tauntPrev: [],
     });
   }
 
@@ -6542,27 +6558,36 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   /**
    * Chest Pound: attacking, the towers near Gorgo that can hit him shoot
    * only him for a while ({@link tauntTarget}); defending, the attackers near
-   * him that can fight turn on him. Nothing near: he tries again in a second.
+   * him that can fight turn on him for as long ({@link releasePound}). Each
+   * remembers what it was on, to go back to when the hold ends. Nothing near:
+   * he tries again in a second.
    */
   const chestPound = (gorgo: Creep): void => {
     if (tick < gorgo.nextPound) return;
     const radius = chestPoundRadius(gorgo.level);
+    const until = tick + chestPoundTicks(gorgo.level);
     let count = 0;
     if (gorgo.friendly) {
       for (const { creep: other } of index.inRange(radius, gorgo.x, gorgo.y, foesOf(gorgo))) {
         if (other.gone || other.hp <= 0 || other.support || !fightsBack(other)) continue;
         if (!canHit(other.hitFlags, gorgo.flags) || other.targetCreep === gorgo.id) continue;
+        if (other.poundBy < 0) {
+          other.poundCreep = other.targetCreep;
+          other.poundBuilding = other.targetBuilding;
+        }
+        other.poundBy = gorgo.id;
+        other.poundUntil = until;
         loseTarget(other);
         other.targetCreep = gorgo.id;
         count += 1;
       }
     } else {
-      const until = tick + chestPoundTicks(gorgo.level);
       for (const tower of towers) {
         const building = tower.building;
         if (building.hp <= 0 || tower.gun) continue;
         if (!canHit(towerTargets(building.type), gorgo.flags)) continue;
         if (yardToCentreSquared(gorgo.x, gorgo.y, building) >= radius * radius) continue;
+        if (tower.tauntBy < 0) tower.tauntPrev = tower.targets.slice();
         tower.tauntBy = gorgo.id;
         tower.tauntUntil = until;
         count += 1;
@@ -6577,11 +6602,16 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   };
 
   /**
-   * A taunted tower's aim: the Gorgo that pounded at it, while he lives,
-   * can be hit and stands in its range; else it aims as it would.
+   * A taunted tower's aim: the Gorgo that pounded at it, while the hold
+   * lasts and he lives, can be hit and stands in its range. Otherwise it goes
+   * back to what it was shooting before the pound, and aims as it would if
+   * that is gone or out of reach; a tower would keep him to the end of its
+   * range else, a tower holding on to what it shoots (`BTOWER.as:171-229`).
+   * The hold is over once its time is up.
    */
   const tauntTarget = (tower: Tower, scan: TowerScan): void => {
-    const gorgo = tower.tauntUntil > tick ? byCreepId.get(tower.tauntBy) : undefined;
+    const held = tower.tauntUntil > tick;
+    const gorgo = held ? byCreepId.get(tower.tauntBy) : undefined;
     if (
       !gorgo ||
       gorgo.hp <= 0 ||
@@ -6590,10 +6620,47 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       !canHit(scan.flags, gorgo.flags) ||
       !towerHolds(gorgo, tower.building, tower.range)
     ) {
-      if (tower.tauntUntil <= tick) tower.tauntBy = -1;
+      if (tower.targets.length === 1 && tower.targets[0] === tower.tauntBy) {
+        tower.targets = tower.tauntPrev.slice();
+      }
+      if (!held) {
+        tower.tauntBy = -1;
+        tower.tauntPrev = [];
+      }
       return;
     }
     tower.targets = [gorgo.id];
+  };
+
+  /**
+   * A defending Gorgo's Chest Pound has held `creep` its time: if it is
+   * still on him, it goes back to the creep it fought before, else the
+   * building it was going for, else it looks as it would. A Gorgo still in
+   * its reach, or one that hits it, it may then turn on again the usual way
+   * ({@link engage}).
+   */
+  const releasePound = (creep: Creep): void => {
+    const by = creep.poundBy;
+    const before = creep.poundCreep;
+    const building = creep.poundBuilding >= 0 ? buildingOf(creep.poundBuilding) : null;
+    creep.poundBy = -1;
+    creep.poundCreep = -1;
+    creep.poundBuilding = -1;
+    if (creep.targetCreep !== by) return;
+    loseTarget(creep);
+    const foe = before >= 0 ? byCreepId.get(before) : undefined;
+    if (
+      foe &&
+      foe.friendly &&
+      foe.hp > 0 &&
+      !foe.gone &&
+      foe.targetable &&
+      canHit(creep.hitFlags, foe.flags)
+    ) {
+      creep.targetCreep = foe.id;
+    } else if (building && isAttackableBuilding(building)) {
+      routeTo(creep, building);
+    }
   };
 
   /**
@@ -7520,6 +7587,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       return;
     }
     if (creep.huntPen >= 0 && huntPenned(creep)) return;
+    // A defending Gorgo's Chest Pound has held it its time.
+    if (creep.poundBy >= 0 && tick >= creep.poundUntil) releasePound(creep);
     if (defended && fightsBack(creep) && engage(creep)) return;
     if (creep.support) {
       // `move()`, then `tickBBuff` (`MonsterBase.tick`, `Fomor.as:22-32`).

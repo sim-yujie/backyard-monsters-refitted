@@ -1,7 +1,7 @@
 {
   "files": {
     "brain.ts": "d2c7886a4178074e20e26fbb3c5a51cb2096d2a932402e3da0d440e346865061",
-    "championAbilities.ts": "fe4e9435811233c74fae58ec7327cb995a43b25c380f230dd64b9cb8b09748f2",
+    "championAbilities.ts": "9cd9736820b10c46ff89774b508eb859c4507a96706e72186cea15ff6c5d91c5",
     "champions.ts": "afc7c45ccd6e404f56a08396ac6992d51c44659639679b456f5b8bc82b33d18b",
     "combatStatsData.ts": "21c4ab4b28ff01892880a088b3a3525986133fe1dc85fbf42d88083422525d48",
     "damagePercent.ts": "5e16e7435753175489a608f9547f1e8eab10e8f2acb54c2c251a6837e9acb662",
@@ -10,7 +10,7 @@
     "descentBurn.ts": "c17b4f64b405a79c33f245b3c28c606396dcfe9cf0a8d1bcf7b8708f62878f48",
     "digest.ts": "5b989c2765d079953fa20f07589fa378c11af5ab28885e2cfa7fba6e63e5b752",
     "dropZone.ts": "01c808c2c32e79c5c23beadeb4857fa5b380819e85c47878296bdd7727643b14",
-    "engine.ts": "6d78560c2a8000c23ae17ace0a6dcf03533a7c6d745948ce7db734a4676ea0ed",
+    "engine.ts": "aa7613983bd13c8ef48147da062878936982b593f572e67ec4cac8372259bb2b",
     "grid.ts": "f860efca5ec3023c3505438d4341b916a3c4ee73f07f833817376a816f490eb3",
     "habits.ts": "eced57e3fdc67e9faece4ee6188067dd80e7e99e7f0ccadfda174830ba787d39",
     "index.ts": "da672e13a554ff4164e716c712c80bef61187d3ecdd8631b8f2184db49eb1b72",
@@ -32,5 +32,5 @@
     "yard.ts": "0fe2d22ab8e0be8c248702a08ac21ec2e46508b52742b785eac8acbdc57a2b71"
   },
   "count": 30,
-  "version": "d68f8f3bf514fcb1"
+  "version": "b103602a9f82547f"
 }

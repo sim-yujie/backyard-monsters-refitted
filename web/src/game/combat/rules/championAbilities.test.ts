@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   CHAMPION_ABILITY_IDS,
+  chestPoundTicks,
   championAbilities,
   championMaxPower,
   powerForAbilities,
@@ -10,7 +11,7 @@ import {
 } from "./championAbilities.js";
 import { championPower, fomorBuff } from "./champions.js";
 import { createBattle, type BattleVisualEvent, type CreepSnapshot } from "./engine.js";
-import { championStat } from "./stats.js";
+import { championStat, ticks } from "./stats.js";
 import { buildEngineYard } from "./yard.js";
 import type { CombatBuildingDataMap, Roster } from "./types.js";
 
@@ -243,6 +244,78 @@ describe("Gorgo", () => {
     expect(guarded.creeps().some((one) => !one.friendly && one.targetCreep === cagedGorgo.id)).toBe(
       true,
     );
+  });
+
+  it("holds for 4 s at every level (owner, desk mm-abilities3)", () => {
+    for (let level = 1; level <= 6; level += 1) expect(chestPoundTicks(level)).toBe(ticks(4));
+  });
+
+  it("lets the towers go back to what they shot once the hold ends", () => {
+    // Pokeys first, so the towers are on them; then Gorgo with Chest Pound alone.
+    const battle = createBattle(towerYard(), { seed: 3, levels: { C1: 6 } });
+    fling(battle, 250, { C1: 40 });
+    const lastShot = new Map<number, number>();
+    watch(battle, 200, (event) => {
+      if (event.kind === "shot") lastShot.set(event.towerId, event.creepId);
+    });
+    fling(battle, 250, {}, { t: 1, l: 1, pl: powerForAbilities("G1", 2) });
+    const pound = firstAbility(battle, "chestPound", false, 400);
+    expect(pound?.count).toBeGreaterThan(0);
+    const gorgo = pound!.creepId;
+    const held = new Set((battle.abilityMarks?.().taunted ?? []).map((one) => one.tower));
+    const before = new Map([...lastShot].filter(([tower]) => held.has(tower)));
+    expect(before.size).toBeGreaterThan(0);
+    const end = pound!.tick + chestPoundTicks(1);
+    const during: number[] = [];
+    const after = new Map<number, number>();
+    watch(battle, chestPoundTicks(1) + 200, (event, current) => {
+      if (event.kind !== "shot" || !held.has(event.towerId)) return false;
+      if (current.tick <= end) during.push(event.creepId);
+      else if (!after.has(event.towerId)) after.set(event.towerId, event.creepId);
+      return false;
+    });
+    expect(during.length).toBeGreaterThan(held.size);
+    // Once he walks into reach they shoot only him, to the end of the hold.
+    expect(during.slice(-held.size).every((id) => id === gorgo)).toBe(true);
+    // Gorgo is alive and in reach, but a tower would no longer keep him: each
+    // held tower whose old target still stands shoots it again.
+    expect(battle.creeps().find((one) => one.id === gorgo)?.hp ?? 0).toBeGreaterThan(0);
+    expect(after.size).toBeGreaterThan(0);
+    expect([...after.values()].every((id) => id !== gorgo)).toBe(true);
+    for (const [tower, was] of before) {
+      const alive = battle.creeps().some((one) => one.id === was && one.hp > 0);
+      if (alive && after.has(tower)) expect(after.get(tower)).toBe(was);
+    }
+  });
+
+  it("lets the attackers go after something else once the hold ends", () => {
+    const max = championStat("G1", "health", 1);
+    const battle = createBattle(cageYard(), {
+      seed: 4,
+      levels: { C1: 6, C10: 6 },
+      bunkers: { 2: { C1: 6 } },
+      defenderChampions: [{ t: 1, l: 1, hp: max, pl: powerForAbilities("G1", 2) }],
+    });
+    fling(battle, 260, { C1: 12, C10: 4 });
+    const pound = firstAbility(battle, "chestPound", true, 1200);
+    expect(pound?.count).toBeGreaterThan(0);
+    const gorgo = pound!.creepId;
+    const pulled = new Set(
+      battle
+        .creeps()
+        .filter((one) => !one.friendly && one.targetCreep === gorgo)
+        .map((one) => one.id),
+    );
+    expect(pulled.size).toBe(pound!.count);
+    const ofPulled = () => battle.creeps().filter((one) => pulled.has(one.id));
+    // Held the whole 4 s, though the bunker's Pokeys stand in their reach.
+    battle.runTo(pound!.tick + chestPoundTicks(1) - 1);
+    expect(ofPulled().every((one) => one.targetCreep === gorgo)).toBe(true);
+    // Then each goes back to its building, and here turns on the Pokeys in its
+    // reach the usual way; none stays held on Gorgo (before, all stayed on him).
+    battle.runTo(pound!.tick + chestPoundTicks(1) + 1);
+    const left = ofPulled().filter((one) => one.targetCreep !== gorgo);
+    expect(left.length).toBeGreaterThan(pulled.size / 2);
   });
 
   it("slams the ground every 4th blow, stunning towers and attackers", () => {
