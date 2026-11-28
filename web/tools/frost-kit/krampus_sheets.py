@@ -152,18 +152,24 @@ def main():
     for level in range(1, 7):
         built = {style: looks[(style, LOOK[level])] for style in SOURCES}
         scales = {style: BODY_H[level] * UP / h_idle for style, (_, h_idle) in built.items()}
-        # frame size: the largest scaled body of either look (every cell), with room round it
-        reach_x = up = 0.0
+        # frame size: the largest scaled body of either look (every cell), measured from the ground point
+        # each cell is placed on (its heading's walk foot), so a lunge that moves the whole body stays inside
+        reach_x = up = down = 0.0
         for style, (grid, _) in built.items():
-            for row in grid:
-                for cell in row:
-                    bx0, by0, bx1, by1, foot = body(cell)
-                    reach_x = max(reach_x, max(bx1 - foot, foot - bx0) * scales[style])
-                    up = max(up, (by1 - by0) * scales[style])
+            for pcol in range(5):
+                feet = [body(grid[r][pcol]) for r in range(WALK_FRAMES)]
+                fx = float(np.median([f[4] for f in feet]))
+                fy = float(np.median([f[3] for f in feet]))
+                for row in grid:
+                    bx0, by0, bx1, by1, _ = body(row[pcol])
+                    reach_x = max(reach_x, max(bx1 - fx, fx - bx0) * scales[style])
+                    up = max(up, (fy - by0) * scales[style])
+                    down = max(down, (by1 - fy) * scales[style])
         fw = int(np.ceil((reach_x + 4 * UP) / UP)) * 2 * UP
         # 1x height even, so the Medium copy (3/4 of the 2x sheet) is whole pixels
         ay = int(np.ceil((up + 6 * UP) / (2 * UP))) * 2 * UP
-        fh = ay + 8 * UP
+        # 8 px under the hooves at least, for the baked shadow (as before)
+        fh = ay + max(8 * UP, int(np.ceil((max(down, 0) + 6 * UP) / (2 * UP))) * 2 * UP)
         ax = fw // 2
         for style, (grid, _) in built.items():
             scale = scales[style]
