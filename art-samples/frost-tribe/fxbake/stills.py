@@ -1,6 +1,6 @@
 """3-up still sheet: today / astra / neon at the same frame of the same fight, cropped and enlarged 2x, labelled.
 
-python3 stills.py <out.png> <take prefix e.g. a-modern> <frame> <x0,y0,x1,y1> [title]   (frames from film.mjs in $FRAMES)
+python3 stills.py <out.png> <take prefix e.g. a-modern, or a folder with {fx} e.g. sh-modern-{fx}-slow0> <frame> <x0,y0,x1,y1> [title]   (frames from film.mjs in $FRAMES)
 """
 import os
 import sys
@@ -15,7 +15,8 @@ LABEL = {"current": "Today's version", "astra": "astra (Codex gpt-6-astra)", "ne
 B = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 34)
 tiles = []
 for fx in ("current", "astra", "neon"):
-    im = Image.open(f"{FRAMES}/{take}-{fx}/f{frame:05d}.jpg").convert("RGB").crop(box)
+    folder = take.replace("{fx}", fx) if "{fx}" in take else f"{take}-{fx}"
+    im = Image.open(f"{FRAMES}/{folder}/f{frame:05d}.jpg").convert("RGB").crop(box)
     tiles.append((LABEL[fx], im.resize((im.width * 2, im.height * 2), Image.LANCZOS)))
 w, h = tiles[0][1].size
 head = 60 if title else 0
