@@ -65,15 +65,15 @@ const krampus = (
 /** Krampus's six sheets, `G6_1` to `G6_6`, as `MONSTER_SPRITES` keys champions. */
 export const KRAMPUS_SPRITES: Readonly<Record<string, MonsterSheet>> = {
   G6_1: krampus(1, {
-    frameWidth: 82,
+    frameWidth: 76,
     frameHeight: 60,
-    anchorX: 41,
+    anchorX: 38,
     anchorY: 52,
   }),
   G6_2: krampus(2, {
-    frameWidth: 100,
+    frameWidth: 92,
     frameHeight: 70,
-    anchorX: 50,
+    anchorX: 46,
     anchorY: 62,
   }),
   G6_3: krampus(3, {

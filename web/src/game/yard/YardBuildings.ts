@@ -254,15 +254,19 @@ const GLOW_BAKES_PER_FRAME = 3;
 const GLOW_CACHE_MAX = 96;
 const NONE_LIT: ReadonlyMap<number, number> = new Map();
 
-/** The icy blue a frozen tower is drawn in, over its own tint (`setFrozen`). */
-const FROZEN_TINT = 0x8fd4ff;
-
-/** `tint` with the frozen blue multiplied in, channel by channel. */
-export const frozenTint = (tint: number): number => {
-  const channel = (shift: number): number =>
-    Math.round((((tint >> shift) & 0xff) * ((FROZEN_TINT >> shift) & 0xff)) / 255) << shift;
-  return channel(16) | channel(8) | channel(0);
-};
+/**
+ * A tower frozen solid by Krampus (beta 10): its brightness carried into a
+ * pale ice blue, so the whole tower reads as ice at phone size, whatever its
+ * own colours (lead, 28 Nov 2026: a multiplied blue tint only darkened it).
+ * Offsets are in 0-1. Each row is light = 0.3 r + 0.59 g + 0.11 b, scaled.
+ */
+// prettier-ignore
+export const ICE_MATRIX = [
+  0.3 * 0.5, 0.59 * 0.5, 0.11 * 0.5, 0, 0.12,
+  0.3 * 0.75, 0.59 * 0.75, 0.11 * 0.75, 0, 0.26,
+  0.3 * 0.85, 0.59 * 0.85, 0.11 * 0.85, 0, 0.42,
+  0, 0, 0, 1, 0,
+] as const;
 
 export class YardBuildings {
   /** Beneath every building. Add to the scene before `tops`. */
@@ -296,6 +300,7 @@ export class YardBuildings {
   /** Buildings drawn highlighted, and the one filter they all share (#88). */
   private readonly highlighted = new Set<number>();
   private highlightFilter: ColorMatrixFilter | null = null;
+  private iceFilter: ColorMatrixFilter | null = null;
   /** The building drawn faded under its upgrade preview, if any; see {@link setFaded}. */
   private faded: number | null = null;
   /** What stands among the buildings for a while, kept through a redraw: see `addGuest`. */
@@ -931,6 +936,7 @@ export class YardBuildings {
     this.views = [];
     this.byId.clear();
     this.highlighted.clear();
+    this.frozen.clear();
     // The glow sprites went with the tops; their baked pictures stay in `glowCache` for the redraw.
     this.helpLit.clear();
     this.faded = null;
@@ -943,6 +949,8 @@ export class YardBuildings {
     this.guests.clear();
     this.highlightFilter?.destroy();
     this.highlightFilter = null;
+    this.iceFilter?.destroy();
+    this.iceFilter = null;
     this.textures.destroy();
   }
 
@@ -1205,23 +1213,21 @@ export class YardBuildings {
   /* ── Frozen, for a live battle (beta 10) ──────────────────────────── */
 
   /**
-   * Draws a tower Krampus's blow froze solid in an icy blue, over whatever
-   * damage step it is at, or puts it back. Kept as a set, so the damage
-   * steps and the hit flash put the ice back on too ({@link tintOf}).
+   * Draws a tower Krampus's blow froze solid as ice ({@link ICE_MATRIX}), or
+   * puts it back. Kept as a set, so a rebuilt gun strip comes back iced too
+   * (`filtersFor`); the drop highlight wins while both are on.
    */
   setFrozen(id: number, on: boolean): void {
     if (on === this.frozen.has(id)) return;
     if (on) this.frozen.add(id);
     else this.frozen.delete(id);
     const view = this.byId.get(id);
-    if (!view) return;
-    const tint = this.tintOf(view);
-    if (view.resolved) view.top.tint = tint;
-    for (const layer of view.anims) layer.sprite.tint = tint;
-    if (view.fort) {
-      view.fort.back.tint = tint;
-      view.fort.front.tint = tint;
-    }
+    if (view) this.applyFilters(view);
+  }
+
+  /** Whether a tower is drawn frozen. */
+  isFrozen(id: number): boolean {
+    return this.frozen.has(id);
   }
 
   /* ── Lit, for a friend's visit (owner's pick F, 26 Nov 2026) ───────── */
@@ -1272,8 +1278,7 @@ export class YardBuildings {
 
   /** The tint a building is drawn with: its damage step's, warmed while a visitor can help it. */
   private tintOf(view: BuildingView): number {
-    const tint = litTint(DAMAGE_TINTS[view.damageStep] ?? 0xffffff, this.helpLit.get(view.building.id) ?? 0);
-    return this.frozen.has(view.building.id) ? frozenTint(tint) : tint;
+    return litTint(DAMAGE_TINTS[view.damageStep] ?? 0xffffff, this.helpLit.get(view.building.id) ?? 0);
   }
 
   /** Puts a building's help light on its sprites: the tint, and the glow's strength or its going. */
@@ -1390,6 +1395,11 @@ export class YardBuildings {
     if (!view || this.highlighted.has(id) === on) return;
     if (on) this.highlighted.add(id);
     else this.highlighted.delete(id);
+    this.applyFilters(view);
+  }
+
+  /** Puts a building's colour filter (highlight or ice) on its sprites, or takes it off. */
+  private applyFilters(view: BuildingView): void {
     const filters = this.filtersFor(view);
     view.top.filters = filters;
     for (const layer of view.anims) layer.sprite.filters = filters;
@@ -1445,7 +1455,14 @@ export class YardBuildings {
   }
 
   private filtersFor(view: BuildingView): ColorMatrixFilter[] | null {
-    if (!this.highlighted.has(view.building.id)) return null;
+    if (!this.highlighted.has(view.building.id)) {
+      if (!this.frozen.has(view.building.id)) return null;
+      if (!this.iceFilter) {
+        this.iceFilter = new ColorMatrixFilter();
+        this.iceFilter.matrix = [...ICE_MATRIX];
+      }
+      return [this.iceFilter];
+    }
     if (!this.highlightFilter) {
       this.highlightFilter = new ColorMatrixFilter();
       this.highlightFilter.matrix = [...HIGHLIGHT_MATRIX];

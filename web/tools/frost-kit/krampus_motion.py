@@ -32,6 +32,9 @@ ATTACK = {
     "nod": [0, -7, -13, -16, -5, 15, 18, 11, 4, 0],
 }
 ATTACK_FRAMES = len(ATTACK["body"])
+RIGID = 0.65   # share of the lunge that moves the whole body
+DROP = 0.45    # how much of the head drop is kept
+NOD = 0.7      # how much of the nod is kept
 ATTACK_STRIKE = 5
 
 # Stomp: the front lifted (x body height, up) and the body tipped back about the hind feet (degrees, + = front up).
@@ -93,22 +96,23 @@ def motion(cell, heading, kind, frame):
         body, head, drop, nod = (ATTACK[k][frame] * (1 if k == "nod" else bh) for k in ("body", "head", "drop", "nod"))
         body *= REACH[heading]
         head *= REACH[heading]
-        dx += w_body * planted * body * fx
-        dy += w_body * planted * body * fy
+        # Most of the lunge moves the whole beast, hooves too: a shift keeps his size in every heading
+        # (lead, 28 Nov: the front-left lunge shrank him 20% when the body was pushed into planted hooves).
+        dx += RIGID * body * fx
+        dy += RIGID * body * fy
+        # The rest stretches him sideways only, hind hooves planted: a reach, never a squash.
+        dx += w_body * planted * (1 - RIGID) * body * fx
+        # The head leads: further forward (sideways), a little lower.
         dx += w_head * planted * head * fx
-        dy += w_head * planted * (head * fy + drop)
-        # the nod: the head turns about the neck (between head and middle), as much as the view shows it
+        dy += w_head * planted * drop * DROP
         side = SIDE[heading]
         if side > 0 and nod != 0:
             px, py = hx + (cx - hx) * 0.55, hy + (cy - hy) * 0.55
             sign = -1 if fx < 0 else 1
-            phi = math.radians(nod) * sign * side * w_head
+            phi = math.radians(nod * NOD) * sign * side * w_head
             ox, oy = xx - px, yy - py
             dx += (ox * np.cos(phi) - oy * np.sin(phi) - ox) * planted
             dy += (ox * np.sin(phi) + oy * np.cos(phi) - oy) * planted
-        elif nod != 0:
-            # face on or from behind a nod is the head dipping: a little more drop
-            dy += w_head * planted * nod / 12 * 0.02 * bh
     else:
         lift = STOMP["lift"][frame] * bh
         tip = STOMP["tip"][frame]
