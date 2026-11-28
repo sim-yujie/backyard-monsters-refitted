@@ -15,10 +15,10 @@ When a tower enters the aura (`on_each`, 440 ms), a frost-mist ring expands arou
 | time ms | piece | where | size (world px) | motion | opacity | colour (Modern / Classic) | blend | layer |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 0–5600 (loop, `hold: 1`) | `frost_zone_ring` (1) | `caster_feet`, follow | `reach*0.96` ↔ `reach*1.00`, `squash: 0.5`, `pulse: true` | `spin_deg_s: 1.8` (glacial turn) | fade in 350 ms → steady `0.70` | `#7cb0ff` / `#7aa2d4` | `normal` | `ground` |
-| 0–4000 (loop, `hold: 1`) | `core_permafrost` (1) | `caster_feet`, follow | `reach*0.29` ↔ `reach*0.31`, `squash: 0.5`, `pulse: true` | anchored under hooves, gentle breath | fade in 250 ms → steady `0.86` | `#ffffff` / `#cfdce8` | `normal` | `ground` |
-| 0–4400 (loop, `hold: 1`) | `rime_bank_wide` (5) | `caster_feet`, `ring: reach*0.48`, follow | `92` ↔ `102`, `pulse: true` | `orbit_deg_s: 2`, `phase_stagger: 0.2` | fade in 300 ms → steady `0.88` | `#ffffff` / `#cfdce8` | `normal` | `ground` |
-| 0–3800 (loop, `hold: 1`) | `rime_bank_crest` (3) | `caster_feet`, `ring: reach*0.43`, follow | `72` ↔ `80`, `pulse: true` | `orbit_deg_s: 2`, `phase_stagger: 0.333` | fade in 300 ms → steady `0.90` | `#ffffff` / `#cfdce8` | `normal` | `ground` |
-| 0–4800 (loop, `hold: 1`) | `mid_frost_patch` (3) | `caster_feet`, `ring: reach*0.26`, follow | `64` ↔ `70`, `pulse: true` | `orbit_deg_s: -1.8`, `phase_stagger: 0.333` | fade in 300 ms → steady `0.84` | `#ffffff` / `#cfdce8` | `normal` | `ground` |
+| 0–4000 (loop, `hold: 1`) | `core_permafrost` (1) | `caster_feet`, follow | `reach*0.29` ↔ `reach*0.31`, `squash: 0.5`, `pulse: true` | anchored under hooves, gentle breath | fade in 250 ms → steady `0.86` | `#ffffff` / `#ffffff` | `normal` | `ground` |
+| 0–4400 (loop, `hold: 1`) | `rime_bank_wide` (5) | `caster_feet`, `ring: reach*0.48`, follow | `92` ↔ `102`, `pulse: true` | `orbit_deg_s: 2`, `phase_stagger: 0.2` | fade in 300 ms → steady `0.88` | `#ffffff` / `#ffffff` | `normal` | `ground` |
+| 0–3800 (loop, `hold: 1`) | `rime_bank_crest` (3) | `caster_feet`, `ring: reach*0.43`, follow | `72` ↔ `80`, `pulse: true` | `orbit_deg_s: 2`, `phase_stagger: 0.333` | fade in 300 ms → steady `0.90` | `#ffffff` / `#ffffff` | `normal` | `ground` |
+| 0–4800 (loop, `hold: 1`) | `mid_frost_patch` (3) | `caster_feet`, `ring: reach*0.26`, follow | `64` ↔ `70`, `pulse: true` | `orbit_deg_s: -1.8`, `phase_stagger: 0.333` | fade in 300 ms → steady `0.84` | `#ffffff` / `#ffffff` | `normal` | `ground` |
 | 0–3400 (loop, `hold: 1`) | `frost_air_motes` (3) | `caster_feet`, `ring: reach*0.28`, `z: 20`, follow | `54` ↔ `60`, `pulse: true` | `orbit_deg_s: -4.5`, `spin_deg_s: 8`, `phase_stagger: 0.333` | fade in 300 ms → steady `0.88` | `#e4f0ff` / `#c8d8e8` | `normal` | `air` |
 
 ### `on_each` — Freeze-Snap When a Tower Enters the Aura (total 440 ms)
@@ -27,13 +27,13 @@ When a tower enters the aura (`on_each`, 440 ms), a frost-mist ring expands arou
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 0–420 | `frost_zone_ring` (1) | `tower_base` | `32` → `76`, `ease: out`, `squash: 0.5` | rapid ground cold-puff expansion | fade in 25 ms → `0.72` (`hold: 0.25`) → 0 | `#8ec0ff` → `#5c94ec` / `#8aaed6` → `#5c7ea6` | `normal` | `ground` |
 | 0–360 | `frost_snap_burst` (1) | `tower_top`, offset `[0, 4]` | `20` → `72`, `ease: out` | `spin_deg_s: 20`, crisp starburst flash | fade in 20 ms → `0.90` (`hold: 0.25`) → 0 | `#f0f6ff` → `#88bcff` → `#4a84e8` / `#d8e4f0` → `#8caed4` → `#5476a0` | `normal` | `air` |
-| 20–440 | `ice_chip_pop` (3) | `tower_top`, offset `[0, 4]`, `ring: 10` | `16` → `10` | `radial_speed: 55`, `vz: 48`, `gravity: 190`, `stagger_ms: 20`, `jitter: 0.3`, `spin_deg_s: 220` | fade in 15 ms → `0.95` (`hold: 0.5`) → 0 | `#ffffff` / `#cfdce8` | `normal` | `air` |
+| 20–440 | `ice_chip_pop` (3) | `tower_top`, offset `[0, 4]`, `ring: 10` | `16` → `10` | `radial_speed: 55`, `vz: 48`, `gravity: 190`, `stagger_ms: 20`, `jitter: 0.3`, `spin_deg_s: 220` | fade in 15 ms → `0.95` (`hold: 0.5`) → 0 | `#ffffff` / `#ffffff` | `normal` | `air` |
 
 ### `held_each` — Blinded Tower Mark (1 piece per tower; max 8 towers = 8 pieces)
 
 | time ms | piece | where | size (world px) | motion | opacity | colour (Modern / Classic) | blend | layer |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 0–2600 (loop, `hold: 1`) | `tower_frost_crown` (1) | `tower_top`, offset `[0, 6]`, follow | `48` ↔ `52`, `pulse: true` | steady gentle frost-visor breath (fades out over 200 ms on exit) | fade in 180 ms → steady `0.92` | `#ffffff` / `#cfdce8` | `normal` | `air` |
+| 0–2600 (loop, `hold: 1`) | `tower_frost_crown` (1) | `tower_top`, offset `[0, 6]`, follow | `48` ↔ `52`, `pulse: true` | steady gentle frost-visor breath (fades out over 200 ms on exit) | fade in 180 ms → steady `0.92` | `#ffffff` / `#ffffff` | `normal` | `air` |
 
 ---
 
@@ -51,8 +51,8 @@ When a tower enters the aura (`on_each`, 440 ms), a frost-mist ring expands arou
 Timing, motion, sizes, and `blend: "normal"` are **identical** between Modern and Classic; only art rendering and tints differ:
 
 - **Palette & shading (Classic):** Muted, slightly dusty natural glacial slate-blue (`#6696cc`, `#4672ac`) and chalky snow-white (`#e2eaf2`) with deep near-black indigo-navy shadow undersides (`#162644`, `#0e182a`)—matching Krampus's horns in `refs/krampus-classic-ingame.png`. Soft grainy late-2000s 3ds Max pre-rendered 3D shading with a single soft upper-left key light and small soft highlights only on slick ice bevels; no glossy cartoon sheen, no neon glow, no outlines.
-- **Tints (`tint_classic`):** Light-sheet pieces shift to slightly dustier slate-frost hues (`#7aa2d4` for the ground reach ring, `#c8d8e8` for air snowflakes, `#d8e4f0 → #8caed4 → #5476a0` for the tower snap burst). Solid pieces carry `tint_classic: ["#cfdce8"]` so that until `classic-sheet.jpg` is generated, the Modern sprites automatically desaturate and cool down to fit Classic's muted grass and lighting; once `classic-sheet.jpg` is painted directly in Classic's muted palette, `tint_classic` on solid pieces can remain `#ffffff` or `#eef4fa` if desired.
-- **Exact `classic-sheet.jpg` layout (to be generated later, matching `modern-sheet.jpg` cell for cell):**
+- **Tints (`tint_classic`):** Light-sheet pieces shift to slightly dustier slate-frost hues (`#7aa2d4` for the ground reach ring, `#c8d8e8` for air snowflakes, `#d8e4f0 → #8caed4 → #5476a0` for the tower snap burst). Solid pieces from `classic-sheet.jpg` use `tint_classic: ["#ffffff"]` so their pre-rendered muted Classic palette and deep navy shadows display cleanly without double-darkening.
+- **Exact `classic-sheet.jpg` layout (matching `modern-sheet.jpg` cell for cell):**
   - **Format:** 3:2 landscape (1536×1024), invisible uniform **3 columns × 2 rows** grid (6 equal 512×512 square cells), flat pure magenta (`#FF00FF`) background, no grid lines, no text, no ground plane, no cast shadows, ≥12% empty magenta margin inside every cell.
   - **Row 1, Col 1 — `core_permafrost`:** Straight top-down chunky 3D cracked slate-blue ice slabs and chalky snow-white hoarfrost crust radiating into irregular jagged lobes with deep dark-navy cracks.
   - **Row 1, Col 2 — `rime_bank_wide`:** 35° isometric wide (~2:1) gently curved ground shelf of crusty chalky-white snow and chunky muted slate-blue ice facets with hanging icicle fringes and dark navy underside shadow.
