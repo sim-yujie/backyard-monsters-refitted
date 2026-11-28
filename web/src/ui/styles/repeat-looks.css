@@ -238,8 +238,40 @@
 }
 
 .rl-cue-glass,
-.repeat-bar--waiting .rl-cue-swords {
+.rl-cue-swords,
+.repeat-bar--waiting .rl-cue .rl-chevrons,
+.repeat-bar--fighting .rl-cue .rl-chevrons,
+.repeat-bar--full .rl-cue .rl-chevrons {
   display: none;
+}
+
+.repeat-bar--fighting:not(.repeat-bar--waiting) .rl-cue-swords,
+.repeat-bar--full .rl-cue-swords {
+  display: block;
+}
+
+/* On the march: three chevrons pulse towards the camp. */
+.rl-chevrons {
+  display: flex;
+  gap: 1px;
+  height: 12px;
+}
+
+.rl-chevron {
+  width: 9px;
+  height: 12px;
+  background: var(--rl-fill-b);
+  clip-path: polygon(0 0, 55% 0, 100% 50%, 55% 100%, 0 100%, 45% 50%);
+  opacity: 0.25;
+  animation: rl-chevron 900ms linear infinite;
+}
+
+.rl-chevron:nth-child(2) {
+  animation-delay: 200ms;
+}
+
+.rl-chevron:nth-child(3) {
+  animation-delay: 400ms;
 }
 
 .repeat-bar--waiting .rl-cue-glass {
@@ -360,6 +392,7 @@
 }
 
 .repeat-look--a .rl-road {
+  opacity: 0.95;
   position: absolute;
   left: 0;
   right: 0;
@@ -392,7 +425,7 @@
 
   position: absolute;
   bottom: 18px;
-  left: calc(10px + var(--march) * (100% - var(--block-w) - var(--goal-w) - 24px));
+  left: calc(10px + var(--march) * (100% - var(--block-w) - var(--goal-w) - 40px));
   z-index: 1;
   display: grid;
   grid-template-columns: repeat(var(--cols), var(--cell));
@@ -449,9 +482,18 @@
   filter: drop-shadow(0 2px 3px rgb(0 0 0 / 55%));
 }
 
+/* The clash sits in the gap between the army's front and the camp, never on a marcher. */
 .repeat-look--a .rl-clash {
-  right: calc(var(--goal-w) - 18px);
-  bottom: calc(var(--stage-h) - 50px);
+  top: 50%;
+  right: calc(var(--goal-w) - 3px);
+  width: 36px;
+  height: 36px;
+  margin-top: -18px;
+}
+
+.repeat-look--a .rl-clash-icon {
+  width: 26px;
+  height: 26px;
 }
 
 /* Fighting: the front lunges, the camp rocks. */
@@ -506,9 +548,7 @@
 /* Classic: a warm sandy battlefield, so Flash's cut-outs stay crisp. */
 :root[data-skin="flash"] .repeat-look--a .rl-stage {
   background: linear-gradient(to bottom, #f1dcb0 0%, #e6c995 46%, #c9b06c 47%, #b39a58 72%, #a08848 100%);
-  box-shadow:
-    inset 0 2px 5px rgb(90 55 20 / 45%),
-    0 0 0 1px rgb(90 55 20 / 35%);
+  box-shadow: inset 0 0 12px 2px rgb(90 55 20 / 35%);
 }
 
 :root[data-skin="flash"] .repeat-look--a .rl-sky {
@@ -532,6 +572,16 @@
   filter: drop-shadow(0 2px 1px rgb(60 30 5 / 50%));
 }
 
+/* Classic's Flash cut-outs: a parchment disc each, so a dark monster never
+   melts into the ground or the brown bar (neon round 1). */
+:root[data-skin="flash"] .rl-unit:not(.rl-unit--champion, .rl-unit--token) .rl-unit-pic,
+:root[data-skin="flash"] .rl-slot:not(.rl-slot--champion, .rl-slot--token) .rl-slot-pic {
+  padding: 2px;
+  border: 1.5px solid #8a6a43;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, #fffaf0, rgb(255 244 222 / 92%) 60%, #e9d3a8);
+}
+
 :root[data-skin="flash"] .repeat-look--a.repeat-bar--waiting .rl-block {
   opacity: 0.82;
 }
@@ -549,14 +599,17 @@
   gap: 4px;
 }
 
+/* No boxes inside the window (neon round 1): a thin rule beside the camp. */
 .repeat-look--b .rl-side {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  padding: 8px;
-  border: 1px solid var(--colour-border-subtle);
-  border-radius: 10px;
-  background: var(--colour-surface-sunken);
+  padding: 4px 0;
+}
+
+.repeat-look--b .rl-foe {
+  border-left: 1px solid var(--colour-border-strong);
+  padding-left: 6px;
 }
 
 .repeat-look--b .rl-side-head {
@@ -601,17 +654,28 @@
   height: 100%;
 }
 
+/* The count on a dark chip at the tile's foot, readable on Classic's cream cards too. */
 .repeat-look--b .rl-tiles .attack-window__caption {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: 50%;
+  bottom: 1px;
   margin: 0;
-  padding: 6px 1px 1px;
+  padding: 0 4px;
+  transform: translateX(-50%);
+  border-radius: var(--radius-pill);
+  background: var(--rl-chip);
+  color: #ffffff;
   font-size: 11px;
-  line-height: 13px;
+  line-height: 14px;
   font-weight: 800;
   text-align: center;
+  text-shadow: none;
+  white-space: nowrap;
+}
+
+.repeat-look--b .rl-tiles .attack-window__tile--champion .attack-window__caption {
+  background: linear-gradient(#ffb340, #d86a10);
+  color: #2c1a04;
 }
 
 .repeat-look--b .rl-tiles--solo .attack-window__caption {
@@ -678,7 +742,27 @@
   object-fit: contain;
 }
 
+.repeat-look--b .rl-disc-swords,
 .repeat-look--b.repeat-bar--waiting .rl-disc-swords {
+  display: none;
+}
+
+.repeat-look--b.repeat-bar--fighting:not(.repeat-bar--waiting) .rl-disc-swords,
+.repeat-look--b.repeat-bar--full .rl-disc-swords {
+  display: block;
+}
+
+.repeat-look--b .rl-disc .rl-chevrons {
+  position: relative;
+}
+
+.repeat-look--b .rl-disc .rl-chevron {
+  background: #ffe08a;
+}
+
+.repeat-look--b.repeat-bar--fighting .rl-disc .rl-chevrons,
+.repeat-look--b.repeat-bar--full .rl-disc .rl-chevrons,
+.repeat-look--b.repeat-bar--waiting .rl-disc .rl-chevrons {
   display: none;
 }
 
@@ -694,34 +778,6 @@
 .repeat-look--b.repeat-bar--fighting .rl-clash-ring {
   inset: -10px;
   animation: rl-ring 700ms ease-out infinite;
-}
-
-.repeat-look--b .rl-chevrons {
-  display: flex;
-  gap: 1px;
-  height: 12px;
-}
-
-.repeat-look--b .rl-chevron {
-  width: 10px;
-  height: 12px;
-  background: var(--rl-fill-b);
-  clip-path: polygon(0 0, 55% 0, 100% 50%, 55% 100%, 0 100%, 45% 50%);
-  opacity: 0.25;
-  animation: rl-chevron 900ms linear infinite;
-}
-
-.repeat-look--b .rl-chevron:nth-child(2) {
-  animation-delay: 200ms;
-}
-
-.repeat-look--b .rl-chevron:nth-child(3) {
-  animation-delay: 400ms;
-}
-
-.repeat-look--b.repeat-bar--fighting .rl-chevrons,
-.repeat-look--b.repeat-bar--waiting .rl-chevrons {
-  visibility: hidden;
 }
 
 .repeat-look--b .rl-place--medal {
@@ -811,12 +867,17 @@
 .attack-end__backdrop.auto-attack__backdrop--banner {
   place-items: start center;
   padding: calc(64px + env(safe-area-inset-top)) var(--space-4) var(--space-4);
-  background: rgb(0 0 0 / 18%);
+  background: rgb(0 0 0 / 35%);
 }
 
 /* Desktop and iPad on its side: centred over the map left of the camp's drawer. */
 @media (min-width: 900px) {
   .attack-end__backdrop.auto-attack__backdrop--banner {
+    padding-right: 384px;
+  }
+
+  /* A and B: centred over the map, clear of the camp's drawer (neon round 1). */
+  .attack-end__backdrop.auto-attack__backdrop--look:not(.auto-attack__backdrop--banner) {
     padding-right: 384px;
   }
 }
@@ -878,6 +939,20 @@
   background: rgb(0 0 0 / 35%);
 }
 
+.repeat-look--c .rl-head-left {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.repeat-look--c .rl-kicker {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #ffd35a;
+}
+
 .repeat-look--c .rl-head-right {
   display: flex;
   align-items: center;
@@ -924,7 +999,7 @@
 .repeat-look--c .rl-vanguard {
   position: absolute;
   bottom: 7px;
-  left: calc(var(--march) * (100% - var(--goal-w) - var(--van) - 4px));
+  left: calc(var(--march) * (100% - var(--goal-w) - var(--van) - 30px));
   z-index: 1;
 }
 
@@ -949,9 +1024,18 @@
   filter: drop-shadow(0 2px 2px rgb(0 0 0 / 60%));
 }
 
+/* The clash in the gap between the vanguard and the camp's crest. */
 .repeat-look--c .rl-clash {
-  right: calc(var(--goal-w) - 18px);
-  top: 1px;
+  top: 50%;
+  right: calc(var(--goal-w) - 6px);
+  width: 36px;
+  height: 36px;
+  margin-top: -18px;
+}
+
+.repeat-look--c .rl-clash-icon {
+  width: 26px;
+  height: 26px;
 }
 
 .repeat-look--c.repeat-bar--fighting .rl-vanguard .rl-unit {
@@ -1042,8 +1126,8 @@
 
   .repeat-look--a .rl-unit-count,
   .repeat-look--c .rl-slot-count {
-    font-size: 10px;
-    line-height: 13px;
+    font-size: 11px;
+    line-height: 14px;
   }
 
   .repeat-look--b .rl-arena {
@@ -1136,8 +1220,8 @@
     grid-template-columns: minmax(0, 1fr) 30px 92px;
   }
 
-  .repeat-look--b .rl-camp-word {
-    display: none;
+  .repeat-look--b .rl-foe .rl-camp {
+    font-size: 11px;
   }
 
   .repeat-look--b .rl-tiles {
@@ -1148,7 +1232,19 @@
 /* A phone on its side: lower scene, tight padding. */
 @media (max-height: 500px) {
   .repeat-look--a {
-    --stage-h: 96px;
+    --stage-h: 88px;
+  }
+
+  .attack-end.auto-attack--look-c {
+    width: min(440px, calc(100vw - 32px));
+  }
+
+  .repeat-look--c .rl-slot {
+    --cell: 26px;
+  }
+
+  .repeat-look--c .rl-sprint {
+    height: 38px;
   }
 
   .map-panel.auto-attack--look > .panel__body {
@@ -1304,4 +1400,16 @@
 .repeat-look.repeat-bar--waiting .rl-cue-glass,
 .repeat-look.repeat-bar--waiting .rl-disc-glass {
   animation-play-state: running;
+}
+
+/* B: the medallion is the cue; no second one at the bar's end. */
+.repeat-look--b .rl-foot .rl-cue {
+  display: none;
+}
+
+@media (max-width: 620px), (max-height: 500px) {
+  .repeat-look--b .rl-disc .rl-chevron {
+    width: 7px;
+    height: 10px;
+  }
 }

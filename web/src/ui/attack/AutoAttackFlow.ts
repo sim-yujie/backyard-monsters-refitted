@@ -116,7 +116,11 @@ const sheet = (title: string, className: string): { backdrop: HTMLElement; panel
   backdrop.className = `popup-backdrop attack-end__backdrop${
     className.includes("auto-attack--bar") ? " auto-attack__backdrop--bar" : ""
   }${/auto-attack--(confirm|failed|result)/.test(className) ? " auto-attack__backdrop--card" : ""}${
-    className.includes("auto-attack--look-c") ? " auto-attack__backdrop--banner" : ""
+    className.includes("auto-attack--look-c")
+      ? " auto-attack__backdrop--look auto-attack__backdrop--banner"
+      : className.includes("auto-attack--look")
+        ? " auto-attack__backdrop--look"
+        : ""
   }`;
   const panel = new Panel({ title, closable: false, className: `map-panel attack-end auto-attack ${className}` });
   panel.element.setAttribute("role", "dialog");

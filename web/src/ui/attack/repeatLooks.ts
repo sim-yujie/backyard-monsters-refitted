@@ -102,7 +102,8 @@ const totalChip = (plan: Plan | null): HTMLElement => {
   const chip = part("rl-total", "span");
   const total = totalOf(plan);
   chip.title = `${total.toLocaleString("en-US")} monsters`;
-  chip.append(gameIcon("swords", { size: 24, decorative: true }), part("", "span", `×${formatCompact(total)}`));
+  // The army icon (monsters and the "again" arrow), never the swords: those mean the fight (neon round 1).
+  chip.append(gameIcon("lastarmy", { size: 24, decorative: true }), part("", "span", `×${formatCompact(total)}`));
   return chip;
 };
 
@@ -119,6 +120,13 @@ const waitBadge = (): HTMLElement => {
   return badge;
 };
 
+/** Three chevrons: on the march (the swords take over when the fight starts). */
+const chevronsOf = (): HTMLElement => {
+  const chevrons = part("rl-chevrons");
+  for (let i = 0; i < 3; i++) chevrons.append(part("rl-chevron", "span"));
+  return chevrons;
+};
+
 /** The slim progress rail and its cue: swords marching, the clash while fighting. */
 const footOf = (): HTMLElement => {
   const foot = part("rl-foot");
@@ -129,7 +137,7 @@ const footOf = (): HTMLElement => {
   glass.className = "rl-cue-glass";
   glass.alt = "";
   glass.src = QUEUE_ICON_URL;
-  cue.append(gameIcon("swords", { size: 24, decorative: true, className: "rl-cue-swords" }), glass);
+  cue.append(chevronsOf(), gameIcon("swords", { size: 24, decorative: true, className: "rl-cue-swords" }), glass);
   foot.append(rail, cue);
   return foot;
 };
@@ -144,8 +152,9 @@ const clashOf = (): HTMLElement => {
 /* ── A: battlefield diorama ─────────────────────────────────────────────── */
 
 const buildA = (root: HTMLElement, plan: Plan | null): void => {
+  // Each side over its own half: your army left, the camp right (neon round 1).
   const head = part("rl-head");
-  head.append(campLine(plan), totalChip(plan));
+  head.append(totalChip(plan), campLine(plan));
   const stage = part("rl-stage");
   stage.append(part("rl-sky"), part("rl-road"));
   const marchers = leadersFirst(plan);
@@ -201,10 +210,8 @@ const buildB = (root: HTMLElement, plan: Plan | null): void => {
   glass.className = "rl-disc-glass";
   glass.alt = "";
   glass.src = QUEUE_ICON_URL;
-  disc.append(part("rl-clash-ring"), gameIcon("swords", { size: 32, decorative: true, className: "rl-disc-swords" }), glass);
-  const chevrons = part("rl-chevrons");
-  for (let i = 0; i < 3; i++) chevrons.append(part("rl-chevron", "span"));
-  medal.append(chevrons, disc, part("rl-place rl-place--medal", "span", "#1"));
+  disc.append(part("rl-clash-ring"), chevronsOf(), gameIcon("swords", { size: 32, decorative: true, className: "rl-disc-swords" }), glass);
+  medal.append(disc, part("rl-place rl-place--medal", "span", "#1"));
 
   const foe = part("rl-side rl-foe");
   foe.append(tribeImage(plan, "rl-foe-portrait"), campLine(plan));
@@ -223,9 +230,12 @@ const buildC = (root: HTMLElement, plan: Plan | null): void => {
   glass.className = "rl-cue-glass";
   glass.alt = "";
   glass.src = QUEUE_ICON_URL;
-  cue.append(gameIcon("swords", { size: 24, decorative: true, className: "rl-cue-swords" }), glass, part("rl-place", "span", "#1"));
+  cue.append(chevronsOf(), gameIcon("swords", { size: 24, decorative: true, className: "rl-cue-swords" }), glass, part("rl-place", "span", "#1"));
   right.append(totalChip(plan), cue);
-  head.append(campLine(plan), right);
+  // No window sign: the banner names itself (neon round 1).
+  const left = part("rl-head-left");
+  left.append(part("rl-kicker", "span", "Repeat attack"), campLine(plan));
+  head.append(left, right);
 
   const marchers = leadersFirst(plan);
   const sprint = part("rl-sprint");
