@@ -2330,7 +2330,8 @@ export class AttackBattleLayer {
           (this.heldBuildingHp.get(event.buildingId) ?? 0) + event.amount,
         );
       }
-      const baked = this.frostBake !== null && monsterId === KRAMPUS_ID;
+      // neon's Ice Shards, or the plain frostball should its atlas have failed to load.
+      const baked = this.frostBake !== null && !this.frostBake.failed && monsterId === KRAMPUS_ID;
       this.fx.projectile(
         event.tick,
         from,
@@ -2769,8 +2770,8 @@ export class AttackBattleLayer {
     }
     if (event.kind === "quake") {
       const at = groundWorld(event.ix, event.iy, this.origin);
-      if (this.frostBake && this.views.get(event.creepId)?.monsterId === KRAMPUS_ID) {
-        // Krampus's Blizzard Stomp (neon's) in place of Korath's rings.
+      if (this.frostBake && !this.frostBake.failed && this.views.get(event.creepId)?.monsterId === KRAMPUS_ID) {
+        // Krampus's Blizzard Stomp (neon's) in place of Korath's rings (the rings should its atlas have failed).
         this.frostBake.slam(event.tick, event.creepId, event.ix, event.iy, event.radius);
         return;
       }

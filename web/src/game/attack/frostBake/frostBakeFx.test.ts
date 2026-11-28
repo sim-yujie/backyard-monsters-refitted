@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { type FrostSet, frostAuraSet, frostFxFromUrl, KRAMPUS_ABILITY_SET, sizeOf } from "./frostBakeFx";
+import { describe, expect, it, vi } from "vitest";
+import { Container } from "pixi.js";
+import { FrostBakeFx, type FrostBakeHost, type FrostSet, frostAuraSet, frostFxFromUrl, KRAMPUS_ABILITY_SET, sizeOf } from "./frostBakeFx";
 
 /** Every cell name a plan uses (pieces and flipbooks). */
 const cellsOf = (node: unknown, found = new Set<string>()): Set<string> => {
@@ -56,5 +57,33 @@ describe("Krampus's frost ability sets", () => {
     expect(set.round).toBe("round-2");
     expect(Object.keys(set.plan)).toEqual(["frostAura"]);
     checkAtlas(set);
+  });
+
+  it("says when its atlas fails to load, so the battle draws the plain shard and rings", async () => {
+    const layer = new Container();
+    let krampus: { id: number; level: number; feet: { x: number; y: number }; top: number; heading: number }[] = [];
+    const host: FrostBakeHost = {
+      air: () => layer,
+      ground: () => layer,
+      krampus: () => krampus,
+      creep: () => null,
+      tower: () => null,
+      blinded: () => [],
+      towerPoints: () => [],
+      jolt: () => {},
+      auraRadius: () => 200,
+      classic: false,
+      low: false,
+    };
+    const fx = new FrostBakeFx(KRAMPUS_ABILITY_SET, host);
+    fx.update(0);
+    await new Promise((done) => setTimeout(done, 0));
+    // No Krampus yet: nothing is loaded, nothing failed.
+    expect(fx.failed).toBe(false);
+    krampus = [{ id: 1, level: 6, feet: { x: 0, y: 0 }, top: -80, heading: 0 }];
+    fx.update(1);
+    // The test runner has no document, so the load fails.
+    await vi.waitFor(() => expect(fx.failed).toBe(true));
+    fx.destroy();
   });
 });

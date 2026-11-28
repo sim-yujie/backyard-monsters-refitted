@@ -306,7 +306,10 @@ export class FrostBakeFx {
     return this.set.plan;
   }
 
-  /** Loads the set's atlas once (a failed load is not retried: the effect is drawing only). */
+  /** The atlas failed to load: the battle layer draws its plain effects instead (a frostball, Korath's rings). */
+  failed = false;
+
+  /** Loads the set's atlas once (a failed load is not retried; {@link failed} says so). */
   private load(): void {
     if (this.sheet || this.loading) return;
     this.loading = true;
@@ -315,7 +318,10 @@ export class FrostBakeFx {
       (texture) => {
         this.sheet = texture;
       },
-      (error: unknown) => console.warn("Krampus frost effects did not load.", error),
+      (error: unknown) => {
+        this.failed = true;
+        console.warn("Krampus frost effects did not load; plain ones are drawn.", error);
+      },
     );
   }
 
