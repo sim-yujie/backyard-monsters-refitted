@@ -66,19 +66,19 @@
   },
   "expected": {
     "ticks": 9800,
-    "damage": 10.039689788597912,
+    "damage": 9.840410515302992,
     "destroyed": null,
     "attackloot": {
-      "r1": 54000,
+      "r1": 48600,
       "r2": 37800,
       "r3": 43200,
-      "r4": 32400
+      "r4": 27000
     },
     "defenderLoss": {
-      "r1": 60000,
+      "r1": 54000,
       "r2": 42000,
       "r3": 48000,
-      "r4": 36000
+      "r4": 30000
     },
     "firedTraps": 0,
     "destroyedBuildings": 22,
@@ -86,58 +86,58 @@
     "creepsKilled": 61,
     "championHp": 0,
     "damagedBuildings": 23,
-    "rngDraws": 1232,
+    "rngDraws": 1230,
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "b502704c890e23ea"
+        "digest": "5f8b32337203fa89"
       },
       {
         "tick": 1600,
-        "digest": "818464c0075e3dfa"
+        "digest": "223ef951cd3a0bc3"
       },
       {
         "tick": 2400,
-        "digest": "f5ea0e227d9ac904"
+        "digest": "e589096dd52d5807"
       },
       {
         "tick": 3200,
-        "digest": "bc5d75d4851360fe"
+        "digest": "c3ba4da2a29b93d4"
       },
       {
         "tick": 4000,
-        "digest": "b3bf9e69fa12b287"
+        "digest": "ea6e9e8f550fee15"
       },
       {
         "tick": 4800,
-        "digest": "860425da5d3adadc"
+        "digest": "e3a4282fb4374b29"
       },
       {
         "tick": 5600,
-        "digest": "5a995974d2aad322"
+        "digest": "84e8e37aed985ef0"
       },
       {
         "tick": 6400,
-        "digest": "9ad3f9ddf9f55cc3"
+        "digest": "ab07f3bb08b3b0f9"
       },
       {
         "tick": 7200,
-        "digest": "f5c1cca3ab6ee5f9"
+        "digest": "5788677b67c93901"
       },
       {
         "tick": 8000,
-        "digest": "82ca1c3f3264d445"
+        "digest": "d239b709194ec147"
       },
       {
         "tick": 8800,
-        "digest": "a74bfe63970ad715"
+        "digest": "9e8cca8dd1235847"
       },
       {
         "tick": 9600,
-        "digest": "344f5b18845181fa"
+        "digest": "37c1333a85e81cf4"
       }
     ],
-    "digest": "4653116ebf7160a4",
+    "digest": "34123a49a307c06f",
     "bunkerLosses": {
       "83": {
         "C1": 8

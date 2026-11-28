@@ -116,13 +116,15 @@ export const stoneSkinCut = (level: number): number => atLevel(STONE_SKIN_CUT, l
  * when something is near, he beats his chest. Attacking: every tower within
  * {@link chestPoundRadius} (yard units from its middle) that can reach him
  * shoots only him for {@link chestPoundTicks}. Defending: every attacker within
- * the radius that can fight turns on him.
+ * the radius that can fight turns on him for as long. When the hold ends, each
+ * goes back to what it was on before the pound (owner, desk mm-abilities3,
+ * 28 Nov 2026: 4 s at every level, both sides).
  */
 export const CHEST_POUND_EVERY = ticks(12);
 /** How often he looks again when nothing was near to pound at. */
 export const CHEST_POUND_RETRY = ticks(1);
 export const CHEST_POUND_RADIUS: readonly number[] = [250, 250, 275, 275, 300, 300];
-export const CHEST_POUND_SECONDS: readonly number[] = [4, 4, 5, 5, 6, 6];
+export const CHEST_POUND_SECONDS: readonly number[] = [4, 4, 4, 4, 4, 4];
 export const chestPoundRadius = (level: number): number => atLevel(CHEST_POUND_RADIUS, level);
 export const chestPoundTicks = (level: number): number =>
   ticks(atLevel(CHEST_POUND_SECONDS, level));
