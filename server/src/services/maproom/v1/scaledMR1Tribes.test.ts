@@ -327,8 +327,8 @@ describe("Map Room 1 tribe save of a started attack", () => {
 
     expect(await run(ctx)).toBeNull();
     const { r1, r2, r3, r4 } = battle.attackloot;
-    // Wild tribes give 25% more Goo (patch 6.9).
-    const r4WithBonus = withTribeGooBonus({ r4 }, true).r4;
+    // Wild tribes give more Goo (patch 6.9; steps down from 9.1).
+    const r4WithBonus = withTribeGooBonus({ r4 }, true, now()).r4;
     expect(userSave.resources).toEqual({ r1: 100 + r1, r2: 100 + r2, r3: 100 + r3, r4: 100 + r4WithBonus });
     expect(maproom.tribedata[0]).toMatchObject({
       destroyed: 1,
@@ -375,7 +375,7 @@ describe("Map Room 1 tribe save of a started attack", () => {
     // Its points are the whole take, loot that did not fit included (patch 7.7.2).
     const { r1, r2, r3, r4 } = battle.attackloot;
     expect(r2 + r3 + r4).toBeGreaterThan(50);
-    expect(Number(userSave.points ?? 0)).toBe(r1 + r2 + r3 + withTribeGooBonus({ r4 }, true).r4);
+    expect(Number(userSave.points ?? 0)).toBe(r1 + r2 + r3 + withTribeGooBonus({ r4 }, true, now()).r4);
   });
 
   test("a save that does not end the attack writes nothing of the battle and credits nothing", async () => {
@@ -484,8 +484,8 @@ describe("Map Room 1 army settlement (#132)", () => {
 
     expect(await run(ctx)).toBeNull();
     const { r1, r2, r3, r4 } = battle.attackloot;
-    // Wild tribes give 25% more Goo (patch 6.9).
-    const r4WithBonus = withTribeGooBonus({ r4 }, true).r4;
+    // Wild tribes give more Goo (patch 6.9; steps down from 9.1).
+    const r4WithBonus = withTribeGooBonus({ r4 }, true, now()).r4;
     expect(userSave.resources).toEqual({ r1: 100 + r1, r2: 100 + r2, r3: 100 + r3, r4: 100 + r4WithBonus });
     expect((userSave.monsters as { housed: unknown }).housed).toEqual({ C1: 4 });
     expect(maproom.tribedata[0]).toMatchObject({ destroyed: 1, damage: Math.trunc(battle.damage) });
@@ -654,9 +654,9 @@ describe("Map Room 1 tribe save: the battle is the server's (#23, C4)", () => {
       r1: 100 + battle.attackloot.r1,
       r2: 100 + battle.attackloot.r2,
       r3: 100 + battle.attackloot.r3,
-      // Wild tribes give 25% more Goo (patch 6.9). Since the 7.9 wall fix this
+      // Wild tribes give more Goo (patch 6.9; steps down from 9.1). Since the 7.9 wall fix this
       // scratch reaches a Goo harvester, so the bonus shows here too.
-      r4: 100 + withTribeGooBonus({ r4: battle.attackloot.r4 }, true).r4,
+      r4: 100 + withTribeGooBonus({ r4: battle.attackloot.r4 }, true, now()).r4,
     });
     expect(mismatches()).toEqual([["damage", "destroyed", "buildinghealthdata", "attackloot"]]);
   });
@@ -964,8 +964,8 @@ describe("Map Room 1 tribe attack left without a save", () => {
 
     expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(1);
     const { r1, r2, r3, r4 } = battle.attackloot;
-    // Wild tribes give 25% more Goo (patch 6.9).
-    const r4WithBonus = withTribeGooBonus({ r4 }, true).r4;
+    // Wild tribes give more Goo (patch 6.9; steps down from 9.1).
+    const r4WithBonus = withTribeGooBonus({ r4 }, true, now()).r4;
     expect(userSave.resources).toEqual({ r1: 100 + r1, r2: 100 + r2, r3: 100 + r3, r4: 100 + r4WithBonus });
     expect((userSave.monsters as { housed: unknown }).housed).toEqual({ C1: 4 });
     expect(maproom.tribedata[0]).toMatchObject({ destroyed: 1, damage: Math.trunc(battle.damage) });
