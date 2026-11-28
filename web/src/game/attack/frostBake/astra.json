@@ -1,0 +1,612 @@
+{
+ "name": "astra",
+ "round": "round-1",
+ "cells": [
+  "brake_collar",
+  "chill_cuffs",
+  "cold_wake",
+  "horn_fan",
+  "ice_eruption",
+  "ice_lance",
+  "ice_splinter",
+  "impact_1",
+  "impact_2",
+  "impact_3",
+  "impact_4",
+  "rime_bank",
+  "sight_snap",
+  "sight_visor",
+  "snow_spray",
+  "stomp_fracture"
+ ],
+ "columns": 6,
+ "bounds": {
+  "brake_collar": [
+   0.9167,
+   0.4062
+  ],
+  "chill_cuffs": [
+   0.9167,
+   0.4427
+  ],
+  "cold_wake": [
+   0.9167,
+   0.4219
+  ],
+  "horn_fan": [
+   0.9167,
+   0.8177
+  ],
+  "ice_eruption": [
+   0.9167,
+   0.7292
+  ],
+  "ice_lance": [
+   0.9167,
+   0.2344
+  ],
+  "ice_splinter": [
+   0.9167,
+   0.599
+  ],
+  "impact_1": [
+   0.9427,
+   0.8385
+  ],
+  "impact_2": [
+   0.9427,
+   0.8385
+  ],
+  "impact_3": [
+   0.9427,
+   0.8385
+  ],
+  "impact_4": [
+   0.9427,
+   0.8385
+  ],
+  "rime_bank": [
+   0.9167,
+   0.3438
+  ],
+  "sight_snap": [
+   0.9167,
+   0.7188
+  ],
+  "sight_visor": [
+   0.9167,
+   0.4688
+  ],
+  "snow_spray": [
+   0.9167,
+   0.4896
+  ],
+  "stomp_fracture": [
+   0.9167,
+   0.875
+  ]
+ },
+ "plan": {
+  "frostAura": {
+   "held": [
+    {
+     "cell": "rime_bank",
+     "anchor": "caster_feet",
+     "follow": true,
+     "loop_ms": 3000,
+     "count": 6,
+     "ring": "reach*0.46",
+     "orbit_deg_s": 2,
+     "phase_stagger": 0.1666667,
+     "size": [
+      76,
+      92
+     ],
+     "pulse": true,
+     "fade_in_ms": 250,
+     "peak": 0.5,
+     "hold": 0.8,
+     "tint": [
+      "#ffffff"
+     ],
+     "blend": "normal",
+     "layer": "ground"
+    },
+    {
+     "cell": "cold_wake",
+     "anchor": "caster_feet",
+     "follow": true,
+     "offset": [
+      0,
+      9
+     ],
+     "loop_ms": 2000,
+     "size": [
+      92,
+      108
+     ],
+     "pulse": true,
+     "fade_in_ms": 250,
+     "peak": 0.48,
+     "hold": 1,
+     "tint": [
+      "#ffffff"
+     ],
+     "blend": "normal",
+     "layer": "ground"
+    }
+   ],
+   "on_each": [
+    {
+     "cell": "sight_snap",
+     "anchor": "tower_top",
+     "offset": [
+      0,
+      8
+     ],
+     "start_ms": 0,
+     "life_ms": 375,
+     "size": [
+      18,
+      44
+     ],
+     "ease": "out",
+     "fade_in_ms": 25,
+     "peak": 0.9,
+     "hold": 0.25,
+     "tint": [
+      "#ffffff"
+     ],
+     "blend": "normal",
+     "layer": "air"
+    }
+   ],
+   "held_each": [
+    {
+     "cell": "sight_visor",
+     "anchor": "tower_top",
+     "offset": [
+      0,
+      8
+     ],
+     "follow": true,
+     "loop_ms": 2000,
+     "size": [
+      36,
+      38
+     ],
+     "pulse": true,
+     "fade_in_ms": 125,
+     "peak": 0.78,
+     "hold": 1,
+     "tint": [
+      "#ffffff"
+     ],
+     "blend": "normal",
+     "layer": "air"
+    }
+   ]
+  },
+  "iceShards": {
+   "launch": [
+    {
+     "cell": "horn_fan",
+     "anchor": "caster_head",
+     "start_ms": 0,
+     "life_ms": 125,
+     "size": [
+      16,
+      34
+     ],
+     "ease": "out",
+     "peak": 0.95,
+     "hold": 0.2,
+     "tint": [
+      "#ffffff"
+     ],
+     "blend": "normal",
+     "layer": "air"
+    }
+   ],
+   "pieces": [
+    {
+     "cell": "ice_lance",
+     "anchor": "caster_head",
+     "fly_to": "target",
+     "arc_px": 10,
+     "face_flight": true,
+     "start_ms": 0,
+     "life_ms": 200,
+     "count": 3,
+     "spread_deg": 14,
+     "stagger_ms": 0,
+     "size": [
+      30,
+      36
+     ],
+     "peak": 1,
+     "hold": 1,
+     "tint": [
+      "#ffffff"
+     ],
+     "blend": "normal",
+     "layer": "air"
+    }
+   ],
+   "impact": [
+    {
+     "flipbook": [
+      "impact_1",
+      "impact_2",
+      "impact_3",
+      "impact_4"
+     ],
+     "anchor": "target",
+     "follow": true,
+     "start_ms": 0,
+     "life_ms": 200,
+     "size": [
+      54,
+      54
+     ],
+     "peak": 1,
+     "hold": 0.5,
+     "tint": [
+      "#ffffff"
+     ],
+     "blend": "normal",
+     "layer": "air"
+    },
+    {
+     "cell": "ice_splinter",
+     "anchor": "target",
+     "start_ms": 25,
+     "life_ms": 300,
+     "offset": [
+      -5,
+      0
+     ],
+     "vel": [
+      -70,
+      45
+     ],
+     "drag": 0.4,
+     "size": [
+      15,
+      8
+     ],
+     "rotation_deg": 145,
+     "spin_deg_s": 180,
+     "peak": 0.9,
+     "hold": 0.2,
+     "tint": [
+      "#ffffff"
+     ],
+     "blend": "normal",
+     "layer": "air"
+    },
+    {
+     "cell": "ice_splinter",
+     "anchor": "target",
+     "start_ms": 25,
+     "life_ms": 300,
+     "offset": [
+      5,
+      0
+     ],
+     "vel": [
+      70,
+      30
+     ],
+     "drag": 0.4,
+     "size": [
+      13,
+      7
+     ],
+     "rotation_deg": 30,
+     "spin_deg_s": -150,
+     "peak": 0.9,
+     "hold": 0.2,
+     "tint": [
+      "#ffffff"
+     ],
+     "blend": "normal",
+     "layer": "air"
+    }
+   ],
+   "held": [
+    {
+     "cell": "chill_cuffs",
+     "anchor": "target",
+     "follow": true,
+     "offset": [
+      0,
+      3
+     ],
+     "loop_ms": 1000,
+     "size": [
+      38,
+      41
+     ],
+     "pulse": true,
+     "fade_in_ms": 100,
+     "peak": 0.8,
+     "hold": 1,
+     "tint": [
+      "#ffffff"
+     ],
+     "blend": "normal",
+     "layer": "air"
+    }
+   ],
+   "body_target": {
+    "start_ms": 200,
+    "keys": [
+     {
+      "ms": 0,
+      "scale_x": 1,
+      "scale_y": 1
+     },
+     {
+      "ms": 50,
+      "scale_x": 1.12,
+      "scale_y": 0.88
+     },
+     {
+      "ms": 125,
+      "scale_x": 0.97,
+      "scale_y": 1.04
+     },
+     {
+      "ms": 200,
+      "scale_x": 1,
+      "scale_y": 1
+     }
+    ]
+   }
+  },
+  "blizzardStomp": {
+   "pieces": [
+    {
+     "cell": "cold_wake",
+     "anchor": "caster_feet",
+     "follow": true,
+     "start_ms": -600,
+     "life_ms": 600,
+     "count": 4,
+     "ring": 56,
+     "radial_speed": -70,
+     "size": [
+      26,
+      18
+     ],
+     "fade_in_ms": 100,
+     "peak": 0.72,
+     "hold": 0.65,
+     "tint": [
+      "#ffffff"
+     ],
+     "blend": "normal",
+     "layer": "ground"
+    },
+    {
+     "cell": "horn_fan",
+     "anchor": "caster_head",
+     "follow": true,
+     "start_ms": -250,
+     "life_ms": 250,
+     "size": [
+      16,
+      32
+     ],
+     "ease": "linear",
+     "fade_in_ms": 50,
+     "peak": 0.85,
+     "hold": 0.9,
+     "tint": [
+      "#ffffff"
+     ],
+     "blend": "normal",
+     "layer": "air"
+    },
+    {
+     "cell": "stomp_fracture",
+     "anchor": "caster_feet",
+     "start_ms": 0,
+     "life_ms": 150,
+     "size": [
+      44,
+      "reach"
+     ],
+     "squash": 0.5,
+     "ease": "out",
+     "peak": 0.78,
+     "hold": 1,
+     "tint": [
+      "#ffffff"
+     ],
+     "blend": "normal",
+     "layer": "ground"
+    },
+    {
+     "cell": "stomp_fracture",
+     "anchor": "caster_feet",
+     "start_ms": 150,
+     "life_ms": 850,
+     "size": [
+      "reach",
+      "reach"
+     ],
+     "squash": 0.5,
+     "peak": 0.78,
+     "hold": 0.1,
+     "tint": [
+      "#ffffff"
+     ],
+     "blend": "normal",
+     "layer": "ground"
+    },
+    {
+     "flipbook": [
+      "impact_1",
+      "impact_2",
+      "impact_3",
+      "impact_4"
+     ],
+     "anchor": "caster_feet",
+     "offset": [
+      0,
+      5
+     ],
+     "start_ms": 0,
+     "life_ms": 200,
+     "size": [
+      86,
+      86
+     ],
+     "squash": 0.5,
+     "peak": 1,
+     "hold": 0.5,
+     "tint": [
+      "#ffffff"
+     ],
+     "blend": "normal",
+     "layer": "ground"
+    },
+    {
+     "cell": "ice_eruption",
+     "anchor": "caster_feet",
+     "start_ms": 25,
+     "life_ms": 525,
+     "count": 8,
+     "ring": 24,
+     "radial_speed": 200,
+     "jitter": 0.06,
+     "stagger_ms": 0,
+     "size": [
+      42,
+      62
+     ],
+     "ease": "out",
+     "fade_in_ms": 25,
+     "peak": 0.95,
+     "hold": 0.35,
+     "tint": [
+      "#ffffff"
+     ],
+     "blend": "normal",
+     "layer": "ground"
+    },
+    {
+     "cell": "snow_spray",
+     "anchor": "caster_feet",
+     "start_ms": 75,
+     "life_ms": 650,
+     "count": 4,
+     "ring": 35,
+     "radial_speed": 140,
+     "jitter": 0.05,
+     "stagger_ms": 0,
+     "size": [
+      44,
+      68
+     ],
+     "ease": "out",
+     "fade_in_ms": 50,
+     "peak": 0.64,
+     "hold": 0.2,
+     "tint": [
+      "#ffffff"
+     ],
+     "blend": "normal",
+     "layer": "ground"
+    }
+   ],
+   "on_each": [
+    {
+     "cell": "ice_eruption",
+     "anchor": "tower_base",
+     "offset": [
+      0,
+      -6
+     ],
+     "start_ms": 0,
+     "life_ms": 350,
+     "size": [
+      30,
+      54
+     ],
+     "ease": "out",
+     "fade_in_ms": 25,
+     "peak": 0.9,
+     "hold": 0.3,
+     "tint": [
+      "#ffffff"
+     ],
+     "blend": "normal",
+     "layer": "air"
+    }
+   ],
+   "held": [
+    {
+     "cell": "brake_collar",
+     "anchor": "tower_base",
+     "offset": [
+      0,
+      -4
+     ],
+     "follow": true,
+     "loop_ms": 1250,
+     "size": [
+      52,
+      55
+     ],
+     "pulse": true,
+     "fade_in_ms": 150,
+     "peak": 0.85,
+     "hold": 1,
+     "tint": [
+      "#ffffff"
+     ],
+     "blend": "normal",
+     "layer": "air"
+    }
+   ],
+   "shake": {
+    "start_ms": 0,
+    "strength_px": 3,
+    "duration_ms": 150
+   },
+   "body": {
+    "start_ms": 0,
+    "keys": [
+     {
+      "ms": 0,
+      "scale_x": 1,
+      "scale_y": 1
+     },
+     {
+      "ms": 37.5,
+      "scale_x": 1.08,
+      "scale_y": 0.9
+     },
+     {
+      "ms": 125,
+      "scale_x": 0.98,
+      "scale_y": 1.03
+     },
+     {
+      "ms": 225,
+      "scale_x": 1,
+      "scale_y": 1
+     }
+    ],
+    "flash": {
+     "colour": "#c8efff",
+     "peak": 0.22,
+     "duration_ms": 75
+    }
+   }
+  }
+ }
+}

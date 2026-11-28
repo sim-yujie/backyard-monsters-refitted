@@ -1,0 +1,79 @@
+{
+  "sheets": [
+    {
+      "file": "modern-sheet.jpg",
+      "look": "modern",
+      "kind": "solid",
+      "columns": 4,
+      "rows": 4,
+      "cells": [
+        "ground_frost_star",
+        "tower_blind_shroud",
+        "tower_ice_clamp",
+        "flyer_chill_crystals",
+        "ice_spear_main",
+        "ice_shard_flank",
+        "ice_shard_chip",
+        "ice_chunk_debris",
+        "shatter_1",
+        "shatter_2",
+        "shatter_3",
+        "shatter_4",
+        "stomp_ice_crater",
+        "stomp_ice_spire",
+        "stomp_ice_spire_alt",
+        "frost_ground_patch"
+      ]
+    },
+    {
+      "file": "classic-sheet.jpg",
+      "look": "classic",
+      "kind": "solid",
+      "columns": 4,
+      "rows": 4,
+      "cells": [
+        "ground_frost_star",
+        "tower_blind_shroud",
+        "tower_ice_clamp",
+        "flyer_chill_crystals",
+        "ice_spear_main",
+        "ice_shard_flank",
+        "ice_shard_chip",
+        "ice_chunk_debris",
+        "shatter_1",
+        "shatter_2",
+        "shatter_3",
+        "shatter_4",
+        "stomp_ice_crater",
+        "stomp_ice_spire",
+        "stomp_ice_spire_alt",
+        "frost_ground_patch"
+      ]
+    },
+    {
+      "file": "lights-sheet.jpg",
+      "look": "both",
+      "kind": "light",
+      "columns": 4,
+      "rows": 4,
+      "cells": [
+        "aura_wind_arc",
+        "snow_flurry_cluster",
+        "cold_mist_swirl",
+        "frost_wisp_puff",
+        "horn_frost_flare",
+        "frost_streak",
+        "impact_starburst",
+        "frost_snap_burst",
+        "gathering_frost_vortex",
+        "blizzard_gust_plume",
+        "frost_shock_arc",
+        "snow_spark_burst",
+        "blizzard_swirl_1",
+        "blizzard_swirl_2",
+        "blizzard_swirl_3",
+        "blizzard_swirl_4"
+      ]
+    }
+  ]
+}

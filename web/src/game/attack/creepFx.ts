@@ -201,7 +201,8 @@ const STOMPING_CHAMPIONS: ReadonlySet<string> = new Set(["G1", "G2", "G4", "G5"]
  * How a shot is drawn. `fireball` is everyone's but these four: D.A.V.E.'s
  * rockets, Fomor's magenta bolt, and the two healers' green shots.
  */
-export type ProjectileStyle = "fireball" | "rocket" | "fomor" | "zafreeti" | "vorg" | "frostball";
+/** `none`: lands as a shot does (numbers, flash) but draws nothing in flight (the krampus-fx bake-off draws it). */
+export type ProjectileStyle = "fireball" | "rocket" | "fomor" | "zafreeti" | "vorg" | "frostball" | "none";
 
 const STYLE_BY_MONSTER: Readonly<Record<string, ProjectileStyle>> = {
   C12: "rocket", // D.A.V.E.
@@ -942,6 +943,8 @@ export class CreepFx {
           break;
         case "frostball":
           this.drawFrostball(shot, age);
+          break;
+        case "none":
           break;
         case "zafreeti":
         case "vorg":

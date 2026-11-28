@@ -1,0 +1,236 @@
+# Brief: animations for Krampus's three frost abilities (Backyard Monsters Revamped)
+
+You are the effects designer AND the effects artist. Design the animation for three abilities of the champion
+Krampus, then make the art for it with your image generation tool. A programmer will build your design into
+the game exactly as you write it, so be precise. Work only in your current folder; the reference pictures are
+in `./refs/` (listed at the end).
+
+## The game
+
+Backyard Monsters Revamped is a browser remake (PixiJS, 2D sprites) of the 2009 Facebook Flash game Backyard
+Monsters. The yard is seen from above at about 35 degrees (isometric-like: the ground is a flat plane, a
+circle on the ground shows as an ellipse twice as wide as tall). Monsters attack a player's yard of buildings
+and towers; the towers shoot back.
+
+**Krampus** is the champion of the new Christmas frost tribe, which raids players' yards this winter. He is a
+big four-legged goat beast: shaggy grey-white frosted fur shaded blue, a dark charcoal face and legs, cloven
+hooves, a fanged grin, glowing icy-cyan eyes, two big curling horns of translucent ice-blue crystal, icicles in
+his fur; at levels 5-6 he wears dark iron armour plates, red-brown chains and copper bells. See
+`refs/krampus-levels.png` (levels 1-6) and `refs/krampus-ingame-frames.png` (his real battle sprite frames, 8
+headings, at 2x). He walks up to buildings and butts them with his horns; he is an ENEMY of the player whose
+yard it is.
+
+The game has two looks, switched by the player (one global switch). Every effect needs art in BOTH:
+
+- **Modern**: crisp, clean, stylised 3D renders (like modern Blender game art): smooth bevelled shapes, warm
+  key light from the upper left, readable medium shadows, rich but not neon colour, bright specular
+  highlights on glossy parts, no outlines, no cel shading, no flat vector fills. Light effects (glows, mist,
+  shockwaves) may be luminous and are drawn in added light.
+- **Classic**: the 2009 Flash look: small pre-rendered 3D pieces like a late-2000s 3ds Max render shrunk to
+  sprite size: soft grainy shading, one soft key light from the upper left, deep near-black shadow sides,
+  muted, dusty, natural colours, small soft highlights only on wet surfaces. No outlines, no cartoon gloss.
+  Classic lays its pieces over the yard (no added-light glow), so its effects read by shape and contrast.
+  `refs/krampus-classic-ingame.png` shows Krampus in the Classic look.
+
+Timing and motion are the SAME in both looks; only the art and the colours differ.
+
+## The problem
+
+The owner of the game, about today's versions: "If we wanna do a frost aura, how would it look? No simple
+circle nonsense. This is a game." "Ice shards has to do better in animation sense. The effort put in is
+ridiculous (simple balls only)." "Blizzard stomp can be improved also? Why just plain circle?" Pictures of
+today's versions are in `./refs/` (cur-*.png). Make something a player understands at a glance and that feels
+like a real, polished game: shaped, layered, moving pieces with anticipation, impact and follow-through, not a
+plain ring or a plain ball.
+
+## The three abilities
+
+Battle time runs at 80 ticks per second; give your timings in milliseconds. The game already shows small
+status icons over affected towers and monsters; do NOT put text or numbers in your art.
+
+1. **Frost aura** (always on, for the whole fight, from his first step until he falls). Every enemy tower
+   whose middle is inside the aura (a circle round Krampus, radius 200 game units at level 1 up to 300 at
+   level 6, about **280 to 425 world px** radius on the ground, the ellipse that wide and half that tall)
+   sees less far: its sight is cut 10-20%, so it notices attackers later. Defending monsters inside it are
+   slowed. The aura moves with him as he walks. Today it draws NOTHING (in `cur-frost-aura.png` the white and
+   cyan lines are only a developer overlay, each tower's reach and cut sight; players see none of it). The
+   owner wants to see what a real game-like aura could look like, NOT a plain circle. The player should feel
+   that Krampus carries a freezing cold with him, roughly how far it reaches, and which towers it is
+   currently blinding. It is on screen all the time, so it must stay calm enough not to tire the eye or hide
+   the fight, and cheap.
+   Hooks: `held` (drawn round Krampus every frame, looped, for the whole fight, following him),
+   `on_each` (played once on a tower when the aura starts holding it), and `held_each` (drawn on each tower
+   every frame while the aura holds it; give a loop; it fades out over 200 ms when the tower leaves the aura).
+2. **Ice Shards** (levels 4-6). When Krampus fights a defending FLYING monster (a dragonfly or bat-like
+   flyer hovering about 40-60 px above the ground), instead of a butt he flings an ice shard at it: it leaves
+   his horns/head, flies **200 ms** (fixed by the game) to the flyer, hits for a quarter of his damage and
+   chills it 30% slower for 2 s. He throws one about every **0.7 s** while a flyer is his target. Today it is
+   a plain pale ball (`cur-ice-shards.png`, the small white-blue ball by the tower). Make the throw, the
+   flight and the hit read as a vicious volley of ice. Hooks: `launch` (at Krampus when the shard leaves),
+   `pieces` (the shard itself and anything flying with it; use `fly_to: "target"` with a `life_ms` of 200 for
+   things that travel), `impact` (at the flyer when it lands, at 200 ms), and `held` (drawn on the chilled
+   flyer for its 2 s chill, looped, following it).
+3. **Blizzard Stomp** (levels 5-6, after every three blows, about every 3-4 s in a fight). Krampus rears up on
+   his hind legs for 600 ms (his sprite already does this, and you cannot redraw him) and slams his forefeet
+   down: everything in a circle round him (radius about **160 world px** on the ground, the ellipse that wide
+   and half that tall) takes damage that falls off from the middle, and every tower inside it works 30% slower
+   for 3 s. Today it is Korath's orange quake rings plus a thin pale blue ring (`cur-blizzard-stomp.png`).
+   Time 0 is the SLAM; you may start pieces as early as -600 ms (the moment he starts to rear up). Hooks:
+   `pieces` (the stomp), `on_each` (played once on each tower slowed, at the slam), `held` (drawn on each
+   slowed tower for its 3 s, looped).
+
+What the player must grasp in **under one second**: who did it, what kind of thing it is (a freezing aura that
+blinds towers / an ice volley that chills a flyer / an ice slam that slows towers), and where it applies.
+
+Frostbite (his blows' lingering frost and the chance to freeze a tower solid in an ice block) stays as it is;
+do not design it.
+
+## Sizes on screen
+
+- The game is played on computers (1280x720 up to 1920x1080 screens) and phones (390x844 portrait). Effects
+  must read on a phone, where everything is about half the size it is on a computer.
+- The yard is zoomable; at the zoom players usually fight at, sizes in **world px** (the unit to use in your
+  plan) appear on a 1280x720 screen at about 0.6x to 1x. The cur-*.png pictures were filmed at about 1.3x
+  (Krampus level 6 is ~105 px tall there).
+- Krampus: level 4 about 62 world px tall and 90 wide, level 6 about 82 tall and 115 wide. A flyer (Ice
+  Shards' target): about 30-40 px. A cannon tower: about 65 tall, 55 wide; a tall tower up to 110.
+- Up to ~40 pieces alive per ability at once (several fights can run together, and phones are slow); the
+  aura, which never stops, at most ~25 pieces at once including the towers it holds (up to ~8 towers). On the
+  game's low-effects setting the count of repeated pieces is cut to ~40%.
+
+## What the programmer can build (the toolkit)
+
+Effects are made of **pieces**. A piece is one picture (one cell from your sprite sheet) drawn as a sprite.
+For each piece you can set:
+
+- `cell` (the picture), or `flipbook` (a list of cells played once over the piece's life, or looped with
+  `flipbook_loop: true` at `flipbook_fps` frames a second);
+- `start_ms` after the ability fires (Blizzard Stomp: after the slam, may be negative down to -600),
+  `life_ms`;
+- `anchor`: where it starts: `caster_feet`, `caster_chest`, `caster_head` (Krampus; his head and horns),
+  `target` (Ice Shards' flyer, its body middle), `target_ground` (the ground under the flyer), `tower` (a
+  tower's middle; only in `on_each`/`held_each` of the aura and `on_each`/`held` of the stomp), `tower_top`,
+  `tower_base` (the ground at its foot); plus `offset` [x, y] in world px (y down);
+- `follow`: true to ride along with the anchor if it moves (Krampus walking, a flyer);
+- motion: `vel` [vx, vy] px/s, `vz` px/s (upward, height above the ground), `z` start height, `gravity`
+  px/s^2 (pieces land and stop on the ground), `drag` (share of speed lost per second, 0-1);
+- `fly_to`: `target` or `caster_chest` or `tower`, with `arc_px` (the piece flies there over its life);
+  `face_flight`: true to turn the piece along its flight line (paint such pieces pointing RIGHT);
+- `count` > 1 with `ring`: that many copies spaced evenly round the anchor on the ground (radius px or
+  `"reach*0.5"`, an ellipse, 2:1), each moving outward at `radial_speed` px/s, with `stagger_ms` between
+  them and optional `jitter` (0-1) for an uneven spread (fixed per fight, never random at run time);
+  `count` > 1 with `spread_deg` instead (Ice Shards only): that many copies fanned across that angle round
+  the flight line, each with its own small `stagger_ms`;
+- `size` [start, end] width in px (use `"reach"` or `"reach*0.5"` for the circle's diameter; the aura's and
+  the stomp's reach are their circles above), `ease` `linear` or `out`; `squash` (height / width; 0.5 lays a
+  piece flat on the ground in perspective);
+- `rotation_deg`, `spin_deg_s`;
+- `fade_in_ms`, `peak` opacity 0-1, `hold` (share of its life at full opacity before it fades to 0);
+- `tint`: a list of colours it passes through over its life (pieces painted white/grey take the tint fully;
+  coloured pieces are multiplied by it, so leave them `#ffffff`); per look: `tint_classic` if different;
+- `blend`: `normal` or `add` (added light; Classic always uses `normal`);
+- `layer`: `ground` (under every monster and building, for frost on the ground, cracks) or `air` (over them).
+
+Held pieces (`held`, `held_each`) repeat every `loop_ms`: size, rotation and opacity follow the same fields
+over one loop (`size` start to end and back is not automatic: give `pulse: true` to go there and back each
+loop); they fade in over `fade_in_ms` and out over 200 ms when the hold ends. A held piece may also use
+`count` with `ring` (copies placed round the anchor, `phase_stagger` 0-1 to offset each copy's loop) and
+`orbit_deg_s` (the ring of copies turns round the anchor at that speed, on the ground ellipse).
+
+Also available, once per ability:
+
+- `shake`: screen shake { `start_ms`, `strength_px` (max 6), `duration_ms` } (Modern only; Classic has none);
+- `body`: Krampus's own sprite (you cannot redraw him; he is a fixed animated sprite) can be squashed and
+  stretched and flashed: { `start_ms`, `keys`: [ { `ms`, `scale_x`, `scale_y` } ... ] (about his feet),
+  `flash`: { `colour`, `peak` 0-1, `duration_ms` } (his body redrawn over itself in added light) };
+- For Ice Shards, the same `body` block can apply to the **target** flyer instead (`body_target`), e.g. a
+  flinch.
+
+If your design truly needs something not in this list, describe it plainly and keep it small; the programmer
+adds only what is reasonable, and adds it equally for every designer.
+
+## What to deliver (all in your current folder)
+
+1. `plan.md`: for each ability, the idea in 2-3 sentences (what the player sees, why it reads in under a
+   second, how it feels powerful), then a keyframe timeline table (time ms | piece | where | size | motion |
+   opacity | colour | blend | layer). Say what differs in Classic (art, colours; never timing).
+2. `motion.json`: the same three timelines in the exact form below. This is what gets built; `plan.md`
+   explains it.
+3. The art, made with your image generation tool, **at most 4 images in total**:
+   - `modern-sheet.png` and `classic-sheet.png`: one sprite sheet per look holding every solid piece, in a
+     grid you choose (at most 6 columns x 4 rows on a 1536x1024 or 1024x1024 image), each piece centred in
+     its own cell with clear empty space around it, nothing crossing into the next cell. Background: flat pure
+     magenta (#FF00FF) everywhere else, no gradient, no texture, no grid lines, no text, no labels, no
+     numbers, no ground and no cast shadow under the pieces.
+   - optionally `lights-sheet.png` (or one per look): light pieces (glows, mist, frost haze, shockwave rings,
+     streaks) drawn in WHITE and light grey only on flat pure BLACK (#000000); black is fully see-through and
+     the game tints them. Same grid rules.
+   - Flipbook frames, if you use any, are cells in the same sheets (keep a flipbook to 4-6 frames; a frame
+     shown at 30 fps changes every 33 ms).
+   - Every piece must read when shrunk to 20-80 px. Pieces that lie on the ground are painted as seen from
+     above at the game's angle (a circle as an ellipse twice as wide as tall), or painted round and squashed
+     with `squash`.
+4. `cells.json`: each sheet's grid and the name of each cell in reading order (left to right, top to bottom;
+   `null` for an empty cell), and which sheet is solid (magenta) or light (black). Cell names are what
+   `motion.json` uses; the same name in the Modern and Classic sheets is the same piece in the two looks. Form:
+   `{ "sheets": [ { "file": "modern-sheet.png", "look": "modern", "kind": "solid", "columns": 6, "rows": 4,
+   "cells": ["shard", "frost_puff", null, ...] }, ... ] }` (a light sheet serves both looks unless you give
+   one per look: `"look": "both"`).
+
+### motion.json form
+
+```json
+{
+  "frostAura": {
+    "held":      [ { "cell": "frost_wisp", "anchor": "caster_feet", "loop_ms": 2400, "count": 6, "ring": "reach*0.45",
+                     "orbit_deg_s": 12, "phase_stagger": 0.5, "size": [40, 60], "pulse": true, "peak": 0.7,
+                     "blend": "add", "layer": "ground" } ],
+    "on_each":   [ { "cell": "frost_snap", "anchor": "tower", "start_ms": 0, "life_ms": 400 } ],
+    "held_each": [ { "cell": "eye_frost", "anchor": "tower_top", "loop_ms": 1200, "size": [30, 34], "pulse": true } ]
+  },
+  "iceShards": {
+    "launch":  [ { "cell": "...", "anchor": "caster_head", "start_ms": 0, "life_ms": 150 } ],
+    "pieces":  [ { "cell": "shard", "anchor": "caster_head", "fly_to": "target", "arc_px": 10, "face_flight": true,
+                   "start_ms": 0, "life_ms": 200 } ],
+    "impact":  [ { "cell": "...", "anchor": "target", "start_ms": 0, "life_ms": 250 } ],
+    "held":    [ { "cell": "...", "anchor": "target", "loop_ms": 600 } ],
+    "body_target": { "keys": [ { "ms": 0, "scale_x": 1, "scale_y": 1 } ] }
+  },
+  "blizzardStomp": {
+    "pieces":  [ { "cell": "...", "anchor": "caster_feet", "start_ms": -600, "life_ms": 600 } ],
+    "on_each": [ { "cell": "...", "anchor": "tower", "start_ms": 0, "life_ms": 400 } ],
+    "held":    [ { "cell": "...", "anchor": "tower_top", "loop_ms": 800 } ],
+    "shake": { "start_ms": 0, "strength_px": 4, "duration_ms": 250 },
+    "body":  { "start_ms": 0, "keys": [ { "ms": 0, "scale_x": 1, "scale_y": 1 } ],
+               "flash": { "colour": "#bff4ff", "peak": 0.5, "duration_ms": 200 } }
+  }
+}
+```
+
+(The cell names and numbers above only show the form; design your own.) Every piece field is optional except
+`cell`/`flipbook`, `start_ms` (not for held pieces), `life_ms` (or `loop_ms` for held pieces) and `anchor`.
+In Ice Shards, `impact` times count from the landing (200 ms after the throw), `launch` and `pieces` from the
+throw. Colours are "#rrggbb". All sizes and distances are world px. Keep each one-shot within its time box:
+Ice Shards from throw to the end of the impact under 600 ms (one comes every 700 ms), Blizzard Stomp from
+-600 ms to under 1.4 s after the slam (then the held marks for 3 s), the aura's `on_each` under 600 ms.
+
+## How you will be judged
+
+The owner will watch your three animations in the real game, filmed one after another with today's version
+and another designer's, at real speed and slowed down, in Modern and in Classic. He judges: does it read in
+under a second, does it look like a real, polished game effect with real motion (not a plain circle, not a
+plain ball), does the art fit the game's two looks, does the aura stay pleasant on screen for a whole fight,
+does it hold up small on a phone. One round of fixes may follow if something is clearly broken.
+
+## Reference pictures in ./refs/
+
+- `krampus-levels.png`: Krampus's portraits at levels 1-6 (row 1: 1, 2, 3; row 2: 4, 5, 6), Modern look.
+- `krampus-ingame-frames.png`: his real Modern battle sprite (level 6) at 2x on green: 8 headings x 4 walk
+  frames. In the fight he is this small.
+- `krampus-classic-ingame.png`: Krampus in the Classic look, in a real fight.
+- `cur-frost-aura.png`, `cur-ice-shards.png`, `cur-blizzard-stomp.png`: TODAY's versions in the real game
+  (Modern look, about 1.3x). These are what the owner dislikes.
+- `style-modern-effects.png`: the game's own Modern effect pieces (the towers' shots, smoke, sparks; cells on
+  grey): the Modern look's quality bar for effect art.
+- `style-classic-flash-effects.png`: real effects from the 2009 Flash game (a purple putty splat in frames, and
+  flying rock chips): the Classic look's quality bar.

@@ -1,0 +1,156 @@
+"""Cuts one krampus-fx entrant's sheets into the game's 192 px atlas, the same way for every entrant
+(after mm-anim's bake/build_set.py, so both bake-offs cut alike).
+
+python3 -I art-samples/frost-tribe/fxbake/build_set.py <worktree> <set>     (set = astra | neon)
+
+Reads fxbake/<set>/<round>/ (round from fxbake/<set>/use.txt): sheets.json (the entrant's cells.json in one
+form: {"sheets": [{"file", "look": modern|classic|both, "kind": solid|light, "columns", "rows", "cells"}]}) and
+motion.json, and writes:
+- server/public/assets/fx/frostbake/<set>.modern.webp and <set>.classic.webp: every named cell, 6 across, the
+  same order in both looks; a cell only one look has is copied into the other;
+- web/src/game/attack/frostBake/<set>.json: { name, round, cells, columns, bounds, plan } for frostBakeFx.ts.
+
+Solid sheets: magenta keyed off (artlib.key + clean). Light sheets: black is see-through, brightness is alpha,
+drawn white (the game tints). Every single piece is cropped to what it holds and fitted to 176 px, centred.
+Flipbook frames (every `flipbook` list in motion.json) keep their place in their cell and share one scale.
+"""
+import json
+import os
+import sys
+
+from PIL import Image
+
+sys.path.insert(0, "/home/yujiesim/Coding/backyard-monsters-refitted/.claude/skills/game-art/scripts")
+from artlib import cells as grid_cells, clean, key  # noqa: E402
+
+WT, SET = sys.argv[1], sys.argv[2]
+BASE = os.path.join(WT, "art-samples", "frost-tribe", "fxbake", SET)
+ROUND = open(os.path.join(BASE, "use.txt")).read().strip()
+SRC = os.path.join(BASE, ROUND)
+CELL, FIT, COLS = 192, 176, 6
+
+
+def light(c):
+    grey = c.convert("L")
+    alpha = grey.point(lambda v: 0 if v < 12 else min(255, int((v - 12) * 1.06)))
+    white = Image.new("RGBA", c.size, (255, 255, 255, 0))
+    white.putalpha(alpha)
+    return white
+
+
+def fit_one(piece):
+    box = piece.getbbox()
+    out = Image.new("RGBA", (CELL, CELL))
+    if not box:
+        return out
+    piece = piece.crop(box)
+    z = min(FIT / piece.width, FIT / piece.height)
+    piece = piece.resize((max(1, round(piece.width * z)), max(1, round(piece.height * z))), Image.LANCZOS)
+    out.alpha_composite(piece, ((CELL - piece.width) // 2, (CELL - piece.height) // 2))
+    return out
+
+
+def fit_frames(frames):
+    """A flipbook: one scale for all, each keeps its place about its cell's centre."""
+    boxes = [f.getbbox() for f in frames]
+    w, h = frames[0].size
+    reach_x = max((max(w / 2 - b[0], b[2] - w / 2) for b in boxes if b), default=1)
+    reach_y = max((max(h / 2 - b[1], b[3] - h / 2) for b in boxes if b), default=1)
+    z = min(FIT / 2 / reach_x, FIT / 2 / reach_y)
+    out = []
+    for f in frames:
+        g = f.resize((max(1, round(w * z)), max(1, round(h * z))), Image.LANCZOS)
+        left, top = (g.width - CELL) // 2, (g.height - CELL) // 2
+        out.append(g.crop((left, top, left + CELL, top + CELL)))
+    return out
+
+
+def flipbooks_of(node, found):
+    if isinstance(node, dict):
+        if isinstance(node.get("flipbook"), list):
+            book = tuple(node["flipbook"])
+            if book not in found:
+                found.append(book)
+        for v in node.values():
+            flipbooks_of(v, found)
+    elif isinstance(node, list):
+        for v in node:
+            flipbooks_of(v, found)
+    return found
+
+
+spec = json.load(open(os.path.join(SRC, "sheets.json")))
+plan = json.load(open(os.path.join(SRC, "motion.json")))
+flipbooks = flipbooks_of(plan, [])
+raw = {"modern": {}, "classic": {}}
+for sheet in spec["sheets"]:
+    im = Image.open(os.path.join(SRC, sheet["file"]))
+    if sheet["kind"] == "solid":
+        im = key(im.convert("RGBA"))
+    pieces = grid_cells(im.convert("RGBA") if sheet["kind"] == "solid" else im.convert("RGB"), sheet["columns"], sheet["rows"])
+    looks = ["modern", "classic"] if sheet["look"] == "both" else [sheet["look"]]
+    for name, piece in zip(sheet["cells"], pieces):
+        if not name:
+            continue
+        piece = clean(piece) if sheet["kind"] == "solid" else light(piece)
+        for look in looks:
+            raw[look][name] = piece
+
+names = sorted(set(raw["modern"]) | set(raw["classic"]))
+fitted = {"modern": {}, "classic": {}}
+for look in ("modern", "classic"):
+    have = raw[look]
+    for name in names:
+        if name not in have:
+            have[name] = raw["classic" if look == "modern" else "modern"][name]
+    done = set()
+    for frames in flipbooks:
+        frames = [f for f in frames if f in have and f not in done]
+        if not frames:
+            continue
+        for f, img in zip(frames, fit_frames([have[f] for f in frames])):
+            fitted[look][f] = img
+            done.add(f)
+    for name in names:
+        if name not in done:
+            fitted[look][name] = fit_one(have[name])
+
+out_dir = os.path.join(WT, "server/public/assets/fx/frostbake")
+os.makedirs(out_dir, exist_ok=True)
+for look in ("modern", "classic"):
+    rows = (len(names) + COLS - 1) // COLS
+    atlas = Image.new("RGBA", (COLS * CELL, rows * CELL))
+    for i, name in enumerate(names):
+        atlas.alpha_composite(fitted[look][name], ((i % COLS) * CELL, (i // COLS) * CELL))
+    path = os.path.join(out_dir, f"{SET}.{look}.webp")
+    atlas.save(path, "WEBP", quality=90, method=6, exact=True)
+    print(path, atlas.size, os.path.getsize(path))
+
+bounds = {}
+for name in names:
+    box = fitted["modern"][name].getbbox() or (0, 0, CELL, CELL)
+    bounds[name] = [round((box[2] - box[0]) / CELL, 4), round((box[3] - box[1]) / CELL, 4)]
+for frames in flipbooks:
+    frames = [f for f in frames if f in bounds]
+    if frames:
+        union = [max(bounds[f][0] for f in frames), max(bounds[f][1] for f in frames)]
+        for f in frames:
+            bounds[f] = union
+used = set()
+def _used(node):
+    if isinstance(node, dict):
+        if isinstance(node.get("cell"), str):
+            used.add(node["cell"])
+        for v in node.values():
+            _used(v)
+    elif isinstance(node, list):
+        for v in node:
+            _used(v)
+_used(plan)
+used |= {f for book in flipbooks for f in book}
+if used - set(names):
+    print("CELLS THE PLAN NAMES BUT NO SHEET HOLDS:", sorted(used - set(names)))
+web = os.path.join(WT, "web/src/game/attack/frostBake", f"{SET}.json")
+json.dump({"name": SET, "round": ROUND, "cells": names, "columns": COLS, "bounds": bounds, "plan": plan},
+          open(web, "w"), indent=1)
+print(web, len(names), "cells")
