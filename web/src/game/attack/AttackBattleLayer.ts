@@ -1,5 +1,5 @@
 import { creepSkin } from "./monsterSkins";
-import { FrostAreaFx } from "./frostAuraFx";
+import { FrostAreaFx, auraEllipse } from "./frostAuraFx";
 import {
   ColorMatrixFilter,
   Container,
@@ -298,6 +298,15 @@ export interface LayoutOptions {
  * through `GRID.as`; a creep is drawn wherever the engine has it, so its
  * motion is smooth rather than stepping a pixel at a time.
  */
+/** DEV only: `?sightRings=1` in the address draws the towers' sight rings. */
+const sightRingsAsked = (): boolean => {
+  try {
+    return new URLSearchParams(window.location.search).get("sightRings") === "1";
+  } catch {
+    return false;
+  }
+};
+
 export const groundWorld = (ix: number, iy: number, origin: Point): Point => ({
   x: ix - iy + origin.x,
   y: (ix + iy) / 2 + origin.y,
@@ -863,6 +872,8 @@ export class AttackBattleLayer {
   private readonly effects = new Container();
   /** Frost Eye-ras' frost areas on the ground (beta 10). */
   private frostAreas: FrostAreaFx | null = null;
+  /** DEV only (`?sightRings=1`): each tower's reach and its sight, to film Krampus's invisible aura. */
+  private sightRings: Graphics | null = null;
   /** Drawn explosions, Eye-ra's fiery one (feat/eyera-explosion); inside `effects`. */
   private readonly blastAir = new Container();
   private readonly blastFx: BlastFx;
@@ -1191,6 +1202,7 @@ export class AttackBattleLayer {
       const seen = this.syncCreeps(live, tick);
       // A stand-in battle (tests) may not draw frost areas.
       this.syncFrostAreas(battle.frostAreas?.() ?? [], tick);
+      if (import.meta.env.DEV && sightRingsAsked()) this.drawSightRings(battle.towerSights?.() ?? []);
       for (const event of battle.recentEvents(this.lastEventTick)) {
         this.sounds.onEvent(event);
         this.lootFx.onEvent(event);
@@ -1487,6 +1499,8 @@ export class AttackBattleLayer {
     this.splats.length = 0;
     this.ringFx.destroy();
     this.frostAreas?.destroy();
+    this.sightRings?.destroy();
+    this.sightRings = null;
     this.frostAreas = null;
     for (const sprite of this.gibPool) sprite.destroy();
     this.gibPool.length = 0;
@@ -1597,6 +1611,25 @@ export class AttackBattleLayer {
   }
 
   /* ── Creeps ─────────────────────────────────────────────────────────── */
+
+  /** DEV only: a white ring at each tower's reach, and a cyan one at its sight when Krampus's aura cuts it. */
+  private drawSightRings(sights: readonly { x: number; y: number; range: number; sight: number }[]): void {
+    if (!this.sightRings) {
+      this.sightRings = new Graphics();
+      this.sightRings.eventMode = "none";
+      (this.host.groundShadowLayer?.() ?? this.effects).addChild(this.sightRings);
+    }
+    const rings = this.sightRings.clear();
+    for (const one of sights) {
+      const at = groundWorld(one.x, one.y, this.origin);
+      const reach = auraEllipse(one.range);
+      rings.ellipse(at.x, at.y, reach.rx, reach.ry).stroke({ width: 2, color: 0xffffff, alpha: 0.55 });
+      if (one.sight < one.range) {
+        const seen = auraEllipse(one.sight);
+        rings.ellipse(at.x, at.y, seen.rx, seen.ry).stroke({ width: 3, color: 0x7fe8ff, alpha: 0.95 });
+      }
+    }
+  }
 
   /** The towers drawn frozen now, so a thaw puts exactly those back. */
   private readonly frozenShown = new Set<number>();

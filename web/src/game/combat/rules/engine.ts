@@ -1513,6 +1513,12 @@ export interface Battle {
   /** Ids of the towers Krampus's aura holds, seeing less far, ascending (beta 10). */
   blindedTowers(): readonly number[];
   /**
+   * Every standing tower's reach and how far it sees now (shorter inside
+   * Krampus's aura), yard units, round its scan point. Drawing only, for the
+   * dev sight rings (`?sightRings=1`). A fresh copy per call.
+   */
+  towerSights(): readonly TowerSight[];
+  /**
    * The frost areas frost Eye-ras left where they burst (`frost.ts`), still
    * on the ground: yard point, radius in yard units, the tick they melt on.
    * Drawing only; the towers inside were slowed when it burst. A fresh copy.
@@ -1992,6 +1998,15 @@ interface Tower {
   weakUntil: number;
   /** The share of its damage the ooze takes off while it lasts. */
   weakShare: number;
+}
+
+/** A tower's reach and sight round its scan point, yard units (`Battle.towerSights`). */
+export interface TowerSight {
+  readonly id: number;
+  readonly x: number;
+  readonly y: number;
+  readonly range: number;
+  readonly sight: number;
 }
 
 /**
@@ -9265,6 +9280,14 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     chilledTowers,
     frozenTowers,
     blindedTowers,
+    towerSights: () =>
+      towers
+        .filter((tower) => tower.building.hp > 0)
+        .map((tower) => {
+          const at = towerScanPoint(tower.building);
+          const { id } = tower.building;
+          return { id, x: at.x, y: at.y, range: tower.range, sight: sightOf(tower) };
+        }),
     frostAreas: (): FrostArea[] => {
       // Melted areas leave the list as they are read; drawing only.
       for (let at = frostAreaList.length - 1; at >= 0; at -= 1) {
