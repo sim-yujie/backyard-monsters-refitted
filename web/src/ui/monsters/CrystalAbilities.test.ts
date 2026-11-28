@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ChampionSaveEntry } from "@/api/types";
 import { CHAMPION_ABILITIES, abilitiesUnlocked, crystalsHeld } from "@/game/events/crystals";
-import { CrystalAbilities, abilityIconUrl, ownedChampion, unlockNote } from "./CrystalAbilities";
+import { CrystalAbilities, abilityIconUrl, gemStyleFrom, ownedChampion, unlockNote } from "./CrystalAbilities";
 
 /**
  * The Champion tab's Abilities view (Monster Madness crystals, 27 Nov 2026):
@@ -110,5 +110,25 @@ describe("ability icons", () => {
 
   it("keeps all twelve in the one painted set, not the fight's status stickers", () => {
     for (const ability of all) expect(file(ability), ability.id).toMatch(/^ui\/abilities\/[a-z-]+\.webp$/);
+  });
+
+  it("reads the gem framing under review from the URL, square without it", () => {
+    expect(gemStyleFrom("?gemIcons=a")).toBe("a");
+    expect(gemStyleFrom("?x=1&gemIcons=c")).toBe("c");
+    expect(gemStyleFrom("?gemIcons=z")).toBeNull();
+    expect(gemStyleFrom("")).toBeNull();
+    expect(file(all[0]!)).not.toContain("gem-");
+  });
+
+  it("has every gem framing's lit and locked file on disk", () => {
+    for (const gem of ["a", "b", "c"] as const) {
+      for (const ability of all) {
+        for (const locked of [false, true]) {
+          const rel = abilityIconUrl(ability, locked, gem).replace(/^.*?\/(?=ui\/)/, "");
+          expect(rel).toMatch(new RegExp(`^ui/abilities/gem-${gem}/[a-z-]+${locked ? "\\.locked" : ""}\\.webp$`));
+          expect(existsSync(path.resolve(__dirname, "../../../public", rel)), rel).toBe(true);
+        }
+      }
+    }
   });
 });

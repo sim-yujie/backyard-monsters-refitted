@@ -55,7 +55,28 @@ const ABILITY_ICON: Readonly<Record<AbilityInfo["id"], string>> = {
   fistsOfDoom: "/ui/abilities/fists-of-doom.webp",
 };
 
-export const abilityIconUrl = (ability: AbilityInfo): string => url(ABILITY_ICON[ability.id]);
+/**
+ * Gem framings under review (owner 28 Nov 2026: "embed them into crystal/gems"), shown only on the dev
+ * server with `?gemIcons=a|b|c`; without it the square icons above. Each is the same painting set into a
+ * painted setting, baked per ability in `/ui/abilities/gem-<x>/`, with its own dull stone for a locked slot:
+ * a = octagon socket, b = hexagon crystal rim in the icon's colour, c = the picture inside a cushion-cut gem.
+ */
+export type GemStyle = "a" | "b" | "c";
+
+export const gemStyleFrom = (search: string): GemStyle | null => {
+  const asked = new URLSearchParams(search).get("gemIcons");
+  return asked === "a" || asked === "b" || asked === "c" ? asked : null;
+};
+
+const gemStyle: GemStyle | null = import.meta.env.DEV && typeof location !== "undefined" ? gemStyleFrom(location.search) : null;
+
+/** The icon's file; with a gem framing on, the gem (and its dull stone when `locked`). */
+export const abilityIconUrl = (ability: AbilityInfo, locked = false, gem: GemStyle | null = gemStyle): string => {
+  const square = ABILITY_ICON[ability.id];
+  if (!gem) return url(square);
+  const name = square.replace(/^.*\//, "").replace(/\.webp$/, "");
+  return url(`/ui/abilities/gem-${gem}/${name}${locked ? ".locked" : ""}.webp`);
+};
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string) => {
   const element = document.createElement(tag);
@@ -69,6 +90,13 @@ const image = (src: string, className: string, alt = ""): HTMLImageElement => {
   picture.src = src;
   picture.alt = alt;
   picture.decoding = "async";
+  return picture;
+};
+
+/** The icon as an image, marked as a gem when a gem framing is on (its CSS drops the square's grey ghost). */
+const abilityIcon = (ability: AbilityInfo, className: string, locked = false): HTMLImageElement => {
+  const picture = image(abilityIconUrl(ability, locked), className);
+  if (gemStyle) picture.classList.add("ability-gem", `ability-gem--${gemStyle}`);
   return picture;
 };
 
@@ -169,7 +197,7 @@ export class CrystalAbilities {
       const state = index < count ? "unlocked" : index === count ? "next" : "locked";
       const slot = el("button", `crystal-slot crystal-slot--${state}`);
       slot.type = "button";
-      slot.append(image(abilityIconUrl(ability), "crystal-slot__icon"), el("span", "crystal-slot__name", ability.name));
+      slot.append(abilityIcon(ability, "crystal-slot__icon", state === "locked"), el("span", "crystal-slot__name", ability.name));
       if (state === "next" && crystals > 0) slot.classList.add("crystal-slot--ready");
       if (ability.fromLevel > 1) {
         const gate = el("span", "crystal-slot__gate", `Lv ${ability.fromLevel}+`);
@@ -216,7 +244,7 @@ export class CrystalAbilities {
     }
     const note = unlockNote(picked.t, ability, ownedChampion(save.champion, picked.t));
     this.inspector.replaceChildren(
-      image(abilityIconUrl(ability), "crystal-abilities__inspector-icon"),
+      abilityIcon(ability, "crystal-abilities__inspector-icon"),
       el("strong", "", `${ability.name}: `),
       document.createTextNode(ability.line),
       ...(note ? [el("span", "crystal-abilities__note", ` ${note}`)] : []),
@@ -259,7 +287,7 @@ const hero = (t: number, ability: AbilityInfo, level: number): HTMLElement => {
   const portrait = el("img", "crystal-hero__portrait");
   portrait.alt = CRYSTAL_CHAMPION_NAMES[t] ?? "";
   showPortrait(portrait, championPortrait(championIdOf(t), level, "card"));
-  wrap.append(portrait, image(abilityIconUrl(ability), "crystal-hero__icon"));
+  wrap.append(portrait, abilityIcon(ability, "crystal-hero__icon"));
   return wrap;
 };
 
