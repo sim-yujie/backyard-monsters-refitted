@@ -8,7 +8,8 @@ import { EVENT_EXTRAS } from "./EventsPanel";
  * `services/yard/season.ts` keeps it).
  */
 
-export const PRESENT_HUNT_HINT = "Tap a present in your yard to pick it. Golden ones hold Shiny!";
+/** "hold Shiny!" kept together, so a narrow card never leaves "Shiny!" alone on a line (lead, 28 Nov 2026). */
+export const PRESENT_HUNT_HINT = "Tap a present in your yard to pick it. Golden ones hold\u00a0Shiny!";
 
 EVENT_EXTRAS.set("christmas", () => {
   // Plain text: the present's picture already stands by "Presents found" just under it (neon, round 2).

@@ -783,6 +783,8 @@
   font-weight: 400;
   color: var(--colour-text-muted);
   opacity: 0.85;
+  /* Two even lines rather than one long and a lone word (phone on its side). */
+  text-wrap: balance;
 }
 
 .events-track {
