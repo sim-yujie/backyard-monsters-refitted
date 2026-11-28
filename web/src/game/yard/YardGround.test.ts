@@ -16,8 +16,8 @@ const bounds = readYard({ error: 0, buildingdata: {}, storedata: {} } as unknown
 
 /** The ground's layers, in the order the constructor adds them. */
 const layers = (ground: YardGround) => {
-  const [surround, plot, clip, boundary] = ground.root.children as Graphics[];
-  return { surround: surround!, plot: plot!, clip: clip!, boundary: boundary! };
+  const [surround, plot, clip, outside, boundary] = ground.root.children as Graphics[];
+  return { surround: surround!, plot: plot!, clip: clip!, outside: outside!, boundary: boundary! };
 };
 
 describe("YardGround", () => {
@@ -37,6 +37,21 @@ describe("YardGround", () => {
     expect(edge.width).toBeGreaterThan(0);
     expect(edge.width).toBeLessThan(bounds.width + 10);
     ground.destroy();
+  });
+
+  it("at Christmas darkens the snow outside the own plot only (neon, 28 Nov 2026)", () => {
+    const load = vi.spyOn(Assets, "load").mockRejectedValue(new Error("offline"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const ground = new YardGround("original");
+    ground.layout(bounds, 1, "plot");
+    expect(layers(ground).outside.getLocalBounds().width).toBe(0);
+    ground.setSeason("christmas");
+    expect(layers(ground).outside.getLocalBounds().width).toBeGreaterThan(bounds.width);
+    ground.layout(bounds, 1, "open");
+    expect(layers(ground).outside.getLocalBounds().width).toBe(0);
+    ground.destroy();
+    load.mockRestore();
+    warn.mockRestore();
   });
 
   it("draws no edge on a foreign yard's open ground", () => {

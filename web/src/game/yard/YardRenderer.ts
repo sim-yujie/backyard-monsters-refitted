@@ -32,6 +32,7 @@ import { YardTurkeys } from "./YardTurkeys";
 import { thanksgivingDressUp, YardDressUp } from "./YardDressUp";
 import { winterDressUp } from "./winterSkin";
 import { flakeCount, YardSnowfall } from "./YardSnowfall";
+import { PresentGlows } from "./presentGlow";
 import { onQualityChange, quality } from "@/game/quality";
 import { UpgradePreview } from "./UpgradePreview";
 import { upgradeLook } from "./upgradeLook";
@@ -111,6 +112,8 @@ export class YardRenderer {
   private readonly dressUp = new YardDressUp(this.buildings);
   /** Christmas: the falling snow (`YardSnowfall.ts`), sized for the screen and the Quality. */
   private readonly snowfall = new YardSnowfall();
+  /** Christmas: the gold glow on the ground under each hunt present (`presentGlow.ts`). */
+  private readonly presentGlows = new PresentGlows();
   /** The screen size the snow was counted for. */
   private snowScreen = "";
   /** A new Quality pick counts the snow again (Low stops it, Medium halves it) without waiting for a resize. */
@@ -286,6 +289,7 @@ export class YardRenderer {
       this.rangeOval,
       this.helpMarks.ground,
       this.buildings.shadows,
+      this.presentGlows.root,
       this.buildings.tops,
       this.giblets.root,
       this.snowfall.root,
@@ -374,6 +378,10 @@ export class YardRenderer {
     }
     this.dressYard();
     this.redrawMushrooms();
+    // The snow's contact patches (`snowContact.ts`) are laid when buildings are shown: a yard already
+    // on screen when Christmas arrives (or ends) is shown again, once.
+    const yard = this.yard;
+    if (yard && this.buildings.snowContact !== (season === "christmas" && yard.kind !== "inferno")) this.show(yard);
   }
 
   /**
@@ -488,6 +496,8 @@ export class YardRenderer {
     // The creatures outlive a redraw: out of the containers the yard is about
     // to empty, and back in once it has refilled them.
     this.life.detach();
+    // Christmas: a dark patch on the snow under each building (`snowContact.ts`, neon 28 Nov 2026).
+    this.buildings.snowContact = this.season === "christmas" && yard.kind !== "inferno";
     this.buildings.show(yard, atlas, this.work ? readWork(this.work.save()) : undefined);
     this.mountLife();
     this.jobBars.show(yard);
@@ -525,6 +535,8 @@ export class YardRenderer {
       sprite.zIndex = mushroomZIndex(mushroom);
       this.buildings.addGuest(sprite);
       this.mushroomSprites.set(key, sprite);
+      // A hunt present glows gold on the snow, so it reads at full-yard zoom (neon, 28 Nov 2026).
+      if (this.season === "christmas") this.presentGlows.add(key, mushroom.worldX, mushroom.worldY);
       keys.add(key);
     }
     for (const key of this.popping.keys()) if (!keys.has(key)) this.popping.delete(key);
@@ -561,6 +573,7 @@ export class YardRenderer {
       this.buildings.setHelpLit(this.helpMarks.active ? this.helpMarks.lit : NO_HELP_LIT);
       this.shakeMushrooms();
       this.popMushrooms(deltaSeconds);
+      if (this.presentGlows.count > 0) this.presentGlows.update(deltaSeconds, prefersReducedMotion());
       if (this.turkeysOn) this.turkeys.update(deltaSeconds);
       this.fallSnow(visible, deltaSeconds);
     } else if (this.snowfall.count > 0) {
@@ -1498,6 +1511,7 @@ export class YardRenderer {
     this.dressUp.destroy();
     this.unwatchSnowQuality();
     this.snowfall.destroy();
+    this.presentGlows.destroy();
     this.planner.destroy();
     this.jobBars.destroy();
     this.hatchMarks.destroy();
@@ -1629,6 +1643,7 @@ export class YardRenderer {
       sprite.destroy();
     }
     this.mushroomSprites.clear();
+    this.presentGlows.clear();
   }
 
   /** Moves every pop on by `deltaSeconds` and scales its mushroom (`mushroomPop.ts`). */
@@ -1636,6 +1651,7 @@ export class YardRenderer {
     for (const [key, elapsed] of this.popping) {
       const now = elapsed + deltaSeconds;
       this.mushroomSprites.get(key)?.scale.set(mushroomPopScale(now) * this.mushroomSize());
+      this.presentGlows.scale(key, mushroomPopScale(now));
       if (now >= MUSHROOM_POP_SECONDS) this.popping.delete(key);
       else this.popping.set(key, now);
     }

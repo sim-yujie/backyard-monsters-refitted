@@ -35,8 +35,7 @@ export const flakeCount = (width: number, height: number, level: Quality): numbe
 };
 
 /** One flake: its place in the view (0 to 1), its fall speed and size in screen px, its sway. */
-interface Flake {
-  readonly sprite: Sprite;
+export interface Flake {
   u: number;
   v: number;
   /** Screen px a second, down. */
@@ -50,7 +49,7 @@ interface Flake {
 }
 
 /** A small seeded generator (mulberry32), so a test sees the same snow every time. */
-const seeded = (seed: number): (() => number) => {
+export const seeded = (seed: number): (() => number) => {
   let state = seed >>> 0;
   return () => {
     state = (state + 0x6d2b79f5) >>> 0;
@@ -59,6 +58,42 @@ const seeded = (seed: number): (() => number) => {
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296;
   };
+};
+
+/**
+ * A new flake. Three depths: far flakes small, slow and bright enough to read
+ * over snow; near ones bigger, quicker and softer, so they never blot out a
+ * tower or salt a dark wall (neon rounds 1 and 2, 27 Nov 2026: near flakes at
+ * most about 55% opaque; on a phone-wide screen 3 to 7 px, else 4 to 11).
+ */
+export const newFlake = (random: () => number, narrow: boolean): Flake & { readonly alpha: number } => {
+  const depth = random();
+  return {
+    u: random(),
+    v: random(),
+    fall: 22 + depth * 46,
+    size: narrow ? 3 + depth * depth * 4 : 4 + depth * depth * 7,
+    alpha: 0.9 - depth * depth * 0.35,
+    swayBy: 6 + random() * 14,
+    swayRate: 0.6 + random() * 1.1,
+    phase: random() * Math.PI * 2,
+  };
+};
+
+/**
+ * Moves a flake on by `step` seconds on a `screenWidth` x `screenHeight`
+ * screen and gives its place across the view now (0 to 1, with its sway); a
+ * flake that fell off the bottom starts again at the top, somewhere new.
+ */
+export const moveFlake = (flake: Flake, step: number, screenWidth: number, screenHeight: number, random: () => number): number => {
+  flake.v += (flake.fall * step) / screenHeight;
+  flake.phase += flake.swayRate * step;
+  if (flake.v > 1.02) {
+    flake.v -= 1.04;
+    flake.u = random();
+  }
+  const swayU = (Math.sin(flake.phase) * flake.swayBy) / screenWidth;
+  return (((flake.u + swayU) % 1) + 1) % 1;
 };
 
 /** The flake picture: a soft white dot, 16 px, drawn once. Null where there is no canvas (tests). */
@@ -81,7 +116,7 @@ const flakeTexture = (): Texture | null => {
 export class YardSnowfall {
   /** Over the buildings and monsters, under the yard's badges and labels. */
   readonly root = new Container();
-  private flakes: Flake[] = [];
+  private flakes: (Flake & { readonly sprite: Sprite })[] = [];
   private texture: Texture | null;
   private readonly random = seeded(1225);
 
@@ -112,24 +147,12 @@ export class YardSnowfall {
     this.texture ??= flakeTexture();
     if (!this.texture) return;
     for (let index = 0; index < count; index++) {
-      // Three depths: far flakes small, slow and faint; near ones bigger, quicker and brighter.
-      const depth = this.random();
+      const flake = newFlake(this.random, narrow);
       const sprite = new Sprite(this.texture);
       sprite.anchor.set(0.5);
-      sprite.alpha = 0.7 + depth * 0.3;
+      sprite.alpha = flake.alpha;
       this.root.addChild(sprite);
-      this.flakes.push({
-        sprite,
-        u: this.random(),
-        v: this.random(),
-        fall: 22 + depth * 46,
-        // Most flakes small; the nearest few big enough to read over bright snow (neon, 27 Nov 2026).
-        // On a phone-wide screen the nearest stay smaller (4-8 px), so they never blot out a tower (neon round 2).
-        size: 4 + depth * depth * (narrow ? 4 : 7),
-        swayBy: 6 + this.random() * 14,
-        swayRate: 0.6 + this.random() * 1.1,
-        phase: this.random() * Math.PI * 2,
-      });
+      this.flakes.push({ ...flake, sprite });
     }
     this.root.visible = true;
   }
@@ -145,14 +168,7 @@ export class YardSnowfall {
     // A long pause (a hidden tab) must not throw every flake to the bottom.
     const step = Math.min(deltaSeconds, 0.1);
     for (const flake of this.flakes) {
-      flake.v += (flake.fall * step) / screenHeight;
-      flake.phase += flake.swayRate * step;
-      if (flake.v > 1.02) {
-        flake.v -= 1.04;
-        flake.u = this.random();
-      }
-      const swayU = (Math.sin(flake.phase) * flake.swayBy) / screenWidth;
-      const u = (((flake.u + swayU) % 1) + 1) % 1;
+      const u = moveFlake(flake, step, screenWidth, screenHeight, this.random);
       flake.sprite.position.set(visible.x + u * visible.width, visible.y + flake.v * visible.height);
       flake.sprite.scale.set((flake.size / 16) * worldPerPixel);
     }
