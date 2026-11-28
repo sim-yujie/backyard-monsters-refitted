@@ -153,7 +153,12 @@ describe("EventsPanel", () => {
     // The dock opens on the first goal ready, says two are waiting, and claims it.
     const dock = section.querySelector<HTMLElement>(".events-track__dock")!;
     expect(dock.dataset["tier"]).toBe("1");
-    expect(dock.querySelector(".events-track__more")?.textContent).toBe("2 ready");
+    expect(dock.querySelector(".events-track__end .events-track__more")?.textContent).toBe("2 ready");
+    // Each ready goal says so on its tile; one not reached yet shows a lock.
+    expect(section.querySelectorAll(".events-track__badge--ready")).toHaveLength(2);
+    expect(nodes[3]!.querySelector(".events-track__badge--locked")).not.toBeNull();
+    // The hint sits under the title, above the bar.
+    expect(section.querySelector(".events-calendar__head + .events-card__extra")).not.toBeNull();
     dock.querySelector<HTMLButtonElement>("[data-claim]")!.click();
     expect(options.onClaimTier).toHaveBeenCalledWith(expect.objectContaining({ id: "christmas-2026" }), 1);
     // A tap on the last goal shows how many are left, with no Claim.

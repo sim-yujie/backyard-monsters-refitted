@@ -664,7 +664,10 @@ export class EventsPanel {
     extra.dataset["event"] = event.id;
     const own = EVENT_EXTRAS.get(event.kind)?.(event);
     if (own) extra.append(own);
-    card.append(extra);
+    // A prize track's hint (where the presents come from) under its title, above its bar (neon round 1).
+    const trackHead = card.querySelector(".events-ladder--track > .events-calendar__head");
+    if (trackHead) trackHead.after(extra);
+    else card.append(extra);
     return card;
   }
 
@@ -835,6 +838,13 @@ export class EventsPanel {
       const prize = el("span", "events-track__prize");
       const hero = heroReward(tier.rewards);
       if (hero) prize.append(rewardBadge(hero));
+      // The prize's state on its tile's corner too (neon round 1): "!" when ready, a lock until reached.
+      if (state === "ready") prize.append(el("span", "events-track__badge events-track__badge--ready", "!"));
+      if (state === "locked") {
+        const badge = el("span", "events-track__badge events-track__badge--locked");
+        badge.append(eventsArt("lock", 10, "events-track__lock"));
+        prize.append(badge);
+      }
       const pip = el("span", "events-track__pip");
       if (tier.claimed) pip.append(eventsArt("tick", 14, "events-track__tick"));
       node.append(prize, pip, el("span", "events-track__need", shortAmount(tier.need)));
@@ -860,10 +870,11 @@ export class EventsPanel {
       }
       dock.className = `events-track__dock events-track__dock--${tier.claimed ? "claimed" : isReady ? "ready" : "locked"}`;
       dock.dataset["tier"] = String(focus);
+      // Where the dock's pointer stands: under the goal it shows (neon round 1).
+      dock.style.setProperty("--at", String((focus + 1) / ladder.tiers.length));
       const goal = el("span", "events-track__goal");
       goal.append(el("span", "events-track__goal-need", shortAmount(tier.need)));
-      // More than one waiting: say how many, so the player knows to keep tapping Claim.
-      if (isReady && ready.length > 1) goal.append(el("span", "events-track__more", `${ready.length} ready`));
+      goal.setAttribute("aria-label", `${formatAmount(tier.need)} ${ladder.label.toLowerCase()}`);
       const chips = el("span", "events-track__chips");
       chips.title = rewardsText(tier.rewards);
       for (const reward of tier.rewards) chips.append(rewardBadge(reward));
@@ -875,7 +886,10 @@ export class EventsPanel {
         button.type = "button";
         button.dataset["claim"] = key;
         button.disabled = view.claiming !== null;
+        button.setAttribute("aria-label", `Claim ${formatAmount(tier.need)}: ${rewardsText(tier.rewards)}`);
         button.addEventListener("click", () => this.options.onClaimTier(event, focus));
+        // More than one waiting: how many, beside the button, so the player knows Claim takes one and to tap again.
+        if (ready.length > 1) end.append(el("span", "events-track__more", `${ready.length} ready`));
         end.append(button);
       } else {
         end.append(

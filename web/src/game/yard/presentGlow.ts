@@ -12,8 +12,8 @@ import { Container, Sprite, Texture } from "pixi.js";
  * (10), and per frame one alpha for all of them.
  */
 
-/** The glow's width on the ground, world px (a present stands about 40 wide). */
-export const GLOW_WIDTH = 78;
+/** The glow's width on the ground, world px (a present stands about 40 wide; wide enough to show beside a building, neon round 1). */
+export const GLOW_WIDTH = 92;
 /** Its height as a share of its width: an oval lying on the isometric ground. */
 const GLOW_FLAT = 0.52;
 /** One breath, seconds. */
