@@ -1,0 +1,187 @@
+{
+  "name": "codex",
+  "source": "Codex, mm-anim bake-off round 1 (owner picked 28 Nov 2026)",
+  "cells": [
+    "chest_burst",
+    "lock_mark",
+    "lock_snap",
+    "taunt_wave"
+  ],
+  "columns": 4,
+  "bounds": {
+    "chest_burst": [
+      0.9167,
+      0.8802
+    ],
+    "lock_mark": [
+      0.9167,
+      0.7083
+    ],
+    "lock_snap": [
+      0.9167,
+      0.6198
+    ],
+    "taunt_wave": [
+      0.9167,
+      0.8906
+    ]
+  },
+  "plan": {
+    "pieces": [
+      {
+        "cell": "chest_burst",
+        "start_ms": 62.5,
+        "life_ms": 200,
+        "anchor": "caster_chest",
+        "offset": [
+          0,
+          -4
+        ],
+        "follow": true,
+        "size": [
+          54,
+          118
+        ],
+        "ease": "out",
+        "fade_in_ms": 12.5,
+        "peak": 0.98,
+        "hold": 0.2,
+        "tint": [
+          "#ffffff"
+        ],
+        "blend": "normal",
+        "layer": "air"
+      },
+      {
+        "cell": "taunt_wave",
+        "start_ms": 62.5,
+        "life_ms": 500,
+        "anchor": "caster_feet",
+        "follow": false,
+        "size": [
+          84,
+          "reach"
+        ],
+        "ease": "out",
+        "squash": 0.5,
+        "fade_in_ms": 12.5,
+        "peak": 0.9,
+        "hold": 0.52,
+        "tint": [
+          "#ffffff"
+        ],
+        "blend": "normal",
+        "layer": "ground"
+      },
+      {
+        "cell": "taunt_wave",
+        "start_ms": 487.5,
+        "life_ms": 412.5,
+        "anchor": "caster_feet",
+        "follow": false,
+        "size": [
+          "reach",
+          "reach"
+        ],
+        "squash": 0.5,
+        "fade_in_ms": 87.5,
+        "peak": 0.39,
+        "hold": 0.08,
+        "tint": [
+          "#ffffff"
+        ],
+        "blend": "normal",
+        "layer": "ground"
+      }
+    ],
+    "on_each": [
+      {
+        "cell": "lock_snap",
+        "start_ms": 62.5,
+        "life_ms": 225,
+        "anchor": "tower_top",
+        "offset": [
+          0,
+          -3
+        ],
+        "follow": true,
+        "size": [
+          92,
+          54
+        ],
+        "ease": "out",
+        "fade_in_ms": 12.5,
+        "peak": 0.95,
+        "hold": 0.32,
+        "tint": [
+          "#ffffff"
+        ],
+        "blend": "normal",
+        "layer": "air"
+      }
+    ],
+    "held": [
+      {
+        "cell": "lock_mark",
+        "start_ms": 0,
+        "life_ms": 900,
+        "loop_ms": 900,
+        "anchor": "tower_top",
+        "offset": [
+          0,
+          -3
+        ],
+        "follow": true,
+        "size": [
+          56,
+          62
+        ],
+        "pulse": true,
+        "ease": "linear",
+        "fade_in_ms": 100,
+        "peak": 0.94,
+        "hold": 1,
+        "tint": [
+          "#ffffff"
+        ],
+        "blend": "normal",
+        "layer": "air"
+      }
+    ],
+    "shake": {
+      "start_ms": 62.5,
+      "strength_px": 4,
+      "duration_ms": 162.5
+    },
+    "body": {
+      "start_ms": 0,
+      "keys": [
+        {
+          "ms": 0,
+          "scale_x": 1,
+          "scale_y": 1
+        },
+        {
+          "ms": 37.5,
+          "scale_x": 0.96,
+          "scale_y": 1.09
+        },
+        {
+          "ms": 62.5,
+          "scale_x": 1.13,
+          "scale_y": 0.89
+        },
+        {
+          "ms": 125,
+          "scale_x": 0.98,
+          "scale_y": 1.035
+        },
+        {
+          "ms": 212.5,
+          "scale_x": 1,
+          "scale_y": 1
+        }
+      ]
+    }
+  }
+}

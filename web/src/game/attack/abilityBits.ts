@@ -50,6 +50,17 @@ export const ABILITY_CELLS = [
   "burst",
 ] as const;
 export type AbilityCell = (typeof ABILITY_CELLS)[number];
+
+/**
+ * Another sheet of named cells in the same 192 px grid (the mm-anim bake-off,
+ * 28 Nov 2026: a designer model's own pieces, `fxSets.ts`). A cell name not
+ * on it draws nothing.
+ */
+export interface AbilityAtlas {
+  readonly url: (classic: boolean) => string;
+  readonly cells: readonly string[];
+  readonly columns: number;
+}
 export const ABILITY_CELL = 192;
 const COLUMNS = 6;
 
@@ -91,11 +102,14 @@ interface Bit {
   /** Flies from where it starts to `to` along an arc `arc` px high, over its life. */
   readonly to: (() => Point | null) | null;
   readonly arc: number;
+  /** A flipbook: these cells over its life (or every `frameTicks` ticks, looping). */
+  readonly frames: readonly string[] | null;
+  readonly frameTicks: number;
 }
 
 /** A piece to throw; everything but its cell and where it starts has a default. */
 export interface AbilityBitSpec {
-  readonly cell: AbilityCell;
+  readonly cell: AbilityCell | (string & {});
   readonly at: Point;
   readonly delay?: number;
   readonly life?: number;
@@ -127,11 +141,15 @@ export interface AbilityBitSpec {
   /** Flies to this point over its life (a spit, a blood drop), `arc` px high at its top. */
   readonly to?: () => Point | null;
   readonly arc?: number;
+  /** A flipbook: these cells over its life (`cell` is then only the first). */
+  readonly frames?: readonly string[];
+  /** With `frames`: ticks per frame, looping; 0 or none spreads them over the life once. */
+  readonly frameTicks?: number;
 }
 
 /** A piece held on a point for this frame only. */
 export interface AbilitySpot {
-  readonly cell: AbilityCell;
+  readonly cell: AbilityCell | (string & {});
   readonly at: Point;
   /** Width, px; height is `squash` of it. */
   readonly size: number;
@@ -154,7 +172,7 @@ export class AbilityBits {
   private readonly bits: Bit[] = [];
   private readonly pool: Sprite[] = [];
   private readonly drawn: Sprite[] = [];
-  private readonly cells = new Map<AbilityCell, Texture>();
+  private readonly cells = new Map<string, Texture>();
   private sheet: Texture | null = null;
   private asked = false;
   private readonly cap: number;
@@ -164,6 +182,7 @@ export class AbilityBits {
     private readonly classic = false,
     private readonly low = false,
     private readonly load: (url: string) => Promise<Texture> = (url) => Assets.load<Texture>(url),
+    private readonly atlas: AbilityAtlas | null = null,
   ) {
     this.cap = low ? LOW_ABILITY_BITS : MAX_ABILITY_BITS;
   }
@@ -189,7 +208,7 @@ export class AbilityBits {
   preload(): void {
     if (this.asked) return;
     this.asked = true;
-    this.load(abilitySheetUrl(this.classic))
+    this.load(this.atlas ? this.atlas.url(this.classic) : abilitySheetUrl(this.classic))
       .then((texture) => {
         this.sheet = texture;
       })
@@ -239,6 +258,8 @@ export class AbilityBits {
       follow: spec.follow ?? null,
       to: spec.to ?? null,
       arc: spec.arc ?? 0,
+      frames: spec.frames && spec.frames.length > 0 ? spec.frames : null,
+      frameTicks: spec.frameTicks ?? 0,
     });
     return true;
   }
@@ -309,13 +330,15 @@ export class AbilityBits {
     this.cells.clear();
   }
 
-  private cell(cell: AbilityCell): Texture | null {
+  private cell(cell: string): Texture | null {
     this.preload();
     const sheet = this.sheet;
     if (!sheet) return null;
     let texture = this.cells.get(cell);
     if (!texture) {
-      texture = new Texture({ source: sheet.source, frame: abilityCellFrame(cell) });
+      const frame = this.atlas ? atlasCellFrame(this.atlas, cell) : abilityCellFrame(cell as AbilityCell);
+      if (!frame) return null;
+      texture = new Texture({ source: sheet.source, frame });
       this.cells.set(cell, texture);
     }
     return texture;
@@ -328,6 +351,13 @@ export class AbilityBits {
       return;
     }
     const t = age / bit.life;
+    if (bit.frames) {
+      const count = bit.frames.length;
+      const index =
+        bit.frameTicks > 0 ? Math.floor(age / bit.frameTicks) % count : Math.min(count - 1, Math.floor(t * count));
+      const texture = this.cell(bit.frames[index] ?? bit.frames[0]!);
+      if (texture) sprite.texture = texture;
+    }
     let x: number;
     let y: number;
     const to = bit.to?.();
@@ -336,7 +366,8 @@ export class AbilityBits {
       const ease = bit.easeOut ? 1 - (1 - t) * (1 - t) : t;
       x = bit.x + (to.x - bit.x) * ease;
       y = bit.y + (to.y - bit.y) * ease - Math.sin(ease * Math.PI) * bit.arc;
-      sprite.rotation = bit.rotation + Math.atan2(to.y - bit.y - Math.cos(ease * Math.PI) * bit.arc * Math.PI, to.x - bit.x);
+      sprite.rotation =
+        bit.rotation + bit.spin * age + Math.atan2(to.y - bit.y - Math.cos(ease * Math.PI) * bit.arc * Math.PI, to.x - bit.x);
     } else {
       const path = bitPath(bit, age);
       x = path.x;
@@ -378,6 +409,18 @@ export class AbilityBits {
     this.pool.push(sprite);
   }
 }
+
+/** Where a named cell sits on another sheet; null when it is not there. */
+export const atlasCellFrame = (atlas: AbilityAtlas, cell: string): Rectangle | null => {
+  const index = atlas.cells.indexOf(cell);
+  if (index < 0) return null;
+  return new Rectangle(
+    (index % atlas.columns) * ABILITY_CELL,
+    Math.floor(index / atlas.columns) * ABILITY_CELL,
+    ABILITY_CELL,
+    ABILITY_CELL,
+  );
+};
 
 /** Where a cell sits on the sheet. */
 export const abilityCellFrame = (cell: AbilityCell): Rectangle => {

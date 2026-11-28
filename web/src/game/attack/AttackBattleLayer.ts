@@ -60,6 +60,18 @@ import { BlastFx, type PunchyStrength } from "./blastFx";
 import { RingFx } from "./ringFx";
 import { AbilityBits } from "./abilityBits";
 import {
+  type Anchors,
+  type BodyPulse,
+  type HeldAt,
+  CHEST_POUND_SET,
+  PLANNED_ABILITIES,
+  PlanPlayer,
+  bodyPulseOf,
+  casterAnchors,
+  chestPoundAtlas,
+  pulseScale,
+} from "./chestPoundFx";
+import {
   ABILITY_LOOKS,
   AbilityPainter,
   BubbleFx,
@@ -935,6 +947,17 @@ export class AttackBattleLayer {
   private readonly abilityAir = new Container();
   private readonly abilityBits: AbilityBits;
   private readonly painter: AbilityPainter;
+  /** Codex's Chest Pound (`chestPoundFx.ts`): its own sheet and its plan's player. */
+  private readonly planBits: AbilityBits;
+  private readonly planPlayer: PlanPlayer;
+  /** Gorgo's squash from the plan's `body`, by creep. */
+  private readonly bodyPulses = new Map<number, BodyPulse>();
+  /** The towers Chest Pound holds, by tower, for the plan's `on_each` and `held`. */
+  private readonly planHolds = new Map<number, { since: number; by: number; ended: number; seen: boolean }>();
+  /** Chest Pound's reach (the circle's drawn width) by Gorgo, for the plan's "reach" sizes. */
+  private readonly planReach = new Map<number, number>();
+  /** Plan shakes that start a moment after the pound. */
+  private readonly pendingShakes: { tick: number; amp: number; life: number }[] = [];
   /** Who was in Stone Skin or a Bubble last frame, to crumble or pop it when it ends. */
   private readonly wasStone = new Set<number>();
   private readonly wasBubbled = new Set<number>();
@@ -1039,6 +1062,16 @@ export class AttackBattleLayer {
       ...(options.abilitySheet ? [options.abilitySheet] : []),
     );
     this.painter = new AbilityPainter(this.abilityBits, this.classic);
+    this.planBits = new AbilityBits(
+      { air: this.abilityAir, ground: () => this.debrisLayer() },
+      this.classic,
+      this.effectsLow || this.juice === "reduced",
+      options.abilitySheet,
+      chestPoundAtlas(),
+    );
+    this.planPlayer = new PlanPlayer(CHEST_POUND_SET, this.planBits, this.classic);
+    // Fetched at once (one small sheet): a Gorgo can pound soon after he lands.
+    this.planBits.preload();
 
     for (const building of options.yard.buildings) {
       if (building.maxHp !== null && building.maxHp > 0) {
@@ -1240,6 +1273,7 @@ export class AttackBattleLayer {
     const shown = this.shownTick(tick);
     // The abilities' held pieces (a bubble, a target mark) are laid again each frame.
     this.abilityBits.begin();
+    this.planBits.begin();
 
     if (!this.settled) {
       // Creeps the engine still has first, then this frame's events, and only
@@ -1282,6 +1316,13 @@ export class AttackBattleLayer {
     this.drawTowerMarks(marks?.stunned ?? [], marks?.marked ?? [], shown);
     this.trailFx.update(shown);
     this.abilityBits.update(shown);
+    this.planBits.update(shown);
+    for (let index = this.pendingShakes.length - 1; index >= 0; index -= 1) {
+      const shake = this.pendingShakes[index]!;
+      if (shake.tick > shown) continue;
+      this.blastFx.jolt(shake.tick, shake.amp, shake.life);
+      this.pendingShakes.splice(index, 1);
+    }
 
     if (this.damageDirty) {
       this.damageDirty = false;
@@ -1554,6 +1595,7 @@ export class AttackBattleLayer {
     this.tauntFx.destroy();
     this.trailFx.destroy();
     this.abilityBits.destroy();
+    this.planBits.destroy();
     for (const filter of this.stoneFilters.values()) filter.destroy();
     this.stoneFilters.clear();
     for (const burst of this.bursts) burst.ring.destroy();
@@ -1908,8 +1950,17 @@ export class AttackBattleLayer {
     }
   }
 
-  /** Chest Pound's holds: a line from each taunted tower to its Gorgo. */
+  /**
+   * Chest Pound's holds: Codex's mark over each held tower once its sheet is
+   * in; until then (or if it never loads), today's painted beads, or a line
+   * from each tower to its Gorgo.
+   */
   private drawTaunts(taunted: readonly { readonly tower: number; readonly by: number }[], tick: number): void {
+    if (this.planPlayer.ready) {
+      this.drawPlanHolds(taunted, tick);
+      this.tauntFx.draw([], tick);
+      return;
+    }
     const lines: TauntAt[] = [];
     const painted = this.painter.ready;
     for (const { tower, by } of taunted) {
@@ -1921,6 +1972,85 @@ export class AttackBattleLayer {
       else lines.push({ from, to });
     }
     this.tauntFx.draw(lines, tick);
+  }
+
+  /** Codex's Chest Pound holds: `on_each` as a tower is caught, `held` while it is. */
+  private drawPlanHolds(taunted: readonly { readonly tower: number; readonly by: number }[], tick: number): void {
+    const player = this.planPlayer;
+    const plan = player.plan("chestPound");
+    for (const hold of this.planHolds.values()) hold.seen = false;
+    for (const { tower, by } of taunted) {
+      const known = this.planHolds.get(tower);
+      if (known && known.ended < 0) {
+        known.seen = true;
+        continue;
+      }
+      this.planHolds.set(tower, { since: tick, by, ended: -1, seen: true });
+      const anchors = this.towerAnchors(tower, by);
+      if (anchors && plan) player.play(tick, plan.on_each, anchors, this.planReach.get(by) ?? 500, tick * 13 + tower);
+    }
+    const holds: HeldAt[] = [];
+    for (const [tower, hold] of this.planHolds) {
+      if (!hold.seen && hold.ended < 0) hold.ended = tick;
+      const ended = hold.ended < 0 ? -1 : tick - hold.ended;
+      if (ended > 40) {
+        this.planHolds.delete(tower);
+        continue;
+      }
+      const anchors = this.towerAnchors(tower, hold.by);
+      if (anchors) holds.push({ key: tower, since: hold.since, ended, anchors });
+    }
+    if (plan) player.held(tick, plan.held, holds, 500);
+  }
+
+  /** A held tower's anchors for the plan: its middle and top, and its Gorgo. */
+  private towerAnchors(tower: number, by: number): Anchors | null {
+    const top = this.towerTop(tower);
+    const middle = this.host.centreOf(tower);
+    if (!top || !middle) return null;
+    const gorgo = () => this.placeOf(by);
+    const place = gorgo();
+    const caster = place ? casterAnchors(place, gorgo) : {};
+    return {
+      ...caster,
+      tower: { at: { x: middle.x, y: middle.y - 20 }, follow: null },
+      tower_top: { at: { x: top.x, y: top.y - 10 }, follow: null },
+    };
+  }
+
+  /** Chest Pound went off: Codex's pieces, shake and squash (the word stays). */
+  private playPlan(event: Extract<BattleVisualEvent, { kind: "ability" }>, ground: Point): void {
+    const player = this.planPlayer;
+    const plan = player.plan(event.ability);
+    if (!plan) return;
+    const id = event.creepId;
+    const follow = () => this.placeOf(id);
+    const place = follow() ?? { ...ground, top: ground.y - BODY_HEIGHT, mid: { x: ground.x, y: ground.y - BODY_HEIGHT / 2 } };
+    // "reach" in a plan: the circle's diameter, as a piece's visible width (`PlanPlayer.fitted`).
+    const reach = event.radius > 0 ? event.radius * 2 : 500;
+    this.planReach.set(id, reach);
+    player.play(event.tick, plan.pieces, casterAnchors(place, follow), reach, event.tick * 31 + id);
+    if (plan.shake && !this.classic) {
+      const start = Math.round(((plan.shake.start_ms ?? 0) * 80) / 1000);
+      const life = Math.max(1, Math.round(((plan.shake.duration_ms ?? 200) * 80) / 1000));
+      const amp = Math.min(6, plan.shake.strength_px ?? 3);
+      if (start <= 0) this.blastFx.jolt(event.tick, amp, life);
+      else this.pendingShakes.push({ tick: event.tick + start, amp, life });
+    }
+    const pulse = bodyPulseOf(event.tick, plan.body);
+    if (pulse) this.bodyPulses.set(id, pulse);
+  }
+
+  /** The plan's squash on a creep's body at `tick`, or none. */
+  private pulseOn(id: number, tick: number): { x: number; y: number } {
+    const pulse = this.bodyPulses.get(id);
+    if (!pulse || this.reducedMotion) return { x: 1, y: 1 };
+    const scale = pulseScale(pulse, tick);
+    if (!scale) {
+      this.bodyPulses.delete(id);
+      return { x: 1, y: 1 };
+    }
+    return scale;
   }
 
   /**
@@ -2262,8 +2392,9 @@ export class AttackBattleLayer {
         }
         // A Slimeattikus's Lab "Split" copy is drawn smaller, about its feet.
         const shrink = creep.splitCopy ? SPLIT_COPY_SCALE : 1;
-        const scaleX = squash.x * flat.x * shrink;
-        const scaleY = squash.y * flat.y * shrink;
+        const pulse = this.bodyPulses.size > 0 ? this.pulseOn(creep.id, tick) : { x: 1, y: 1 };
+        const scaleX = squash.x * flat.x * shrink * pulse.x;
+        const scaleY = squash.y * flat.y * shrink * pulse.y;
         body.scale.set(scaleX, scaleY);
         view.baseTint = 0xffffff;
         // Whole pixels, as Flash drew them (`MonsterBase.as:613-616`): a cell
@@ -3074,7 +3205,11 @@ export class AttackBattleLayer {
       event.toIx !== undefined && event.toIy !== undefined
         ? groundWorld(event.toIx, event.toIy, this.origin)
         : null;
-    if (this.painter.ready) {
+    const planned = PLANNED_ABILITIES.includes(event.ability) && this.planPlayer.ready;
+    if (planned) {
+      // Codex's Chest Pound (owner, 28 Nov 2026, after the mm-anim bake-off).
+      this.playPlan(event, ground);
+    } else if (this.painter.ready) {
       // The painted look (owner, desk card mm-abilities2, 28 Nov 2026).
       const id = event.creepId;
       const place = this.placeOf(id) ?? { ...ground, top: ground.y - BODY_HEIGHT, mid: { x: ground.x, y: ground.y - BODY_HEIGHT / 2 } };
@@ -3089,7 +3224,7 @@ export class AttackBattleLayer {
       if (to && look.beam) this.trailFx.beam(event.tick, middle, { x: to.x, y: to.y - 14 }, look.colour);
       if (event.ability === "healingMist") this.mistOver(event, ground, look.colour);
     }
-    if (look.punchy) {
+    if (look.punchy && !planned) {
       // The painted dust and shockwave stand in for the blast's own ring: its flash stays, and the shake.
       const painted = this.painter.ready;
       this.punchy(event.tick, ground, Math.max(40, event.radius * 0.6), painted ? "flash" : look.punchy);
