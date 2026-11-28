@@ -18,6 +18,14 @@ export enum Reward {
   SPURTZ1 = "spurtzCannonReward",
   SPURTZ2 = "spurtzCannonReward2",
   DIAMOND_SPURTZ = "spurtzCannonReward3",
+  /**
+   * Brukkarg War's Spurtz Cannon prizes (beta 10, `config/SpurtzConfig.ts`).
+   * Not Flash's ids above: old saves and the sandbox yards carry those from
+   * the Town Hall 9 unlock removed in beta 5.9, and must not open the build.
+   */
+  BRUKWAR_SPURTZ1 = "brukwarSpurtz1",
+  BRUKWAR_SPURTZ2 = "brukwarSpurtz2",
+  BRUKWAR_DIAMOND_SPURTZ = "brukwarSpurtz3",
   GOLDEN_DAVE = "goldenDAVE",
   DAVE_STATUE = "daveStatue",
   IMPROVED_HCC="improvedHCC",

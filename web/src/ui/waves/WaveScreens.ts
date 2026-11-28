@@ -6,7 +6,7 @@ import { isFlyingMovement } from "@/game/combat/rules/targeting";
 import { startWaveWords, totemName, WAVE_LOST_CHIP, WAVE_LOST_LINE, WAVE_SURRENDERED_LINE, waveArmy, waveTip } from "@/game/waves/waveText";
 import { coinAmount, coinWords } from "@/ui/events/coinUi";
 import { el } from "@/ui/dom";
-import { gameIcon } from "@/ui/gameIcon";
+import { gameIcon, type GameIconName } from "@/ui/gameIcon";
 import { Popup } from "@/ui/Popup";
 import "@/ui/styles/waves.css";
 import { totemImage } from "./waveArt";
@@ -248,12 +248,14 @@ export const waveIntroPopup = (status: WaveStatus, onStart: () => void, onClose:
   const parts: HTMLElement[] = [band];
   if (status.text) parts.push(el("p", "wave-intro__text", status.text));
   const facts = el("ul", "wave-intro__facts");
-  const FACTS = [
+  // Brukkarg War's waves pay no Glimmers and have no bonus waves: only the facts true of this event.
+  const bonus = Math.max(0, status.waves - status.firstBonusWave + 1);
+  const FACTS: (readonly [GameIconName, string])[] = [
     ["shield", "No loot lost"],
     ["tools", "Auto-repairs"],
-    ["eventcoin", "Glimmers per wave"],
-    ["gift", "2 bonus waves"],
-  ] as const;
+    ...((status.prize?.glimmers ?? 0) > 0 ? [["eventcoin", "Glimmers per wave"] as const] : []),
+    ...(bonus > 0 ? [["gift", `${bonus} bonus wave${bonus > 1 ? "s" : ""}`] as const] : []),
+  ];
   for (const [icon, words] of FACTS) {
     const fact = el("li", "wave-intro__fact");
     fact.append(gameIcon(icon, { size: 16, decorative: true, className: "wave-intro__fact-icon" }), el("span", "", words));

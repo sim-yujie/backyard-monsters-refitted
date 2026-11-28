@@ -42,6 +42,8 @@ import { isMR3Structure } from "../../../services/maproom/v3/utils/isMR3Structur
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { MapRoomVersion } from "../../../enums/MapRoom.js";
 import { MR1_TRIBE_IDS } from "../../../game-data/tribes/v1/index.js";
+import { isEventYardId } from "../../../game-data/tribes/events/index.js";
+import { landEventYardAttack } from "../../../services/events/yards/eventYardLanding.js";
 import { scaledMR1Tribes } from "../../../services/maproom/v1/scaledMR1Tribes.js";
 import { withTribeGooBonus } from "../../../services/base/tribeGooBonus.js";
 import { isMR2Camp, withCampLootBonus } from "../../../services/base/campLootBonus.js";
@@ -143,6 +145,16 @@ export const baseSave: KoaController = async (ctx) => {
 
     ctx.status = Status.OK;
     ctx.body = { error: 0, ...filteredSave, ...(credited && { lootcredited: credited }) };
+    return;
+  }
+
+  // Nor does a Brukkarg event yard (beta 10, `services/events/yards/eventYardLanding.ts`).
+  if (!baseSave && isEventYardId(saveData.baseid)) {
+    const { save: yardSave, credited, landed } = await landEventYardAttack(ctx, user, saveData);
+    const filteredSave = await mapSaveData(yardSave, user, { attack: true });
+
+    ctx.status = Status.OK;
+    ctx.body = { error: 0, ...filteredSave, ...(credited && { lootcredited: credited }), ...(landed && { eventyard: landed }) };
     return;
   }
 
@@ -634,14 +646,14 @@ const saveBase = async (
     if (loot) {
       // Tribe Plunder: a wild tribe's loot lands that much more, on top of
       // the credit the server's battle allowed (`weekendBoosts.ts`); wild
-      // tribes also give 25% more Goo (patch 6.9, `tribeGooBonus.ts`).
+      // tribes also give more Goo (patch 6.9; steps down from 9.1, `tribeGooBonus.ts`).
       const fromTribe = baseSave.type === BaseType.TRIBE;
       const plunder = plunderPercent(fromTribe, now);
       // The attacker's alliance loot bonus and the defender's raiders-carry (`allianceBonuses.ts`).
       const alliancePercent = await attackLootPercent(postgres.em, user.userid, baseSave.saveuserid);
       const gain = withPlunderBonus(
         withCampLootBonus(
-          withTribeGooBonus(mapByPercent(loot.credit, alliancePercent), fromTribe),
+          withTribeGooBonus(mapByPercent(loot.credit, alliancePercent), fromTribe, now),
           isMR2Camp(baseSave.type, userSave.mapversion)
         ),
         plunder

@@ -158,11 +158,11 @@ const rowlessCheckpoint = async (
     return;
   }
 
-  if (kind === "mr1") {
+  if (kind === "mr1" || kind === "event") {
     await requireFlingsInRoom(
       ctx,
       user,
-      { baseid, rowless: "mr1-tribe" },
+      { baseid, rowless: kind === "mr1" ? "mr1-tribe" : "event-yard" },
       input.flinglog,
       session.attackerAcademy,
       combatConfig.mode,

@@ -6,6 +6,7 @@ import { championName } from "@/ui/attack/ArmyPanel";
 import { tribePictureUrl } from "@/game/maproom/tribeAvatars";
 import { championPortrait, monsterPortrait, showPortrait, type Portrait } from "@/game/portraits";
 import { formatCompact } from "@/ui/format";
+import { gameIcon } from "@/ui/gameIcon";
 import {
   REAL_TIMERS,
   REPEAT_BAR_AFTER_LINE_MS,
@@ -14,27 +15,43 @@ import {
   waitingProgress,
   type BarTimers,
 } from "./repeatBarTiming";
+import { QUEUE_ICON, QUEUE_NOTE, queueWords } from "./repeatQueue";
 import "@/ui/styles/repeat-bar.css";
 
 /**
- * Repeat attack's working bar (owner, 15 Nov 2026), on the sheet while the
- * server fights the battle: the marching army (look A, chosen 15 Nov). The
- * monsters the attack sends (its plan, as the confirm sheet showed it) march
- * along the bar to the camp's tribe at the end, from art the game already has.
+ * Repeat attack's working window while the server fights the battle: the
+ * battlefield scene (owner, 28 Nov 2026, look A, after "why is there a
+ * 'panel' within a panel?"). The window's own frame holds one frameless
+ * battlefield: the army the attack sends (its plan, as the confirm sheet
+ * showed it) marches as a tidy block along the road to the camp's tribe,
+ * then fights at its gate. Over it, the army's size on the left and the
+ * camp on the right; under it, a slim rail with the phase ("Marching" with
+ * chevrons, "Fighting" with swords).
  *
- * The frame is the window style's own bar plate (skin.css `--skin-bar`):
- * steel in Modern, Flash brown in Classic. `--repeat-progress` (0 to 1) on
- * the element drives it; the CSS does the rest.
+ * `--repeat-progress` (0 to 1), `--march` (0 to 1, the travelling part, up
+ * to {@link FIGHT_AT}) and the classes `repeat-bar--fighting`, `--waiting`,
+ * `--full`, `--stopped` and `--still` on the element drive the CSS
+ * (repeat-bar.css).
  *
- * In the server's battle line (patch 9.1) the army halts where it is
- * ({@link RepeatBar.hold}) and marches on when the turn comes
- * ({@link RepeatBar.resume}); time in line does not count towards the bar's
- * minimum, and after a wait of {@link REPEAT_BAR_AFTER_LINE_MS} or more the
- * march from there is at most that long (neon, 26 Nov 2026).
+ * In the server's battle line (patch 9.1) the bar's clock halts
+ * ({@link RepeatBar.hold}) and runs on when the turn comes
+ * ({@link RepeatBar.resume}). Meanwhile the field goes dark with the place
+ * on it, and the army waits at the start with the rail empty, since nothing
+ * is spent yet (neon round 2); it glides back to where it was. Time
+ * in line does not count towards the bar's minimum, and after a wait of
+ * {@link REPEAT_BAR_AFTER_LINE_MS} or more the march from there is at most
+ * that long (neon, 26 Nov 2026).
  */
 
-/** From this many marchers, two staggered ranks. */
-export const RANKS_FROM = 7;
+/** The part of the bar that is the march; the rest is the fight at the camp's gate. */
+export const FIGHT_AT = 0.68;
+
+/**
+ * At most this many marchers in the block (five columns of two ranks):
+ * more would leave the army no road to march on a phone. A bigger army
+ * shows its first {@link MAX_MARCHERS} - 1 and a "+N" for the rest.
+ */
+export const MAX_MARCHERS = 10;
 
 /** The tribe's portrait at the end of the army's road: Modern's painting, Classic's Flash splash. */
 export const tribeGoalPicture = (tribe: string, classic: boolean = classicLook()): string | null => {
@@ -49,6 +66,8 @@ export interface Marcher {
   /** How many of the kind; null for a champion. */
   readonly count: number | null;
   readonly name: string;
+  /** A champion's level. */
+  readonly level?: number;
 }
 
 /**
@@ -64,7 +83,7 @@ export const marchersOf = (plan: Pick<PlanSummary, "monsters" | "champions"> | n
     .map(([id, count]): Marcher => ({ picture: monsterPortrait(id, "icon"), count, name: monsterName(id) }));
   const champions = plan.champions.map((champion): Marcher => {
     const id = championByType(champion.t) ?? `G${champion.t}`;
-    return { picture: championPortrait(id, champion.l, "icon"), count: null, name: championName(champion.t) };
+    return { picture: championPortrait(id, champion.l, "icon"), count: null, name: championName(champion.t), level: champion.l };
   });
   return [...kinds, ...champions];
 };
@@ -88,12 +107,171 @@ const picture = (className: string, src: string): HTMLImageElement => {
   return image;
 };
 
+type ScenePlan = (Pick<PlanSummary, "monsters" | "champions" | "tribe"> & { readonly level?: number }) | null;
+
+/**
+ * A dev build's frozen point for the pictures' scripts (`globalThis.__repeatFreeze`,
+ * 0 to 0.97), else null. Never in a release build.
+ */
+const devFreeze = (): number | null => {
+  if (!import.meta.env.DEV) return null;
+  const asked = (globalThis as Record<string, unknown>)["__repeatFreeze"];
+  return typeof asked === "number" && Number.isFinite(asked) ? Math.min(0.97, Math.max(0, asked)) : null;
+};
+
+/** One marcher: its portrait (a round token for Modern's square paintings) and its count or "Lv" on a chip. */
+const unitOf = (marcher: Marcher, index: number): HTMLElement => {
+  const champion = marcher.count === null;
+  const unit = part(
+    `repeat-bar__unit${champion ? " repeat-bar__unit--champion" : ""}${
+      !champion && marcher.picture.src.includes("/portraits/") ? " repeat-bar__unit--token" : ""
+    }`,
+  );
+  unit.style.setProperty("--marcher", String(index));
+  const image = document.createElement("img");
+  image.className = "repeat-bar__unit-pic";
+  image.alt = "";
+  image.draggable = false;
+  showPortrait(image, marcher.picture);
+  unit.append(image);
+  const chip = part("repeat-bar__count", "span");
+  chip.textContent = champion ? `Lv ${marcher.level ?? ""}`.trim() : formatCompact(marcher.count ?? 0);
+  unit.append(chip);
+  unit.title = champion ? marcher.name : `${marcher.name} ×${marcher.count}`;
+  return unit;
+};
+
+/** The kinds that do not fit the block, as one "+N" token. */
+const moreOf = (rest: readonly Marcher[], index: number): HTMLElement => {
+  const unit = part("repeat-bar__unit repeat-bar__unit--more");
+  unit.style.setProperty("--marcher", String(index));
+  unit.append(part("repeat-bar__more", "span"));
+  unit.firstElementChild!.textContent = `+${rest.length}`;
+  unit.title = rest.map((one) => (one.count === null ? one.name : `${one.name} ×${one.count}`)).join(", ");
+  return unit;
+};
+
+/**
+ * The army as a tidy block, the leaders at the front (right): champions,
+ * then the kinds by size; one rank up to five, two ranks above.
+ */
+const blockOf = (plan: ScenePlan): HTMLElement => {
+  const all = marchersOf(plan);
+  const leaders = [...all.filter((one) => one.count === null), ...all.filter((one) => one.count !== null)];
+  const shown = leaders.length > MAX_MARCHERS ? leaders.slice(0, MAX_MARCHERS - 1) : leaders;
+  const units = shown.map(unitOf);
+  if (shown.length < leaders.length) units.push(moreOf(leaders.slice(shown.length), shown.length));
+  const two = units.length > 5;
+  const columns = two ? Math.ceil(units.length / 2) : Math.max(1, units.length);
+  const block = part(`repeat-bar__block${units.length === 1 ? " repeat-bar__block--solo" : two ? " repeat-bar__block--two" : ""}`);
+  block.style.setProperty("--cols", String(columns));
+  block.style.setProperty("--rows", two ? "2" : "1");
+  units.forEach((unit, index) => {
+    unit.style.gridColumn = String(two ? columns - Math.floor(index / 2) : columns - index);
+    unit.style.gridRow = String(two ? (index % 2) + 1 : 1);
+    block.append(unit);
+  });
+  return block;
+};
+
+/** The army's size: the army icon and "×132" (never the swords: those mean the fight, neon). */
+const totalOf = (plan: ScenePlan): HTMLElement => {
+  const total = plan ? Object.values(plan.monsters).reduce((sum, count) => sum + (count > 0 ? count : 0), 0) : 0;
+  const chip = part("repeat-bar__total", "span");
+  chip.title = `${total.toLocaleString("en-US")} monsters`;
+  const words = part("", "span");
+  words.textContent = `×${formatCompact(total)}`;
+  chip.append(gameIcon("lastarmy", { size: 24, decorative: true }), words);
+  return chip;
+};
+
+/** "Dreadnaut camp" and "Lv 36", over the camp's side of the scene. */
+const campOf = (plan: ScenePlan): HTMLElement => {
+  const line = part("repeat-bar__camp");
+  if (!plan) return line;
+  const name = part("repeat-bar__camp-name", "span");
+  name.textContent = `${plan.tribe} camp`;
+  line.append(name);
+  if (plan.level !== undefined) {
+    const level = part("repeat-bar__level", "span");
+    level.textContent = `Lv ${plan.level}`;
+    line.append(level);
+  }
+  return line;
+};
+
+/** The place in the battle line over the scene: the hourglass, "Waiting in line · #3" and that nothing is spent. */
+const waitOf = (): HTMLElement => {
+  const badge = part("repeat-bar__wait");
+  // The working sheet's own line tells a screen reader.
+  badge.setAttribute("aria-hidden", "true");
+  const words = part("repeat-bar__wait-words");
+  const note = part("repeat-bar__wait-note", "span");
+  note.textContent = QUEUE_NOTE;
+  words.append(part("repeat-bar__wait-place", "span"), note);
+  badge.append(picture("repeat-bar__wait-icon", QUEUE_ICON), words);
+  return badge;
+};
+
+/**
+ * The cue at the rail's end: chevrons and "Marching" on the march, swords and
+ * "Fighting" in the fight (a word too, so the phase reads without motion or
+ * colour, neon round 2). Nothing in line: the badge over the field says it.
+ */
+const cueOf = (): HTMLElement => {
+  const cue = part("repeat-bar__cue");
+  const march = part("repeat-bar__phase repeat-bar__phase--march", "span");
+  const chevrons = part("repeat-bar__chevrons");
+  for (let i = 0; i < 3; i++) chevrons.append(part("repeat-bar__chevron", "span"));
+  const marching = part("", "span");
+  marching.textContent = "Marching";
+  march.append(chevrons, marching);
+  const fight = part("repeat-bar__phase repeat-bar__phase--fight", "span");
+  const fighting = part("", "span");
+  fighting.textContent = "Fighting";
+  fight.append(gameIcon("swords", { size: 24, decorative: true, className: "repeat-bar__cue-swords" }), fighting);
+  cue.append(march, fight);
+  return cue;
+};
+
+/** The clash in the gap between the army's front and the camp, while fighting. */
+const clashOf = (): HTMLElement => {
+  const clash = part("repeat-bar__clash");
+  clash.append(part("repeat-bar__clash-ring"), gameIcon("swords", { size: 32, decorative: true, className: "repeat-bar__clash-icon" }));
+  return clash;
+};
+
+/** The camp's tribe at the road's end. */
+const goalOf = (plan: ScenePlan): HTMLElement => {
+  const goal = part("repeat-bar__goal");
+  const url = plan ? tribeGoalPicture(plan.tribe) : null;
+  if (url) goal.append(picture("repeat-bar__goal-pic", url));
+  else goal.classList.add("repeat-bar__goal--none");
+  if (plan) goal.title = `${plan.tribe} camp`;
+  return goal;
+};
+
+/** The whole scene: the head, the battlefield and the rail. */
+const buildScene = (root: HTMLElement, plan: ScenePlan): void => {
+  const head = part("repeat-bar__head");
+  head.append(totalOf(plan), campOf(plan));
+  const stage = part("repeat-bar__stage");
+  stage.append(part("repeat-bar__sky"), part("repeat-bar__road"), blockOf(plan), clashOf(), goalOf(plan), waitOf());
+  const foot = part("repeat-bar__foot");
+  const rail = part("repeat-bar__rail");
+  rail.append(part("repeat-bar__fill"));
+  foot.append(rail, cueOf());
+  root.append(head, stage, foot);
+};
+
 export interface RepeatBarOptions {
   /** The attack being repeated: who marches, and to which tribe. */
-  readonly plan: Pick<PlanSummary, "monsters" | "champions" | "tribe"> | null;
+  readonly plan: ScenePlan;
   readonly timers?: BarTimers;
   readonly reducedMotion?: boolean;
   readonly minMs?: number;
+  /** Holds the march at this point (tests; pictures in a dev build use `__repeatFreeze`). */
+  readonly freeze?: number | null;
 }
 
 export class RepeatBar {
@@ -111,9 +289,11 @@ export class RepeatBar {
   private heldAt: number | null = null;
   /** Time spent in the line so far. */
   private heldMs = 0;
+  private readonly freeze: number | null;
 
   constructor(options: RepeatBarOptions) {
     this.timers = options.timers ?? REAL_TIMERS;
+    this.freeze = options.freeze ?? null;
     this.minMs = options.minMs ?? REPEAT_BAR_MIN_MS;
     const reduced = options.reducedMotion ?? prefersReducedMotion();
 
@@ -122,9 +302,7 @@ export class RepeatBar {
     root.setAttribute("aria-label", "Attacking");
     root.setAttribute("aria-valuemin", "0");
     root.setAttribute("aria-valuemax", "100");
-    const track = part("repeat-bar__track");
-    root.append(track);
-    this.buildArmy(root, track, options.plan);
+    buildScene(root, options.plan);
     this.element = root;
     this.paint(0);
   }
@@ -152,7 +330,7 @@ export class RepeatBar {
     return this.startedAt;
   }
 
-  /** In the battle line: the army halts where it is. */
+  /** In the battle line: the clock halts (the CSS parks the army at the start). */
   hold(): void {
     if (this.state !== "running" || this.heldAt !== null) return;
     this.heldAt = this.timers.now();
@@ -217,6 +395,11 @@ export class RepeatBar {
   /** Moves the bar to where it should be now. Called each frame; the tests call it by hand. */
   update(): void {
     if (this.state !== "running" || this.heldAt !== null) return;
+    const frozen = this.freeze ?? devFreeze();
+    if (frozen !== null) {
+      this.paint(frozen);
+      return;
+    }
     this.paint(waitingProgress(this.timers.now() - this.startedAt, this.minMs));
   }
 
@@ -246,51 +429,14 @@ export class RepeatBar {
     this.progress = Math.max(this.progress, Math.min(1, value));
     this.element.style.setProperty("--repeat-progress", this.progress.toFixed(4));
     this.element.setAttribute("aria-valuenow", String(Math.round(this.progress * 100)));
+    // The march, then the fight at the camp's gate.
+    this.element.style.setProperty("--march", Math.min(1, this.progress / FIGHT_AT).toFixed(4));
+    this.element.classList.toggle("repeat-bar--fighting", this.progress >= FIGHT_AT);
   }
 
-  /* ── The army ──────────────────────────────────────────────────────────── */
-
-  private buildArmy(root: HTMLElement, track: HTMLElement, plan: RepeatBarOptions["plan"]): void {
-    track.append(part("repeat-bar__road"));
-    const troop = part("repeat-bar__troop");
-    const all = marchersOf(plan);
-    // Left to right: the smallest kind at the back, the biggest behind the champions, who lead.
-    const marchers = [...all.filter((one) => one.count !== null).reverse(), ...all.filter((one) => one.count === null)];
-    marchers.forEach((marcher, index) => {
-      const unit = part(
-        `repeat-bar__marcher${marcher.count === null ? " repeat-bar__marcher--champion" : ""}${
-          marcher.count !== null && marcher.picture.src.includes("/portraits/") ? " repeat-bar__marcher--token" : ""
-        }`,
-      );
-      unit.style.setProperty("--marcher", String(index));
-      if (index % 2 === 1) unit.classList.add("repeat-bar__marcher--up");
-      const image = document.createElement("img");
-      image.className = "repeat-bar__marcher-pic";
-      image.alt = "";
-      image.draggable = false;
-      showPortrait(image, marcher.picture);
-      unit.append(image);
-      if (marcher.count !== null) {
-        // Next to each other the counts take turns above and below the
-        // portraits, so two never overlap (owner, 20 Nov 2026).
-        const count = part(`repeat-bar__count${index % 2 === 1 ? " repeat-bar__count--high" : ""}`, "span");
-        count.textContent = formatCompact(marcher.count);
-        unit.append(count);
-      }
-      unit.title = marcher.count === null ? marcher.name : `${marcher.name} ×${marcher.count}`;
-      troop.append(unit);
-    });
-    troop.style.setProperty("--marchers", String(Math.max(1, marchers.length)));
-    // A big army marches in two staggered ranks (astra, 20 Nov 2026: ten in
-    // one line hid each other): every other marcher a rank up, its count above.
-    if (marchers.length >= RANKS_FROM) root.classList.add("repeat-bar--ranks");
-    track.append(troop);
-
-    const goal = part("repeat-bar__goal repeat-bar__goal--tribe");
-    const tribe = plan ? tribeGoalPicture(plan.tribe) : null;
-    if (tribe) goal.append(picture("repeat-bar__goal-pic", tribe));
-    else goal.classList.add("repeat-bar__goal--none");
-    if (plan) goal.title = plan.tribe;
-    root.append(goal);
+  /** The place in the server's battle line on the scene's badge (null: not in line). */
+  showPlace(place: number | null): void {
+    const words = this.element.querySelector(".repeat-bar__wait-place");
+    if (words) words.textContent = place === null ? "" : queueWords(place);
   }
 }

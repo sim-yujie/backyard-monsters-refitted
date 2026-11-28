@@ -299,9 +299,9 @@ const writeTribeLanding = async (
     // storage (issue #166, `bankAttackLoot`), as on Map Room 2.
     const credit = creditableMR1Loot(battle?.attackloot, mr1TribePool(tribeData), existingTribe.looted);
     // Tribe Plunder: the attacker banks that much more; the tribe gives up only `credit` (`weekendBoosts.ts`).
-    // Wild tribes also give 25% more Goo (patch 6.9, `tribeGooBonus.ts`).
+    // Wild tribes also give more Goo (patch 6.9; steps down from 9.1, `tribeGooBonus.ts`).
     const plunder = plunderPercent(true, now);
-    const gain = withPlunderBonus(withTribeGooBonus(credit, true), plunder);
+    const gain = withPlunderBonus(withTribeGooBonus(credit, true, now), plunder);
     const credited: ResourceAmounts = bankAttackLoot(userSave, gain, krallenBuff).credited;
     // One point per resource taken, on the main save (patch 7.7.2, `lootPoints.ts`).
     awardLootPoints(userSave, gain);

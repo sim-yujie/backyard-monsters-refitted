@@ -68,19 +68,32 @@ export const waveCardBody = (feed: WaveFeedState & { status: WaveStatus }, onSta
     start.disabled = true;
     onStart();
   });
-  row.append(prize, start);
+  // Only "Win" and a prize: Brukkarg War's waves pay nothing (their prize is the yards they open).
+  if (prize.childElementCount > 1) row.append(prize);
+  row.append(start);
   body.append(row);
   return body;
 };
 
-/** Registers the card's part, drawn from the feed (empty until the yard has read the event). */
+/**
+ * The card's wave part for the event `event`, drawn from the feed: empty until
+ * the yard has read the event, and for an event without waves. Also the
+ * Brukkarg War yard card's (`game/yard/plugins/eventYards.ts`).
+ */
+export const waveCardPart = (
+  event: { readonly id: string },
+  feed: () => WaveFeedState = waveFeed,
+  start: () => void = callNextWave,
+): HTMLElement => {
+  const slot = el("div", "wave-card-slot");
+  const now = feed();
+  if (now.status && now.status.run === event.id) slot.append(waveCardBody({ ...now, status: now.status }, start));
+  return slot;
+};
+
+/** Registers the card's part (kind `wave`). */
 export const registerWaveCard = (feed: () => WaveFeedState = waveFeed, start: () => void = callNextWave): void => {
-  EVENT_EXTRAS.set("wave", (event) => {
-    const slot = el("div", "wave-card-slot");
-    const now = feed();
-    if (now.status && now.status.run === event.id) slot.append(waveCardBody({ ...now, status: now.status }, start));
-    return slot;
-  });
+  EVENT_EXTRAS.set("wave", (event) => waveCardPart(event, feed, start));
 };
 
 registerWaveCard();

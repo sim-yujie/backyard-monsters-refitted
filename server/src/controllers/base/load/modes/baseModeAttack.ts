@@ -25,6 +25,8 @@ import { readRowlessCheckpoint } from "../../../../services/base/rowlessCheckpoi
 import { ATTACK_ONLINE_SECONDS, isPlayerOnline } from "../../../../services/user/online.js";
 import { isTruceActive } from "../../../../services/mail/isTruceActive.js";
 import { MR1_TRIBE_IDS } from "../../../../game-data/tribes/v1/index.js";
+import { isEventYardId } from "../../../../game-data/tribes/events/index.js";
+import { startEventYardAttack } from "../../../../services/events/yards/eventYardAttack.js";
 import { registerAttacker } from "../../../../services/maproom/v1/registerAttacker.js";
 import { requireMr1Attack } from "../../../../services/maproom/v1/mr1AttackCheck.js";
 import { requireAttackableMR1Tribe } from "../../../../services/maproom/v1/mr1TribeAttack.js";
@@ -115,6 +117,10 @@ export const baseModeAttack = async ({
   // cost and result from the client. The load refuses it first; this is the
   // same rule for any other caller.
   if (mapversion === MapRoomVersion.V3) throw mapRoom3ClosedErr();
+
+  // A Brukkarg event yard (beta 10): on no map, from any Map Room, fought as a
+  // Map Room 1 tribe is (`services/events/yards/eventYardAttack.ts`).
+  if (isEventYardId(baseid)) return startEventYardAttack({ user, baseid, attackerLevel });
 
   const userSave = user.save!;
   let save: Save | null = null;

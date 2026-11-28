@@ -4,6 +4,8 @@ import { MR1_TRIBE_IDS } from "../../game-data/tribes/v1/index.js";
 import { descentFinalLockKey } from "../inferno/descentSession.js";
 import { infernoTribeFinalLockKey } from "../inferno/infernoTribeSession.js";
 import { mr1TribeFinalLockKey } from "../maproom/v1/mr1TribeSession.js";
+import { EVENT_YARDS_MAP } from "../../game-data/tribes/events/index.js";
+import { eventYardFinalLockKey } from "../events/yards/eventYardSession.js";
 import { attackFinalLockKey } from "./attackCheckpoint.js";
 import { listCheckpoints } from "./attackCheckpointStore.js";
 import { attackerSessionKey } from "./attackSession.js";
@@ -24,8 +26,8 @@ import { attackerSessionKey } from "./attackSession.js";
  *
  * - the Map Room 2 attack their session names, and any row they hold a
  *   checkpoint on (`attackFinalLockKey`);
- * - a Map Room 1 tribe, the Descent and a Moloch tribe, which are keyed by the
- *   attacker (`mr1TribeSession.ts`, `descentSession.ts`, `infernoTribeSession.ts`).
+ * - a Map Room 1 tribe, the Descent, a Moloch tribe and a Brukkarg event yard
+ *   (`eventYardSession.ts`), which are keyed by the attacker (`mr1TribeSession.ts`, `descentSession.ts`, `infernoTribeSession.ts`).
  *
  * It never waits longer than {@link OWN_LANDING_WAIT_MS}, which covers a save's
  * replay deadline and a left save's longer one is short of; past it the load
@@ -41,6 +43,7 @@ export const OWN_LANDING_POLL_MS = 100;
 export const ownLandingLocks = async (userid: number): Promise<string[]> => {
   const keys = new Set<string>([descentFinalLockKey(userid), infernoTribeFinalLockKey(userid)]);
   for (const baseid of MR1_TRIBE_IDS) keys.add(mr1TribeFinalLockKey(userid, String(baseid)));
+  for (const baseid of EVENT_YARDS_MAP.keys()) keys.add(eventYardFinalLockKey(userid, baseid));
 
   const sessionRow = Number(await redis.get(attackerSessionKey(userid)));
   if (Number.isSafeInteger(sessionRow) && sessionRow > 0) keys.add(attackFinalLockKey(sessionRow));

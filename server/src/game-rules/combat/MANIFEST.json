@@ -21,7 +21,7 @@
     "replay.ts": "bbba7248ba63ae50119cc728d64a9549e938ff2a221fa0f92b7b2983c1e866cb",
     "report.ts": "1e02b0502704276e6c16e94c827c39134325e6c1d01607cc72dbecd545981904",
     "rng.ts": "f9e813c674fd46b30904fca04d9a77005e0b3ed8286f91b8732aaa405d641f1d",
-    "rulesCompat.ts": "375dbfcd472b6fe10ea64b88ef035471b1715136b674acef106b9af51d33fee0",
+    "rulesCompat.ts": "03514be861ca920d7b467da430a6a6a8abf11e65e0d406c6f054f42de2b90288",
     "siege.ts": "37711bb07325f33bf0c0007205931668fdc5c9bad6d162ed0f7acff958c0521d",
     "specialMoves.ts": "feae0fe43e4544c5126856e6e8086473d8129eef85f4a8b70b68010ac28135c3",
     "stance.ts": "dfd5d648a7936cb63e767845359f1c592ce36bdb88b9e85d7e974f31a804facd",
@@ -33,5 +33,5 @@
     "yard.ts": "0fe2d22ab8e0be8c248702a08ac21ec2e46508b52742b785eac8acbdc57a2b71"
   },
   "count": 31,
-  "version": "f998a4e3e4aace51"
+  "version": "8da600cb6494481a"
 }

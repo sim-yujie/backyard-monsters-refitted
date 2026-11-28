@@ -638,3 +638,36 @@ describe("build in the Inferno yard: the Infernal Monster Lab", () => {
     ]);
   });
 });
+
+describe("Brukkarg War's Spurtz Cannons (beta 10, `config/SpurtzConfig.ts`)", () => {
+  const SPURTZ = 136;
+  const BLACK = 137;
+  const place = (type: number, save: BuildSave) => planBuild(save, { type, x: -400, y: -400 }, NOW);
+  const withCannon = (type: number): BuildSave["buildingdata"] => ({
+    ...yard().buildingdata,
+    "9": { id: 9, t: type, X: 400, Y: -400, l: 1 } as never,
+  });
+
+  test("off the menu without the prize, and Flash's old reward ids (Town Hall 9 unlock, sandbox) open nothing", () => {
+    expect(refusal(() => place(SPURTZ, yard())).data).toMatchObject({ reason: "notBuildable" });
+    const old = { spurtzCannonReward: { id: "spurtzCannonReward" }, spurtzCannonReward3: { id: "spurtzCannonReward3" } };
+    expect(refusal(() => place(SPURTZ, yard({ rewards: old }))).data).toMatchObject({ reason: "notBuildable" });
+    expect(refusal(() => place(BLACK, yard({ rewards: old }))).data).toMatchObject({ reason: "notBuildable" });
+  });
+
+  test("3 yards: one Spurtz Cannon; a second needs the 4-yard prize", () => {
+    const one = { brukwarSpurtz1: { id: "brukwarSpurtz1" } };
+    expect(place(SPURTZ, yard({ rewards: one })).report.t).toBe(SPURTZ);
+    expect(refusal(() => place(SPURTZ, yard({ rewards: one, buildingdata: withCannon(SPURTZ) }))).data).toMatchObject({
+      limit: { have: 1, allowed: 1, next: null },
+    });
+    const two = { ...one, brukwarSpurtz2: { id: "brukwarSpurtz2" } };
+    expect(place(SPURTZ, yard({ rewards: two, buildingdata: withCannon(SPURTZ) })).report.t).toBe(SPURTZ);
+  });
+
+  test("5 yards: Black Diamond ones, two of them, and no more plain ones", () => {
+    const all = { brukwarSpurtz1: {}, brukwarSpurtz2: {}, brukwarSpurtz3: {} };
+    expect(place(BLACK, yard({ rewards: all, buildingdata: withCannon(BLACK) })).report.t).toBe(BLACK);
+    expect(refusal(() => place(SPURTZ, yard({ rewards: all }))).data).toMatchObject({ reason: "notBuildable" });
+  });
+});

@@ -1357,21 +1357,44 @@ describe("the HCC's levels 2 and 3 (beta 9): switcher, presets", () => {
   /** The strip's housing, where the tab's own housing box hides behind a tap. */
   const stripHousing = (element: HTMLElement) => element.querySelector<HTMLElement>(".hcc-strip .hcc-housing")!;
   const addingPart = (element: HTMLElement) => stripHousing(element).querySelector<HTMLElement>(".hcc-housing__adding");
+  /** The batch's "+N" beside the queue's blue number (desk card hatch-preview B, 28 Nov). */
+  const batchNumber = (element: HTMLElement) => stripHousing(element).querySelector<HTMLElement>(".hcc-housing__batch--row");
+  /** The same at the bar's end, which a phone shows instead (short form). */
+  const batchAtBar = (element: HTMLElement) => stripHousing(element).querySelector<HTMLElement>(".hcc-housing__track > .hcc-housing__batch--track");
 
   it("the strip's housing bar shows the batch chosen in its own colour before Add (regression, 28 Nov)", () => {
     const { element } = setup(hccAt(2), { monster: "C1" });
     // Nothing chosen: the bar is housed and on the way only.
     expect(addingPart(element)).toBeNull();
+    expect(batchNumber(element)).toBeNull();
+    expect(batchAtBar(element)).toBeNull();
     // 5 Pokeys take 50 of the yard's 1,080, and the bar grows with the count.
     type(box(element), "5");
     expect(addingPart(element)!.style.width).toBe("4.63%");
+    // The number says it too; the queue is empty, so no blue "+0" stands beside it.
+    expect(batchNumber(element)!.textContent).toBe("+50");
+    expect(stripHousing(element).querySelector(".hcc-housing__coming")).toBeNull();
+    expect(batchNumber(element)!.classList.contains("hcc-housing__batch--over")).toBe(false);
+    expect(batchAtBar(element)!.textContent).toBe("+50");
     expect(addingPart(element)!.classList.contains("hcc-housing__adding--over")).toBe(false);
     expect(stripHousing(element).title).toMatch(/this add 50$/);
     more(element);
     expect(addingPart(element)!.style.width).toBe("5.56%");
-    // Back to none: the batch's part goes.
+    expect(batchNumber(element)!.textContent).toBe("+60");
+    // Back to none: the batch's part and number go.
     type(box(element), "0");
     expect(addingPart(element)).toBeNull();
+    expect(batchNumber(element)).toBeNull();
+    expect(batchAtBar(element)).toBeNull();
+  });
+
+  it("the queue's blue +N shows only when the queue adds something, and the batch's number follows it", () => {
+    const empty = setup(hccAt(2)).element;
+    expect(stripHousing(empty).querySelector(".hcc-housing__coming")).toBeNull();
+    const { element } = setup(hccAt(2, { monsters: { saved: T0, housed: {}, hid: [10, 11], h: [["", 0, []], ["", 0, []]], hstage: [0, 0], hcc: [["C1", 6, 1]] } } as Partial<BaseLoadResponse>), { monster: "C1" });
+    expect(stripHousing(element).querySelector(".hcc-housing__coming")!.textContent).toBe("+60");
+    type(box(element), "5");
+    expect(batchNumber(element)!.previousElementSibling!.classList.contains("hcc-housing__coming")).toBe(true);
   });
 
   it("past the room the batch still shows, in the warning colour, and the bar is scaled to fit", () => {
@@ -1381,6 +1404,10 @@ describe("the HCC's levels 2 and 3 (beta 9): switcher, presets", () => {
     expect(part.classList.contains("hcc-housing__adding--over")).toBe(true);
     // 1,200 of a 1,080 room: the whole bar is the batch.
     expect(part.style.width).toBe("100%");
+    expect(batchNumber(element)!.textContent).toBe("+1,200");
+    expect(batchNumber(element)!.classList.contains("hcc-housing__batch--over")).toBe(true);
+    expect(batchAtBar(element)!.textContent).toBe("+1K");
+    expect(batchAtBar(element)!.classList.contains("hcc-housing__batch--over")).toBe(true);
   });
 
   it("level 1's locked boxes and the dashed batch stay while the count changes", () => {
@@ -1405,6 +1432,7 @@ describe("the HCC's levels 2 and 3 (beta 9): switcher, presets", () => {
     expect(element.classList.contains("hcc-remote")).toBe(true);
     type(box(element), "5");
     expect(addingPart(element)!.style.width).toBe("9.26%");
+    expect(batchNumber(element)!.textContent).toBe("+50");
     state.mockRestore();
   });
 

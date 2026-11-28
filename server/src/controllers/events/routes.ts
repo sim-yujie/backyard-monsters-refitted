@@ -12,6 +12,7 @@ import { weekendCheckinState } from "../../services/events/weekendCoins.js";
 import { weekendState } from "../../services/events/weekendSchedule.js";
 import { weekendSettings } from "../../services/events/weekendSettings.js";
 import { eventsAnswer, whatsNewSeenAnswer } from "./eventsState.js";
+import { eventYardsAnswer } from "../../services/events/yards/yardEventGate.js";
 
 /**
  * Mounts the Events page's read, the weekend event's read and the "What's
@@ -37,6 +38,16 @@ export const mountEventsRoutes = (router: Router): void => {
     ctx.status = Status.OK;
     ctx.set("Cache-Control", "no-store");
     ctx.body = { error: 0, now, ...weekendState(weekendSettings(), now), ...(checkin && { checkin }) };
+  });
+  // The Brukkarg attack event on now (beta 10): its yards with the player's
+  // progress, which to attack next and what it waits for
+  // (`services/events/yards/yardEventGate.ts`); `event: null` when none runs.
+  router.get(`${api}/bm/events/yards`, apiVersion, verifyUserAuth, verifyAccountStatus, eventsLimiter, async (ctx) => {
+    await postgres.em.populate(ctx.authUser, ["save"]);
+    const now = getCurrentDateTime();
+    ctx.status = Status.OK;
+    ctx.set("Cache-Control", "no-store");
+    ctx.body = { error: 0, now, event: await eventYardsAnswer(postgres.em, ctx.authUser.userid, ctx.authUser.save, now) };
   });
   router.post(`${api}/bm/whatsnew/seen`, apiVersion, verifyUserAuth, verifyAccountStatus, eventsLimiter, logRequest, async (ctx) => {
     ctx.status = Status.OK;

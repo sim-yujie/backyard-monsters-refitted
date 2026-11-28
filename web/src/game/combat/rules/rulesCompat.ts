@@ -117,6 +117,10 @@
  * empty: the blast is now a ground circle of the old area (`bombBlast`), so a
  * battle with a twig or pebble bomb hits other buildings than before.
  *
+ * Patch 9.1 (main, merged back 28 Nov 2026) brings the same twig and pebble
+ * blast (and the wild tribe Goo bonus step, outside the rules), but beta 10's
+ * other changes move its battles, so 9.1's 90eed38ba0369a60 is not listed.
+ *
  * Add the version a change replaces only when that change moves no battle.
  * A change that moves any battle result must empty this list.
  *

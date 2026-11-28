@@ -10,6 +10,7 @@ import {
   openShop,
   openSmartMove,
   openWaveIntro,
+  openYardCard,
   pressDock,
 } from "./game";
 
@@ -248,27 +249,53 @@ export const WINDOWS: readonly WindowCase[] = [
     open: (page) => openSmartMove(page, "short-note"),
   },
   {
-    // The Attacking bar with every kind marching (owner, 20 Nov 2026).
+    // Repeat attack's working window, the battlefield scene (owner, 28 Nov
+    // 2026, look A), at its busiest: ten marchers in two ranks. Every
+    // marcher, the camp, the army's size and the camp's name in sight.
     id: "repeat-bar",
-    label: "Repeat attack, Attacking bar",
+    label: "Repeat attack, march (10 marchers)",
     panel: ".auto-attack--bar",
-    items: ".repeat-bar",
+    items: ".repeat-bar__unit",
     tabs: false,
     closeButton: null,
+    inSight: ".repeat-bar__unit, .repeat-bar__goal-pic, .repeat-bar__total, .repeat-bar__camp",
     open: (page) => openRepeatSheet(page, "working"),
   },
   {
+    // A small army: a champion and one kind, one rank.
+    id: "repeat-bar-small",
+    label: "Repeat attack, march (2 marchers)",
+    panel: ".auto-attack--bar",
+    items: ".repeat-bar__unit",
+    tabs: false,
+    closeButton: null,
+    inSight: ".repeat-bar__unit, .repeat-bar__goal-pic, .repeat-bar__total, .repeat-bar__camp",
+    open: (page) => openRepeatSheet(page, "working2"),
+  },
+  {
+    // More kinds than the block holds: nine marchers and a "+9".
+    id: "repeat-bar-many",
+    label: "Repeat attack, march (18 marchers)",
+    panel: ".auto-attack--bar",
+    items: ".repeat-bar__unit",
+    tabs: false,
+    closeButton: null,
+    inSight: ".repeat-bar__unit, .repeat-bar__goal-pic, .repeat-bar__total, .repeat-bar__camp",
+    open: (page) => openRepeatSheet(page, "working-many"),
+  },
+  {
     // Waiting in the server's battle line (patch 9.1) at its busiest: the
-    // marching army halted, the hourglass and "#20 in line" under it.
+    // halted army dimmed under the badge with the hourglass and "#20".
     id: "repeat-queue",
     label: "Repeat attack, in the battle line",
     panel: ".auto-attack--bar",
-    items: ".auto-attack__working--line",
+    items: ".repeat-bar__wait",
     tabs: false,
     closeButton: null,
+    inSight: ".repeat-bar__wait, .repeat-bar__total, .repeat-bar__camp",
     open: async (page) => {
       if (!(await openRepeatSheet(page, "queued"))) return false;
-      await page.locator(".overlay__layer .auto-attack__working--line").waitFor({ timeout: 10_000 });
+      await page.locator(".overlay__layer .repeat-bar--waiting").waitFor({ timeout: 10_000 });
       return true;
     },
   },
@@ -326,6 +353,18 @@ export const WINDOWS: readonly WindowCase[] = [
     closeButton: ".raid-alert__prepare",
     inSight: ".raid-alert__stats, .raid-alert__champion, .raid-alert__actions > .btn",
     open: openRaidAlert,
+  },
+  {
+    // The world map's "Your outpost" card (bug 73, 27 Nov 2026): a stray } in
+    // another sheet dropped its width and height cap in the build, and it ran
+    // off every screen under about 850 px tall. Every action in sight.
+    id: "yard-card",
+    label: "Your outpost card",
+    panel: ".yard-card",
+    items: ".yard-card__monster",
+    tabs: false,
+    inSight: ".yard-card__foot button",
+    open: openYardCard,
   },
 ];
 

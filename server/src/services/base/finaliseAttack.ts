@@ -407,7 +407,7 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
   const alliancePercent = await attackLootPercent(postgres.em, attacker.userid, defender.saveuserid);
   const gain = withPlunderBonus(
     withCampLootBonus(
-      withTribeGooBonus(mapByPercent(loot.credit, alliancePercent), fromTribe),
+      withTribeGooBonus(mapByPercent(loot.credit, alliancePercent), fromTribe, now),
       isMR2Camp(defender.type, userSave.mapversion)
     ),
     plunder

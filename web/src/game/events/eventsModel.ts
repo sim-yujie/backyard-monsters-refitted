@@ -280,8 +280,12 @@ export const grantedKorathText = (granted: readonly GrantedReward[]): string | n
  */
 export const leadsPage = (event: EventView): boolean => event.status === "active" && event.kind === "christmas";
 
-/** 0 for Christmas while it is on, 1 for a wave event, which the page puts next among the events on. */
-const pageRank = (event: EventView): number => (leadsPage(event) ? 0 : event.kind === "wave" ? 1 : 2);
+/**
+ * 0 for Christmas while it is on, 1 for an event the dashboard started (a wave
+ * event, or a Brukkarg yard event), which the page puts next among the events on.
+ */
+const pageRank = (event: EventView): number =>
+  leadsPage(event) ? 0 : event.kind === "wave" || event.kind === "yards" ? 1 : 2;
 
 /**
  * The events to list: the ones on now first, then the ones over with a reward

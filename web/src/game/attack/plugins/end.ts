@@ -32,6 +32,9 @@ import { tribeOutcome } from "@/game/inferno/tribeMap";
 import { setMapFocus } from "@/game/maproom/mapFocus";
 import { takeoverGrantOf, type TakeoverKind } from "@/game/maproom/takeover";
 import { INFERNO_YARD, MAIN_YARD, outpostTarget } from "@/game/yard/ownYards";
+import { eventYardLandedOf } from "@/api/eventYards";
+import { noteEventYardLanded } from "@/game/eventYards/eventYardAttack";
+import { eventYardResult } from "@/ui/eventYards/yardEventUi";
 import { monsterName } from "@/ui/attack/ArmyPanel";
 import { EndAttackPanel, type SaveFailure, type SavedInfo } from "@/ui/attack/EndAttackPanel";
 import { EndTakeoverOffer } from "@/ui/attack/EndTakeoverOffer";
@@ -466,7 +469,8 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
 
     /** Opens the map on the target's cell. */
     const returnToMap = (): void => {
-      if (descent) {
+      // A Brukkarg event yard is on no map: home, where its prizes show.
+      if (descent || target.eventYard) {
         goToOutpost(MAIN_YARD);
         return;
       }
@@ -506,9 +510,12 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
       panel?.setExtra(offer.element);
     };
 
+    /** What the attack did for a Brukkarg event (`eventyard`), shown under the result. */
+    let eventExtra: HTMLElement | null = null;
     const show = (next: SaveShown): void => {
       shown = next;
       if (panel) showOn(panel, next);
+      if (panel && eventExtra) panel.setExtra(eventExtra);
       creditHud();
       if (next.kind === "saved" && next.takeover) offerTakeover(next.takeover);
     };
@@ -546,6 +553,11 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
     /** The panel's saved state for a response. A grant's outpost is not protected yet. */
     const savedFrom = (response: BaseSaveResponse): SaveShown => {
       playDescent(response);
+      if (target.eventYard) {
+        const landed = eventYardLandedOf(response);
+        noteEventYardLanded(landed);
+        if (landed) eventExtra = eventYardResult(landed);
+      }
       const takeover = takeoverChanceOf(target, response, payload);
       const landing = infernoTribe ? tribeLandingOf(response) : null;
       const player = infernoPlayer ? playerLandingOf(response) : null;
@@ -701,7 +713,7 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
       if (panel || tornDown) return;
       panel = new EndAttackPanel({
         summary: summariseAttack(session),
-        ...(descent ? { returnLabel: RETURN_HOME } : {}),
+        ...(descent || target.eventYard ? { returnLabel: RETURN_HOME } : {}),
         // Flash's Return Home went to the Inferno yard; Return to map opens the Inferno map over it.
         ...(fromInfernoYard(target) ? { home: { label: RETURN_HOME, onHome: () => goToOutpost(INFERNO_YARD) } } : {}),
         onReturn: () => {
@@ -713,6 +725,7 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
       }).mount(modal);
       if (shown) showOn(panel, shown);
       if (offer) panel.setExtra(offer.element);
+      if (eventExtra) panel.setExtra(eventExtra);
       // The result is on screen (issue #227): the server's own copy decides what it counts for.
       guideBus.emit("attackEnded", {
         baseid: target.baseid,

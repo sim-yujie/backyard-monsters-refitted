@@ -58,7 +58,8 @@ export const campMaxLoot = (tribe: TribeId, level: number): Loot => {
       .reduce((sum, b) => sum + Number(b.st ?? 0), 0);
     loot[key] = Math.max(hallFirst, silosFirst) + buffers;
   }
-  return withTribeGooBonus(loot, true);
+  // The goo bonus before the 9.1 step-down (time 0 is before any start), its largest.
+  return withTribeGooBonus(loot, true, 0);
 };
 
 const total = (loot: Loot): number => RESOURCES.reduce((sum, key) => sum + loot[key], 0);
