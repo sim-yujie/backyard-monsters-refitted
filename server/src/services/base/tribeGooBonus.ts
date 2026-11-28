@@ -24,7 +24,7 @@
  *
  * `null` = not set: the bonus stays at +25% for good (merging early changes nothing).
  */
-export const GOO_BONUS_STEP_START: string | null = null;
+export const GOO_BONUS_STEP_START: string | null = "2026-11-28T05:00:00Z";
 
 /** The bonus before the step-down (patch 6.9). */
 export const TRIBE_GOO_BONUS_BEFORE_STEPS = 25;
