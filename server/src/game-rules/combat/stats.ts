@@ -1596,10 +1596,23 @@ export const bombReaches = (
   dx: number,
   dy: number,
   buildingSize: number,
+): boolean => blastReaches(bombBlast(bomb), dx, dy, buildingSize);
+
+/**
+ * {@link bombReaches} for a blast already in hand: the attack screen's drop
+ * zone carries the blast as its ring, and the test of whether a bomb may land
+ * (it must reach a building) reads it through here, so a drop is allowed
+ * exactly where the ring would hit something.
+ */
+export const blastReaches = (
+  blast: Ellipse,
+  dx: number,
+  dy: number,
+  buildingSize: number,
 ): boolean => {
   const apart = dx * dx + dy * dy;
   const reach =
-    ellipseEdgeSquared(bombBlast(bomb), dx, dy) +
+    ellipseEdgeSquared(blast, dx, dy) +
     ellipseEdgeSquared(squashedEllipse(buildingSize * 0.5), dx, dy);
   return apart < reach;
 };

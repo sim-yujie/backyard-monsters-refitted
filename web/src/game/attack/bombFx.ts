@@ -1,5 +1,5 @@
 import { Assets, Rectangle, Sprite, Texture, type Container } from "pixi.js";
-import { TICKS_PER_SECOND, type BombStats } from "@/game/combat/rules";
+import { bombBlast, TICKS_PER_SECOND, type BombStats } from "@/game/combat/rules";
 import type { Point } from "@/game/yard/YardGrid";
 import { artUrl } from "../../artUrl";
 
@@ -86,9 +86,13 @@ export const planBombRain = (
 ): BombParticlePlan[] => {
   const plans: BombParticlePlan[] = [];
   const count = Math.max(0, Math.trunc(bomb.particles));
+  // Flash scattered over `radius / 2`, a 2:1 ellipse. A twig or pebble blast
+  // is now a 2:1 ground circle that wide times sqrt 1.6 (`bombBlast`), so its
+  // rain spreads over the whole ring it hits; putty keeps Flash's spread.
+  const spread = bomb.resource === TWIG || bomb.resource === PEBBLE ? bombBlast(bomb).rx : bomb.radius / 2;
   for (let index = 0; index < count; index += 1) {
     const angle = random() * 360 * 0.0174532925;
-    const distance = Math.trunc((random() * bomb.radius) / 2);
+    const distance = Math.trunc(random() * spread);
     const x = at.x + Math.sin(angle) * distance;
     const y = at.y + Math.cos(angle) * distance * 0.5;
     const putty = bomb.resource !== TWIG && bomb.resource !== PEBBLE;
