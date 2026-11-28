@@ -83,6 +83,8 @@ export interface EventView {
   kind: string;
   /** A picture under /public, or null. */
   banner: string | null;
+  /** The Classic look's banner, or null to use `banner` there too (absent from older servers). */
+  bannerClassic?: string | null;
   /** "ended": over, with a ladder tier the player can still claim until `claimUntil`. */
   status: "active" | "upcoming" | "ended";
   /** Unix seconds. */

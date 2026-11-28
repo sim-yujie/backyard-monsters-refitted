@@ -10,6 +10,7 @@ import {
   openRepeatSheet,
   openShop,
   openSmartMove,
+  openWaveIntro,
   pressDock,
 } from "./game";
 
@@ -78,6 +79,16 @@ export const WINDOWS: readonly WindowCase[] = [
     items: null,
     tabs: true,
     open: dock("events"),
+  },
+  {
+    id: "wave-intro",
+    optional: true,
+    why: "no wave event is on",
+    label: "Wave event arrival",
+    panel: ".wave-intro",
+    items: null,
+    tabs: false,
+    open: openWaveIntro,
   },
   {
     id: "quests",

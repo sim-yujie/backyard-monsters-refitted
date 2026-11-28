@@ -1,3 +1,4 @@
+import { classicLook } from "@/game/classicLook";
 import { CRYSTAL_ICON } from "@/game/events/crystals";
 import type { EventReward, EventView, LadderView, Mr2WelcomeStatus } from "@/api/events";
 import {
@@ -367,9 +368,10 @@ const krallenPicture = (level: number, size: "card" | "icon", className: string)
 /** The event's banner picture; nothing when it has none or the file is missing. */
 const banner = (event: EventView): HTMLElement[] => {
   if (!event.banner) return [];
-  const band = el("div", `events-card__banner events-card__banner--${event.kind}`);
+  const classic = classicLook() && Boolean(event.bannerClassic);
+  const band = el("div", `events-card__banner events-card__banner--${event.kind}${classic ? " events-card__banner--classic" : ""}`);
   const image = el("img", "events-card__banner-image");
-  image.src = event.banner;
+  image.src = classic ? event.bannerClassic! : event.banner;
   image.alt = "";
   image.decoding = "async";
   image.addEventListener("error", () => band.remove(), { once: true });
@@ -531,6 +533,14 @@ export class EventsPanel {
     const claim = this.element.querySelector<HTMLElement>("button[data-claim]:not(:disabled)");
     if (!claim) return false;
     claim.scrollIntoView?.({ block: "nearest" });
+    return true;
+  }
+
+  /** Scrolls the first card of kind `kind` into view, if it is not already (the wave event's, opened for a wave). */
+  showCard(kind: string): boolean {
+    const card = this.element.querySelector<HTMLElement>(`.events-card--${kind}`);
+    if (!card) return false;
+    card.scrollIntoView?.({ block: "nearest" });
     return true;
   }
 

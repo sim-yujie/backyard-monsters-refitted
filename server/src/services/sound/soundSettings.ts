@@ -1,4 +1,4 @@
-import type { Stats } from "../events/wmi/invasionUtils.js";
+import type { Stats } from "../../types/Stats.js";
 import { guideOpen, readOnboarding, type OnboardingSave } from "../onboarding/state.js";
 
 /**

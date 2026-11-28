@@ -115,6 +115,8 @@ export interface EventDefinition {
   readonly endsAt: string;
   /** A web client path to the banner picture, e.g. `/events/<id>-banner.png`. */
   readonly banner?: string;
+  /** The banner in the Classic look, when it has its own (the wave events' Flash strips); `banner` when absent. */
+  readonly bannerClassic?: string;
   /** The daily login calendar, day 1 first. */
   readonly calendar?: readonly CalendarDay[];
   /** The collection ladder, lowest tier first. What the counter counts is the event's own business. */

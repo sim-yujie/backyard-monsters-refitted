@@ -33,6 +33,8 @@ export interface EventView {
   text: string;
   kind: string;
   banner: string | null;
+  /** The Classic look's banner, or null to use `banner` there too. */
+  bannerClassic: string | null;
   /** "ended": over, with a ladder tier the player can still claim until `claimUntil`. */
   status: "active" | "upcoming" | "ended";
   /** Unix seconds. */
@@ -115,6 +117,7 @@ export const eventView = (
     text: firstTier ? text.replaceAll("{goal}", amountWords(needOf(firstTier))) : text,
     kind: event.kind,
     banner: event.banner ?? null,
+    bannerClassic: event.bannerClassic ?? null,
     status,
     startsAt: window.startsAt,
     endsAt: window.endsAt,

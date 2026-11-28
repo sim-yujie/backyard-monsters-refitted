@@ -8,6 +8,8 @@ import { notePumpkins } from "@/game/events/pumpkinHunt";
 import { resetWeekend, setWeekend, setWeekendCheckin, type WeekendCheckin, type WeekendRun } from "@/game/weekend";
 import { Notices } from "@/ui/maproom/Notices";
 import type { YardMounts } from "../yardPlugins";
+import type { WaveStatus } from "@/api/waves";
+import { resetWaveFeed, setWaveFeed } from "@/game/waves/waveFeed";
 import { EventsDoor } from "./events";
 
 // The "What's new" pop-up is another test's business; keep it quiet here.
@@ -88,6 +90,12 @@ beforeEach(() => {
 afterEach(() => {
   for (const door of doors) door.destroy();
   resetWeekend();
+  resetWaveFeed();
+  try {
+    window.localStorage.removeItem("bymr.waveMarkSnooze");
+  } catch {
+    /* none */
+  }
   // jsdom has no scrollIntoView; the tests that spy on it add their own.
   delete (Element.prototype as Partial<Element>).scrollIntoView;
 });
@@ -163,6 +171,61 @@ describe("Events: opening the page", () => {
     const { door } = await setup([hunt(3)]);
     door.toggle();
     expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+});
+
+/** No wave bar on the yard (owner, 27 Nov 2026): the Events button says a wave is ready. */
+describe("Events: a wave event's wave ready", () => {
+  const invasion: EventView = { ...hunt(0), id: "wmi1-1", title: "Wild Monster Invasion", kind: "wave", ladder: null };
+  const wave = (extra: Partial<WaveStatus> = {}): WaveStatus => ({
+    event: "wmi1",
+    title: "Wild Monster Invasion",
+    run: "wmi1-1",
+    endsAt: 2_000_000_000,
+    waves: 32,
+    firstBonusWave: 31,
+    beaten: 9,
+    lost: 0,
+    next: 10,
+    preview: [],
+    size: 60,
+    prize: { glimmers: 20, totemLevel: 2 },
+    totemType: 121,
+    totemLevel: 1,
+    banner: { modern: "", classic: "" },
+    ...extra,
+  });
+  const mark = (door: EventsDoor) => door.button.querySelector<HTMLElement>(".events-door__wave")!;
+
+  it("shows crossed swords apart from the reward count while a wave can be started", async () => {
+    const { door } = await setup([invasion]);
+    expect(mark(door).hidden).toBe(true);
+    setWaveFeed(wave());
+    expect(mark(door).hidden).toBe(false);
+    expect(door.button.querySelector<HTMLElement>(".events-badge")!.hidden).toBe(true);
+    expect(door.button.getAttribute("aria-label")).toBe("Events. a wave is ready");
+    setWaveFeed(wave(), false, true);
+    expect(mark(door).hidden).toBe(true);
+    setWaveFeed(wave({ beaten: 32, next: null }));
+    expect(mark(door).hidden).toBe(true);
+  });
+
+  it("opening the page for it rests the mark, opens on the invasion's card, and the card starts the wave", async () => {
+    const scrolled: Element[] = [];
+    Element.prototype.scrollIntoView = vi.fn(function (this: Element) {
+      scrolled.push(this);
+    });
+    const { door, content } = await setup([invasion, hunt(12)]);
+    setWaveFeed(wave());
+    door.toggle();
+    expect(scrolled).toEqual([content.querySelector(".events-card--wave")]);
+    expect(content.querySelector(".wave-card__start")?.textContent).toContain("Start wave 10");
+    door.toggle();
+    expect(mark(door).hidden).toBe(true);
+    // Opened again, nothing due: the old way (a phone scrolls to the first Claim).
+    scrolled.length = 0;
+    door.toggle();
+    expect(scrolled).toEqual([content.querySelector("button[data-claim]")]);
   });
 });
 

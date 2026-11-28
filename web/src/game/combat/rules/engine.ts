@@ -3929,16 +3929,30 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     const radius = Math.max(0, event.r);
     const strength = event.strength ?? 1;
+    const rage = Math.max(0, Math.round((event.rage ?? 0) * TICKS_PER_SECOND));
     for (const monsterId of Object.keys(event.monsters).sort()) {
       const count = Math.max(0, Math.floor(event.monsters[monsterId] ?? 0));
-      const level = clampLevel(options.defenderLevels, monsterId);
+      const level =
+        event.level !== undefined && event.level > 0
+          ? Math.floor(event.level)
+          : clampLevel(options.defenderLevels, monsterId);
       const at = (): Cart => dropPoint(event.x, event.y, radius);
       // Moloch's raiders keep the strength they had before the Infernal Lab
       // (owner, 21 Nov 2026): Balthazar at rank 2, King Wormzer at rank 3.
-      const rank = rankOf(MOLOCH_RAID_RANKS, monsterId);
+      const rank =
+        event.rank !== undefined
+          ? Math.max(0, Math.min(3, Math.floor(event.rank)))
+          : rankOf(MOLOCH_RAID_RANKS, monsterId);
       for (let spawned = 0; spawned < count; spawned += 1) {
-        spawnCreep(monsterId, level, at(), false, "attack", -1, strength, rank);
+        const creep = spawnCreep(monsterId, level, at(), false, "attack", -1, strength, rank);
         creepsFlung += 1;
+        if (rage > 0) {
+          // Flash's `Enrage(2, 0)` on a timer, as a putty boost lands one.
+          creep.puttySpeed = 2;
+          creep.puttyArmour = 0;
+          creep.puttyUntil = tick + rage;
+          puttied += 1;
+        }
       }
     }
     // A wild champion (beta 10): after the monsters, so a wave without one
