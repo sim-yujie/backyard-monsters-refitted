@@ -63,6 +63,8 @@ export interface HccBenchHost {
   sendPreset(slot: number): Promise<HccPresetSendReport | null>;
   /** Draws the whole tab again. */
   redraw(): void;
+  /** The housing the batch chosen on the Hatch tab would take, before Add; 0 with none. */
+  adding(): number;
 }
 
 /** A preset as the bench edits it: its stacks in order. */
@@ -257,11 +259,7 @@ export class HccBench {
       const message = split.querySelector(".hatch-message");
       if (message) this.tabs.after(message);
     }
-    this.lockMissingBoxes();
-    for (const clear of this.bench.querySelectorAll<HTMLButtonElement>("button.hatch-clear")) {
-      // One word that fits its box on a phone; the button keeps its own accessible name.
-      if (clear.textContent !== "Clear") clear.replaceChildren(el("span", "", "Clear"));
-    }
+    this.dressLine();
     const info = this.root.querySelector(".hatch-info");
     if (info && this.editBox.parentElement !== info) info.append(this.editBox);
     // Run from home: Add wears the outpost's flag, so the last tap says where it goes.
@@ -273,6 +271,28 @@ export class HccBench {
     this.renderPresets();
     this.renderEditor();
     this.renderYards();
+  }
+
+  /**
+   * After the count changes on the Hatch tab (every step of a hold): the tab
+   * has drawn its queue again, so the line is dressed again, and the strip's
+   * housing shows the batch chosen (it stood only in the tab's own housing
+   * box, hidden behind a tap with the bench on: owner, 28 Nov 2026).
+   */
+  countChanged(yard: HatchYard): void {
+    if (!this.on) return;
+    this.yard = yard;
+    this.dressLine();
+    this.strip.querySelector(":scope > .hcc-housing")?.replaceWith(this.housing());
+  }
+
+  /** The queue as the bench shows it: level 1's missing boxes locked, and "Clear" in one word. */
+  private dressLine(): void {
+    this.lockMissingBoxes();
+    for (const clear of this.bench.querySelectorAll<HTMLButtonElement>("button.hatch-clear")) {
+      // One word that fits its box on a phone; the button keeps its own accessible name.
+      if (clear.textContent !== "Clear") clear.replaceChildren(el("span", "", "Clear"));
+    }
   }
 
   /** Level 1's queue holds 7 stacks; the three it lacks show locked, so the box grid is the same at every level. */
@@ -386,12 +406,19 @@ export class HccBench {
     this.strip.replaceChildren(stepper, this.housing());
   }
 
-  /** The housing: now / room, what the queue will add, and the bar. A tap opens the tab's own housing box. */
+  /**
+   * The housing: now / room, what the queue will add, and the bar. A tap
+   * opens the tab's own housing box. The batch chosen but not yet added
+   * shows on the bar in its own colour, as on the tab's housing bar (the
+   * accent, the warning colour past the room), and the bar is then scaled
+   * to the total as that bar is, so a batch past the room still shows.
+   */
   private housing(): HTMLElement {
     const yard = this.yard!;
     const housed = housedSpace(yard);
     const room = Math.max(1, yard.capacity);
     const coming = pendingSpace(yard);
+    const adding = Math.max(0, this.host.adding());
     const over = housed + coming > room;
     const box = btn(
       `hcc-housing${over ? " hcc-housing--over" : ""}`,
@@ -413,12 +440,21 @@ export class HccBench {
     );
     const bar = el("span", "hcc-housing__bar");
     const fill = el("span", "hcc-housing__fill");
-    const now = Math.min(100, (housed / room) * 100);
+    // With no batch the bar is as it was: cut at the room.
+    const scale = adding > 0 ? Math.max(room, housed + coming + adding) : room;
+    const percent = (part: number) => +Math.min(100, (part / scale) * 100).toFixed(2);
+    const now = percent(housed);
     fill.style.width = `${now}%`;
     const more = el("span", "hcc-housing__more");
-    more.style.width = `${Math.max(0, Math.min(100, ((housed + coming) / room) * 100) - now)}%`;
+    const queued = percent(housed + coming);
+    more.style.width = `${Math.max(0, +(queued - now).toFixed(2))}%`;
     bar.append(fill, more);
-    box.title = `Housing ${housed.toLocaleString("en-US")} of ${room.toLocaleString("en-US")}; the queue and the hatcheries add ${coming.toLocaleString("en-US")} more`;
+    if (adding > 0) {
+      const batch = el("span", `hcc-housing__adding${housed + coming + adding > room ? " hcc-housing__adding--over" : ""}`);
+      batch.style.width = `${Math.max(0, +(percent(housed + coming + adding) - queued).toFixed(2))}%`;
+      bar.append(batch);
+    }
+    box.title = `Housing ${housed.toLocaleString("en-US")} of ${room.toLocaleString("en-US")}; the queue and the hatcheries add ${coming.toLocaleString("en-US")} more${adding > 0 ? `; this add ${adding.toLocaleString("en-US")}` : ""}`;
     box.append(numbers, bar);
     box.addEventListener("click", () => this.root.classList.toggle("hcc-show-housing"));
     return box;
