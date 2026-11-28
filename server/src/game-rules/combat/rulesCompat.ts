@@ -103,6 +103,11 @@
  * but beta 9's other changes move its battles, so 8.7's 92ea2dbbfe06531c is
  * not listed.
  *
+ * Patch 9.1's twig and pebble blast (owner, option C, 28 Nov 2026) keeps it
+ * empty: the blast is now a ground circle of the old area (`bombBlast`), so a
+ * battle with a twig or pebble bomb hits other buildings than before, and no
+ * replay stamped with beta 9's 15bf255b01aafabc plays the same any more.
+ *
  * Add the version a change replaces only when that change moves no battle.
  * A change that moves any battle result must empty this list.
  */

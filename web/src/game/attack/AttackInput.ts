@@ -5,6 +5,7 @@ import {
   buildingClass,
   cellOf,
   ellipseEdgeDistance,
+  groundRing,
   ELLIPSE_SQUASH,
   GRID_CELL,
   GRID_HEIGHT,
@@ -238,14 +239,12 @@ const clipRing = (size: number): Ellipse => ({ rx: size * 0.6, ry: size * 0.3 })
  * which is wider and flatter than the blast `ResourceBomb` applies. Here a
  * damage bomb's ring is the rules' {@link bombBlast}, the ellipse the engine's
  * hit test reads, so the ring and the damage cannot drift apart. A putty bomb
- * reaches a circle of `radius / 2` yard units on the ground, which on screen is
- * an ellipse `sqrt 2` times that across and half as tall.
+ * reaches a circle of `radius / 2` yard units on the ground. Both are the
+ * rules' {@link groundRing}, twice as wide as tall like the fling ring, so all
+ * three sit on the tilted yard the same way (owner, 28 Nov 2026).
  */
-export const bombRing = (bomb: BombStats): Ellipse => {
-  if (bomb.resource !== 3) return bombBlast(bomb);
-  const across = puttyReach(bomb) * Math.SQRT2;
-  return { rx: across, ry: across / 2 };
-};
+export const bombRing = (bomb: BombStats): Ellipse =>
+  bomb.resource === 3 ? groundRing(puttyReach(bomb)) : bombBlast(bomb);
 
 /** `ATTACK.DropZone`'s arguments for a tool (`ATTACK.as:667-672`, `ResourceBombs.as:274-280`). */
 export const dropZoneOf = (tool: DropTool, bucketRadius: number): DropZone => {

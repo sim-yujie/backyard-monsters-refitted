@@ -1324,8 +1324,9 @@ export interface BombStats {
   /** Putty only: how long the boost lasts, in seconds (`speedlength`). */
   readonly speedlength?: number;
   /**
-   * `_size` of the blast, in isometric pixels. Despite the name it is a full
-   * width, not a radius: see {@link bombBlast}.
+   * `_size` of the blast. Flash read it as the blast's full width in
+   * isometric pixels, not a radius; the blast is now the ground circle of the
+   * same area: see {@link bombReach}.
    */
   readonly radius: number;
   /**
@@ -1454,16 +1455,48 @@ export const squashedEllipse = (width: number): Ellipse => ({
 });
 
 /**
- * The area a damage bomb hits, centred where it lands.
+ * A circle of `reach` yard units on the ground, as the screen shows it.
  *
- * `ResourceBomb` hands `EllipseEdgeDistanceSqrd` the bomb's `radius` as the
- * ellipse's full width (`com/monsters/effects/ResourceBomb.as`, the
- * constructor), so the blast reaches `radius / 2` either side and
- * `radius * 0.4` above and below: the "radius" is a diameter. This is the one
- * figure the engine's hit test and the attack screen's drop ring both read, so
- * the ring the player aims with is the blast they get.
+ * `GRID.ToISO` turns a yard point `(x, y)` into `(x - y, (x + y) / 2)`, so a
+ * ground circle is `reach * sqrt 2` either side and half that above and below:
+ * an ellipse twice as wide as it is tall. The fling ring (Flash's
+ * `DROPZONE_CLIP`, `_size * 1.2` wide and half as tall), the putty bomb's ring
+ * and a damage bomb's blast all have this shape, so every ring on the attack
+ * screen sits on the tilted yard the same way. The mapping keeps areas
+ * (its determinant is 1), so the ellipse covers exactly the circle's area.
  */
-export const bombBlast = (bomb: BombStats): Ellipse => squashedEllipse(bomb.radius);
+export const groundRing = (reach: number): Ellipse => {
+  const across = reach * Math.SQRT2;
+  return { rx: across, ry: across / 2 };
+};
+
+/**
+ * How far a damage bomb reaches on the ground for each unit of its `radius`:
+ * `sqrt(ELLIPSE_SQUASH / 4)`, about 0.447.
+ *
+ * Flash's blast was `radius` wide and `radius * ELLIPSE_SQUASH` tall on screen
+ * (`ResourceBomb.as`, the constructor, through `EllipseEdgeDistanceSqrd`), an
+ * area of `pi * 0.2 * radius²` that looked nearly round on the tilted yard.
+ * The owner chose to make it a true ground circle like the putty and fling
+ * rings (option C, 28 Nov 2026) while keeping that area, so a bomb hits about
+ * as many buildings as before: the ground circle whose area is
+ * `pi * 0.2 * radius²` has a radius of `radius * sqrt 0.2`. On screen that is
+ * about 1.26 times Flash's width and 0.79 times its height.
+ */
+export const BOMB_GROUND_REACH = Math.sqrt(ELLIPSE_SQUASH / 4);
+
+/** How far a damage bomb reaches, in yard units on the ground: see {@link BOMB_GROUND_REACH}. */
+export const bombReach = (bomb: BombStats): number => bomb.radius * BOMB_GROUND_REACH;
+
+/**
+ * The area a damage bomb hits, centred where it lands: the ground circle of
+ * {@link bombReach}, on screen an ellipse twice as wide as it is tall.
+ *
+ * This is the one figure the engine's hit test ({@link bombReaches}) and the
+ * attack screen's drop ring both read, so the ring the player aims with is the
+ * blast they get.
+ */
+export const bombBlast = (bomb: BombStats): Ellipse => groundRing(bombReach(bomb));
 
 /**
  * How far a putty bomb reaches, in yard units: a circle of half its `radius`
@@ -1501,7 +1534,8 @@ export const ellipseEdgeSquared = (ellipse: Ellipse, dx: number, dy: number): nu
  * the squared distance against the sum of the two squared edge distances,
  * which is what `d⁴ < (e₁ + e₂)²` comes to (`ResourceBomb.as`). A building is
  * therefore hit a little outside the blast ellipse, by less than its own
- * half-size.
+ * half-size. The blast is {@link bombBlast}'s ground circle (since 28 Nov
+ * 2026); the building keeps Flash's squashed stand-in.
  */
 export const bombReaches = (
   bomb: BombStats,

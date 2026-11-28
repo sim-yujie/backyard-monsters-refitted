@@ -64,9 +64,11 @@ export interface BattleAttacker extends LootAttacker {
  * (player report, Reii, 25 Nov 2026): patch 8.7's, `92ea2dbbfe06531c`, and
  * beta 9's with it, `723a6cab98c42278`. Both fight Krallen by patch 8.6's
  * rules too. An attack started on 8.7 and landed after beta 9 went live, or
- * on beta 9 before main's 8.7 was merged back, keeps both.
+ * on beta 9 before main's 8.7 was merged back, keeps both. Beta 9 as it went
+ * live, `15bf255b01aafabc`, keeps both too: an attack started on it and
+ * landed after patch 9.1's twig and pebble blast moved the version.
  */
-const WHOLE_HEALTH_RULES_SINCE_8_7: readonly string[] = ["92ea2dbbfe06531c", "723a6cab98c42278"];
+const WHOLE_HEALTH_RULES_SINCE_8_7: readonly string[] = ["92ea2dbbfe06531c", "723a6cab98c42278", "15bf255b01aafabc"];
 
 /**
  * The older rules versions that already fight Krallen by patch 8.6's rules
