@@ -1,0 +1,15 @@
+You are the UI/UX and visual designer for the browser game "Backyard Monsters Revamped". I need YOUR OWN idea of a cool ability icon.
+
+The ability: OBSIDIAN HIDE, the third ability of the champion Drull (drull.png: a dark red two-headed dragon with yellow-orange crests, cream belly plates, gold spots, pale fangs). Every bite Drull lands grows another layer of dark red/black volcanic-glass (obsidian) scales over his hide, up to five layers, so he takes up to 15% less damage.
+
+Where it appears: a small square slot in the Champion tab (champion-tab-modern.png and champion-tab-classic.png show the real tab; the icon is drawn about 30 px there, and 52 px in the unlock pop-up). The game's other ability icons are in ability-icons.png.
+
+What the owner rejected (rejected-round2.png, options 1-6, and before that a cluster of red scales). The owner's words: "They look more goofy rather than cool. Especially with the white border. Like stickers." Before that: "I was going more of the cool route rather than generic game buff route."
+And the owner added, word for word: "Not just cool but premium btw". So it must feel PREMIUM, like a high-end paid game's skill icon: rich materials, careful lighting and rim light, crisp detail, a refined frame or full-bleed finish, nothing cheap, cartoony or sticker-like.
+
+Your task:
+1. Decide what YOU think a cool Obsidian Hide icon is. Give 2 or 3 clearly different concepts, each with one line of reasoning.
+2. If you have an image generation tool, generate each concept as a square PNG (1024x1024 is fine) and save them in this folder as neon-1.png, neon-2.png, neon-3.png. Plain dark or transparent background is fine; it must still read at 30 px.
+3. Whether or not you could make images, also write an EXACT art brief per concept that a painter could follow without adding ideas: composition, silhouette, palette (hex values), lighting, edge treatment / frame, background, what must read at 30 px.
+
+Write everything in your final answer as Markdown with sections "Can I generate images: yes/no", "Concept 1/2/3" (name, reasoning line, art brief), and list any files you saved. Do not edit any file except the PNGs you generate.
