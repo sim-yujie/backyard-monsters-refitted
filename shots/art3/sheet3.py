@@ -2,7 +2,7 @@
 # 30 px on the Modern and Classic slot colours (real size and 3x pixel view) and at 3x of the 96 px file, plus a
 # COMPOSITE crop of Drull's three slots made from the real 1x Champion tab screenshot.
 import json, sys
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 P = "/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/hide-icon/web/public/ui/abilities/"
 UI = "/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/hide-icon/shots/ui/r2/"
 F = lambda s: ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", s)
@@ -11,6 +11,12 @@ NB = [("Bloodthirst", Image.open(P + "bloodthirst.webp").convert("RGBA")), ("Twi
 LOOKS = {"modern": ((66, 70, 68), (235, 235, 235), (757, 461), (480, 430, 820, 505)),
          "classic": ((255, 242, 194), (60, 40, 20), (753, 467), (480, 436, 820, 511))}
 CW = 300
+
+def locked(im):
+    g = ImageOps.grayscale(im).convert("RGBA")
+    rgb = Image.blend(im, g, 0.8)
+    rgb.putalpha(im.getchannel("A").point(lambda v: int(v * 0.35)))
+    return rgb
 
 def composite(look, icon):
     _, _, (cx, cy), crop = LOOKS[look]
@@ -38,12 +44,13 @@ def band(take):
     y += 70
     for look, (bg, ink, _, _) in LOOKS.items():
         d.rectangle((0, y, W, y + 150), fill=bg)
-        d.text((12, y + 6), f"{look.upper()} slot colour: real 30 px, then the same 30 px shown 3x", fill=ink, font=F(18))
+        d.text((12, y + 6), f"{look.upper()} slot colour: real 30 px | that 30 px shown 3x | locked (greyed, 35%) shown 3x", fill=ink, font=F(18))
         for c, (_, im) in enumerate(cols):
             t = im.resize((30, 30), Image.LANCZOS)
-            b.alpha_composite(t, (c * CW + 60, y + 75))
-            tile = Image.new("RGBA", (30, 30), bg + (255,)); tile.alpha_composite(t)
-            b.alpha_composite(tile.resize((90, 90), Image.NEAREST), (c * CW + 130, y + 45))
+            b.alpha_composite(t, (c * CW + 15, y + 75))
+            for k, tt in enumerate((t, locked(t))):
+                tile = Image.new("RGBA", (30, 30), bg + (255,)); tile.alpha_composite(tt)
+                b.alpha_composite(tile.resize((90, 90), Image.NEAREST), (c * CW + 55 + k * 115, y + 45))
         y += 150
     d.text((12, y + 4), "3x of the 96 px file", fill=(230, 230, 230), font=F(18))
     for c, (_, im) in enumerate(cols):

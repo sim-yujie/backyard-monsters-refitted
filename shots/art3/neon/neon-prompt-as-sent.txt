@@ -13,3 +13,6 @@ Your task:
 3. Whether or not you could make images, also write an EXACT art brief per concept that a painter could follow without adding ideas: composition, silhouette, palette (hex values), lighting, edge treatment / frame, background, what must read at 30 px.
 
 Write everything in your final answer as Markdown with sections "Can I generate images: yes/no", "Concept 1/2/3" (name, reasoning line, art brief), and list any files you saved. Do not edit any file except the PNGs you generate.
+
+
+Note: in this run you cannot run commands or save files (read-only). So answer 'Can I generate images: no' and put full effort into the exact art briefs.
