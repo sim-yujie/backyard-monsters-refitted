@@ -1952,7 +1952,8 @@ export class AttackBattleLayer {
 
   /**
    * Chest Pound's holds: Codex's mark over each held tower once its sheet is
-   * in; until then (or if it never loads), a line from each to its Gorgo.
+   * in; until then (or if it never loads), today's painted beads, or a line
+   * from each tower to its Gorgo.
    */
   private drawTaunts(taunted: readonly { readonly tower: number; readonly by: number }[], tick: number): void {
     if (this.planPlayer.ready) {
@@ -1961,11 +1962,14 @@ export class AttackBattleLayer {
       return;
     }
     const lines: TauntAt[] = [];
+    const painted = this.painter.ready;
     for (const { tower, by } of taunted) {
       const from = this.towerTop(tower);
       const gorgo = this.views.get(by);
       if (!from || !gorgo || this.died.has(by)) continue;
-      lines.push({ from, to: { x: gorgo.lastX, y: (gorgo.lastY + gorgo.top) / 2 } });
+      const to = { x: gorgo.lastX, y: (gorgo.lastY + gorgo.top) / 2 };
+      if (painted) this.painter.taunt(tick, { x: from.x, y: from.y - 10 }, to, tower);
+      else lines.push({ from, to });
     }
     this.tauntFx.draw(lines, tick);
   }
