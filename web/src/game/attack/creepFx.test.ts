@@ -407,6 +407,8 @@ describe("projectile styles", () => {
     expect(projectileStyle("C12")).toBe("rocket");
     expect(projectileStyle("G3")).toBe("fomor");
     expect(projectileStyle("C15")).toBe("zafreeti");
+    // Krampus's Ice Shards fly as ice (beta 10).
+    expect(projectileStyle("G6")).toBe("frostball");
     expect(projectileStyle("C16")).toBe("vorg");
     for (const id of ["C14", "C19", "IC7", "C1", ""]) expect(projectileStyle(id)).toBe("fireball");
   });

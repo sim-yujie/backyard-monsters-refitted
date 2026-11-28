@@ -208,6 +208,8 @@ const STYLE_BY_MONSTER: Readonly<Record<string, ProjectileStyle>> = {
   G3: "fomor",
   C15: "zafreeti",
   C16: "vorg",
+  // Krampus's Ice Shards (beta 10): ice, not Korath's fire.
+  G6: "frostball",
 };
 
 /**
