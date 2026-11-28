@@ -20,7 +20,7 @@ export interface AbilityLook {
   readonly colour: number;
   /** The word over the champion as it goes off; short, as the owner wants. */
   readonly word: string;
-  /** Screen px of the ring where it lands (a bubble, a spit, a pounce); 0 for none. */
+  /** Screen px of the ring where it lands (a bubble, a spit); 0 for none. */
   readonly landRing: number;
   /** A punchy blast where it lands or round the champion; null for none. */
   readonly punchy: PunchyStrength | null;
@@ -36,11 +36,14 @@ export const ABILITY_LOOKS: Readonly<Record<ChampionAbilityId, AbilityLook>> = {
   groundSlam: { colour: 0xc9a25a, word: "Slam", landRing: 0, punchy: "full", castRing: 0, beam: false },
   bloodthirst: { colour: 0xd0202a, word: "", landRing: 0, punchy: null, castRing: 0, beam: false },
   twinBite: { colour: 0xff7b2e, word: "Twin Bite", landRing: 18, punchy: null, castRing: 0, beam: false },
-  pounce: { colour: 0xffb347, word: "Pounce", landRing: 0, punchy: "light", castRing: 0, beam: false },
+  obsidianHide: { colour: 0x8a1c2c, word: "Obsidian Hide", landRing: 0, punchy: null, castRing: 40, beam: false },
   healingMist: { colour: 0x6ef0a0, word: "Healing Mist", landRing: 0, punchy: null, castRing: 0, beam: false },
   bubble: { colour: 0x7fd8ff, word: "Bubble", landRing: 22, punchy: null, castRing: 0, beam: true },
   acidSpit: { colour: 0x9be22d, word: "Acid", landRing: 26, punchy: null, castRing: 0, beam: true },
 };
+
+/** Obsidian Hide's dark red glass. */
+const OBSIDIAN = 0x8a1c2c;
 
 /** The tint an ability's state leaves on a creep's body; null when none does. */
 export const abilityStateTint = (creep: {
@@ -53,11 +56,6 @@ export const abilityStateTint = (creep: {
   if (creep.stunned) return 0xfff0a0;
   return null;
 };
-
-/** How high, in world px, Drull is drawn through a Pounce, `leap` 0 to 1 of the way. */
-export const POUNCE_HEIGHT = 70;
-export const pounceLift = (leap: number): number =>
-  Math.sin(Math.min(Math.max(leap, 0), 1) * Math.PI) * POUNCE_HEIGHT;
 
 /** One creep inside a Bubble this frame: its feet, the top of its body, what is left of it. */
 export interface BubbleAt {
@@ -358,8 +356,8 @@ const GROUND_FILL = 0.92;
  * - Bloodthirst: drops of blood fly from what he bit into him, and he glows red.
  * - Twin Bite: a second set of jaws snaps shut on the target, with slashes
  *   and a spray of blood.
- * - Pounce: dust kicks up as he leaps, a trail of dust follows him through
- *   the air, and he lands in a crack, a shockwave and a spray of stones.
+ * - Obsidian Hide: dark red glass shards fly in onto him as his first scale
+ *   layer forms.
  * - Healing Mist: green mist rolls out over his ring, and green crosses rise
  *   off everyone it heals.
  * - Bubble: a small bubble floats from him to the ally, which then sits in a
@@ -417,10 +415,8 @@ export class AbilityPainter {
       case "twinBite":
         if (to) this.twinBite(tick, to.at, seed);
         return;
-      case "pounce":
-        if (to) this.pounceOff(tick, caster, seed);
-        else this.pounceLand(tick, caster, seed);
-        return;
+      case "obsidianHide":
+        return this.obsidianHide(tick, caster, follow, seed);
       case "healingMist":
         return this.healingMist(tick, caster, radius, seed);
       case "bubble":
@@ -780,89 +776,28 @@ export class AbilityPainter {
     }
   }
 
-  private pounceOff(tick: number, caster: CreepPlace, seed: number): void {
-    const puffs = this.many(5);
-    for (let n = 0; n < puffs; n += 1) {
-      const angle = (n / puffs) * Math.PI * 2 + abilityNoise(seed, n);
+  /** Obsidian Hide's first layer: dark red glass shards fly in onto him. */
+  private obsidianHide(tick: number, caster: CreepPlace, follow: () => CreepPlace | null, seed: number): void {
+    const height = Math.max(30, caster.y - caster.top);
+    const mid = (): Point | null => follow()?.mid ?? null;
+    const count = this.many(6);
+    for (let n = 0; n < count; n += 1) {
+      const angle = (n / count) * Math.PI * 2 + abilityNoise(seed, n) * 0.6;
+      const reach = height * (0.8 + abilityNoise(seed, n, 1) * 0.4);
       this.emit(tick, {
-        cell: "mist",
-        at: { x: caster.x, y: caster.y },
-        vx: Math.cos(angle) * 1.2,
-        vy: Math.sin(angle) * 0.6,
-        drag: 0.05,
-        life: 40,
-        size0: 18,
-        size1: 40,
-        squash: 0.7,
-        peak: 0.75,
-        colours: this.palette.dust,
-        easeOut: true,
-      });
-    }
-  }
-
-  /** Drull in the air, for this frame: a puff of dust left behind him every few ticks. */
-  pounceTrail(tick: number, place: CreepPlace): void {
-    if (tick % 3 !== 0) return;
-    this.emit(tick, {
-      cell: "mist",
-      at: place.mid,
-      life: 26,
-      size0: 24,
-      size1: 12,
-      peak: 0.55,
-      colours: this.palette.dust,
-    });
-  }
-
-  private pounceLand(tick: number, caster: CreepPlace, seed: number): void {
-    const palette = this.palette;
-    const at = { x: caster.x, y: caster.y };
-    this.emit(tick, { cell: "crack", at, ground: true, life: CRACK_TICKS * 0.7, size0: 56, size1: 60, peak: 0.85, hold: 0.5, easeOut: true });
-    this.emit(tick, {
-      cell: "shock",
-      at,
-      ground: true,
-      life: 30,
-      size0: 30,
-      size1: 150,
-      colours: palette.dust,
-      peak: 0.9,
-      easeOut: true,
-    });
-    const puffs = this.many(7);
-    for (let n = 0; n < puffs; n += 1) {
-      const angle = (n / puffs) * Math.PI * 2 + abilityNoise(seed, n);
-      this.emit(tick, {
-        cell: "mist",
-        at: { x: at.x + Math.cos(angle) * 8, y: at.y + Math.sin(angle) * 4 },
-        vx: Math.cos(angle) * 1.6,
-        vy: Math.sin(angle) * 0.8,
-        drag: 0.05,
-        life: 50,
-        size0: 22,
-        size1: 52,
-        squash: 0.7,
-        peak: 0.8,
-        colours: palette.dust,
-        easeOut: true,
-      });
-    }
-    const rocks = this.many(5);
-    for (let n = 0; n < rocks; n += 1) {
-      const angle = abilityNoise(seed, n, 3) * Math.PI * 2;
-      this.emit(tick, {
-        cell: n % 2 === 0 ? "pebbles" : "clods",
-        at,
-        z: 4,
-        vx: Math.cos(angle) * 1.2,
-        vy: Math.sin(angle) * 0.6,
-        vz: 2 + abilityNoise(seed, n, 4),
-        gravity: 0.12,
-        life: 55,
-        hold: 0.7,
-        size0: 12,
-        spin: 0.15,
+        cell: "shard",
+        at: { x: Math.cos(angle) * reach, y: Math.sin(angle) * reach * 0.6 },
+        follow: mid,
+        to: () => ({ x: 0, y: 0 }),
+        arc: 0,
+        delay: Math.round(abilityNoise(seed, n, 2) * 5),
+        life: 14,
+        size0: 20,
+        size1: 10,
+        fadeIn: 3,
+        hold: 0.8,
+        rotation: angle,
+        colours: [OBSIDIAN],
       });
     }
   }

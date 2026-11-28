@@ -60,12 +60,12 @@ export const CHAMPION_ABILITIES: Readonly<Record<number, readonly AbilityInfo[]>
     { id: "groundSlam", name: "Ground Slam", line: "Every 4th blow stuns towers and monsters near him.", fromLevel: 1 },
   ],
   2: [
-    { id: "bloodthirst", name: "Bloodthirst", line: "Heals from the damage he deals.", fromLevel: 1 },
+    { id: "bloodthirst", name: "Bloodthirst", line: "Heals a little from the damage he deals.", fromLevel: 1 },
     { id: "twinBite", name: "Twin Bite", line: "Every 3rd blow his second head bites too.", fromLevel: 1 },
-    { id: "pounce", name: "Pounce", line: "Leaps over walls onto far targets and hits twice as hard.", fromLevel: 1 },
+    { id: "obsidianHide", name: "Obsidian Hide", line: "Each bite adds a scale layer: up to 15% less damage taken.", fromLevel: 1 },
   ],
   3: [
-    { id: "healingMist", name: "Healing Mist", line: "Heals the hurt monsters around him.", fromLevel: 1 },
+    { id: "healingMist", name: "Healing Mist", line: "Heals the hurt monsters around him; champions less.", fromLevel: 1 },
     { id: "bubble", name: "Bubble", line: "Shields the most hurt monster near him.", fromLevel: 1 },
     { id: "acidSpit", name: "Acid Spit", line: "Marks his target: every hit on it does more.", fromLevel: 1 },
   ],

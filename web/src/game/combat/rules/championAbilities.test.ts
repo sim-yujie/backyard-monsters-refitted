@@ -2,9 +2,15 @@ import { describe, expect, it } from "vitest";
 
 import {
   CHAMPION_ABILITY_IDS,
+  HEALING_MIST_CHAMPION_SHARE,
+  OBSIDIAN_HIDE_LAYERS,
+  OBSIDIAN_HIDE_TICKS,
+  bloodthirstShare,
   chestPoundTicks,
   championAbilities,
   championMaxPower,
+  healingMistShare,
+  obsidianHideShare,
   powerForAbilities,
   stoneSkinCut,
   type ChampionAbilityId,
@@ -353,20 +359,42 @@ describe("Drull", () => {
   });
 
   it("bites with his second head every 3rd blow, attacking and defending", () => {
+    // A few Pokeys first, so a Dave is still standing on his 3rd blow for the second head.
     expect(firstAbility(attack("G2"), "twinBite", false, 4000)?.count).toBeGreaterThan(0);
-    expect(firstAbility(defence("G2", { C12: 4 }), "twinBite", true, 4000)?.count).toBeGreaterThan(
+    expect(firstAbility(defence("G2", { C12: 4, C1: 3 }), "twinBite", true, 4000)?.count).toBeGreaterThan(
       0,
     );
   });
 
-  it("pounces on a target far off, over the ground between, attacking and defending", () => {
-    const battle = attack("G2", {}, undefined, 0);
-    const leap = firstAbility(battle, "pounce", false, 2000);
-    expect(leap?.toIx).toBeDefined();
-    battle.step();
-    expect(championOf(battle, false)?.leap).toBeGreaterThan(0);
-    const guarded = defence("G2", { C1: 10 }, undefined, 500);
-    expect(firstAbility(guarded, "pounce", true, 3000)).toBeDefined();
+  it("wears obsidian scales as he bites, attacking and defending, which fall away when he stops", () => {
+    const battle = attack("G2");
+    expect(firstAbility(battle, "obsidianHide", false, 3000)).toBeDefined();
+    let most = 0;
+    watch(battle, 800, (_event, current) => {
+      most = Math.max(most, championOf(current, false)?.scales ?? 0);
+    });
+    expect(most).toBe(OBSIDIAN_HIDE_LAYERS);
+    const guarded = defence("G2", { C1: 10 });
+    expect(firstAbility(guarded, "obsidianHide", true, 3000)).toBeDefined();
+  });
+
+  it("takes a fifth of 10-15% off each blow per scale layer", () => {
+    expect(obsidianHideShare(1, 5)).toBeCloseTo(0.1);
+    expect(obsidianHideShare(6, 5)).toBeCloseTo(0.15);
+    expect(obsidianHideShare(6, 1)).toBeCloseTo(0.03);
+    expect(obsidianHideShare(6, 9)).toBeCloseTo(0.15);
+    expect(obsidianHideShare(6, 0)).toBe(0);
+    expect(OBSIDIAN_HIDE_TICKS).toBe(ticks(3));
+  });
+
+  it("heals 3-5% of the damage he deals (owner's B2)", () => {
+    expect(bloodthirstShare(1)).toBe(0.03);
+    expect(bloodthirstShare(3)).toBe(0.04);
+    expect(bloodthirstShare(6)).toBe(0.05);
+  });
+
+  it("no longer leaps: Pounce is gone", () => {
+    expect(CHAMPION_ABILITY_IDS["G2"]).toEqual(["bloodthirst", "twinBite", "obsidianHide"]);
   });
 });
 
@@ -378,6 +406,29 @@ describe("Fomor", () => {
     expect(
       firstAbility(defence("G3", { C1: 30 }), "healingMist", true, 3000)?.count,
     ).toBeGreaterThan(0);
+  });
+
+  it("heals a champion a tenth of what a monster gets (owner's F2)", () => {
+    // No towers: nothing but the mist changes anyone's health.
+    const battle = createBattle(
+      yardOf({ "1": { id: 1, t: 1, l: 1, X: 900, Y: 900, st: 10_000 } }),
+      { seed: 3 },
+    );
+    fling(battle, 250, {}, { t: 3, l: 6, pl: powerForAbilities("G3", 1) });
+    battle.apply({ kind: "fling", t: 0, x: 250, y: 250, r: 60, monsters: { C1: 1 }, champion: { t: 5, l: 5, pl: 2, hp: 100 } });
+    const share = healingMistShare(6);
+    let checked = false;
+    watch(battle, 3000, (event, current) => {
+      if (event.kind !== "ability" || event.ability !== "healingMist") return false;
+      const krallen = current.creeps().find((one) => one.monsterId === "G5");
+      expect(krallen).toBeDefined();
+      const expected = 100 + krallen!.maxHp * share * HEALING_MIST_CHAMPION_SHARE;
+      expect(krallen!.hp).toBeCloseTo(Math.min(expected, krallen!.maxHp), 3);
+      checked = true;
+      return true;
+    });
+    expect(HEALING_MIST_CHAMPION_SHARE).toBe(0.1);
+    expect(checked).toBe(true);
   });
 
   it("blows a bubble on the most hurt ally, attacking and defending", () => {

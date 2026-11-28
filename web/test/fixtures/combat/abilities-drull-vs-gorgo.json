@@ -66,7 +66,7 @@
   },
   "expected": {
     "ticks": 9800,
-    "damage": 1.1956756397695045,
+    "damage": 1.2097912549612317,
     "destroyed": null,
     "attackloot": {
       "r1": 0,
@@ -85,59 +85,59 @@
     "creepsFlung": 40,
     "creepsKilled": 41,
     "championHp": 0,
-    "damagedBuildings": 6,
-    "rngDraws": 968,
+    "damagedBuildings": 7,
+    "rngDraws": 1346,
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "a4232f40d608f99e"
+        "digest": "5f67b67325e031fd"
       },
       {
         "tick": 1600,
-        "digest": "87b79b8b30209ab5"
+        "digest": "4f4d7b63a7e80f9d"
       },
       {
         "tick": 2400,
-        "digest": "a7a2b55c1b24cf26"
+        "digest": "cbc405bc47f943ae"
       },
       {
         "tick": 3200,
-        "digest": "805aa46bda49a80d"
+        "digest": "970fba6f2893ab89"
       },
       {
         "tick": 4000,
-        "digest": "aaa40de508365377"
+        "digest": "48c09a651da7c6c7"
       },
       {
         "tick": 4800,
-        "digest": "6844708cc1b68316"
+        "digest": "a6e8c8ac3d131f5e"
       },
       {
         "tick": 5600,
-        "digest": "64ab1da77f008241"
+        "digest": "dce149a389f64545"
       },
       {
         "tick": 6400,
-        "digest": "03355c1b6b99327d"
+        "digest": "f13c11dff285c4b9"
       },
       {
         "tick": 7200,
-        "digest": "05209a1201e4e99c"
+        "digest": "4d4e1f068e463e40"
       },
       {
         "tick": 8000,
-        "digest": "94a20255f8fccaa7"
+        "digest": "d5ef74d561ce3637"
       },
       {
         "tick": 8800,
-        "digest": "8d12da334c2bb595"
+        "digest": "bffd46b7c9676a91"
       },
       {
         "tick": 9600,
-        "digest": "cabd9a3c3d56c306"
+        "digest": "39b0671c9ddee98e"
       }
     ],
-    "digest": "57d76a65d20ae947",
+    "digest": "0d1fa1e5639e9957",
     "bunkerLosses": {},
     "bunkerGarrisons": {
       "83": {
@@ -148,7 +148,7 @@
       }
     },
     "defenderChampionsHp": [
-      88400
+      89600
     ]
   }
 }
