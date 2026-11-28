@@ -458,7 +458,7 @@ export class AbilityPainter {
       });
     }
     this.emit(tick + 14, {
-      cell: "smoke",
+      cell: "mist",
       at: { x: caster.x, y: caster.y - 4 },
       life: 40,
       size0: height * 0.9,
@@ -502,7 +502,7 @@ export class AbilityPainter {
       });
     }
     this.emit(tick, {
-      cell: "smoke",
+      cell: "mist",
       at: { x: caster.x, y: caster.y - 6 },
       life: 36,
       size0: height,
@@ -805,7 +805,7 @@ export class AbilityPainter {
   pounceTrail(tick: number, place: CreepPlace): void {
     if (tick % 3 !== 0) return;
     this.emit(tick, {
-      cell: "smoke",
+      cell: "mist",
       at: place.mid,
       life: 26,
       size0: 24,

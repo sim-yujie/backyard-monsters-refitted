@@ -1735,6 +1735,8 @@ export class AttackBattleLayer {
       bounds.yardHeight / 2,
     );
     this.departed.add(view.id);
+    // Walking off, it is only walking: the stone surface (painted per frame for live views) goes.
+    if (view.stoneCoat) view.stoneCoat.root.visible = false;
     this.leavers.set(view.id, { view, plan });
     this.walkOffUntil = Math.max(this.walkOffUntil, shown + WALK_OFF_TICKS + WALK_OFF_PAUSE_TICKS);
     // Whatever it was doing, it is only walking now: no hurt tint, no badges.
@@ -1793,6 +1795,8 @@ export class AttackBattleLayer {
       const stone = view.snapshot?.stone === true && alive;
       if (painted) {
         this.paintAbilityStates(view, tick, shield > 0 && alive, stone);
+        // Low effects draw no stone surface: the cracks over the grey stand in for it.
+        if (stone && this.abilityBits.lowEffects) stones.push({ id: view.id, x: view.lastX, y: view.lastY, top: view.top });
       } else {
         if (shield > 0 && alive) bubbles.push({ x: view.lastX, y: view.lastY, top: view.top, shield });
         if (stone) stones.push({ id: view.id, x: view.lastX, y: view.lastY, top: view.top });
@@ -1822,6 +1826,12 @@ export class AttackBattleLayer {
    */
   private paintAbilityStates(view: CreepView, tick: number, bubbled: boolean, stone: boolean): void {
     const id = view.id;
+    const snapshot = view.snapshot;
+    const marked = snapshot?.stunned || snapshot?.marked || snapshot?.leap !== undefined;
+    if (!bubbled && !stone && !marked && !this.wasStone.has(id) && !this.wasBubbled.has(id)) {
+      if (view.stoneCoat) view.stoneCoat.root.visible = false;
+      return;
+    }
     const place = this.placeOf(id);
     this.paintStoneCoat(view, stone && place !== null);
     if (stone) this.wasStone.add(id);
@@ -1833,7 +1843,6 @@ export class AttackBattleLayer {
     } else if (this.wasBubbled.delete(id)) {
       this.painter.bubblePop(tick, place);
     }
-    const snapshot = view.snapshot;
     if (snapshot?.stunned) this.painter.dizzy(tick, { x: place.x, y: place.top - 4 }, id);
     if (snapshot?.marked) this.painter.acidOn(tick, { x: place.mid.x, y: place.mid.y - 6 }, id);
     if (snapshot?.leap !== undefined) this.painter.pounceTrail(tick, place);
@@ -2516,6 +2525,7 @@ export class AttackBattleLayer {
   private letGo(view: CreepView, tick: number): void {
     if (tick - view.struckTick <= FELLED_AFTER_TICKS && view.snapshot) {
       view.felledTick = view.struckTick;
+      if (view.stoneCoat) view.stoneCoat.root.visible = false;
       this.felled.set(view.id, view);
       return;
     }
@@ -3118,8 +3128,11 @@ export class AttackBattleLayer {
   ): { readonly at: Point; readonly follow: (() => Point | null) | null } {
     let best: CreepView | null = null;
     let near = 30 * 30;
+    // A Bubble lands on Fomor's side, a spit or a bite on the other.
+    const ownSide = event.ability === "bubble";
     for (const view of this.views.values()) {
       if (view.id === event.creepId || this.died.has(view.id) || !view.body.visible) continue;
+      if (!view.snapshot || (view.snapshot.friendly === event.friendly) !== ownSide) continue;
       const dx = view.lastX - to.x;
       const dy = view.lastY - to.y;
       if (dx * dx + dy * dy < near) {

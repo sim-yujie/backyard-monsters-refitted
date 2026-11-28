@@ -11,7 +11,7 @@ import { bitPath, tintAt } from "./blastFx";
  * a daze star, a soap bubble, mist, a healing cross, a shockwave, a bubble's
  * pop, a slash, and six of the towers' own painted bits (smoke, debris, a
  * ring, a cloud, a glow, a burst). Each is a cell of one sheet per look,
- * painted by the image model (`shots/fx-art` on feat/mm-crystal): the Modern
+ * painted by the image model (prompts and `build_atlas.py` in `art-samples/ability-fx`): the Modern
  * sheet in the clean 3D look, the Classic one in Flash's grainy pre-render.
  *
  * Every piece is a pooled sprite placed from its age alone, as the towers'
