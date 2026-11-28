@@ -83,7 +83,7 @@ export const campHead = (plan: Pick<PlanSummary, "tribe" | "level">, damage: num
 
 /* ── The army ───────────────────────────────────────────────────────────── */
 
-export const monsterTile = (id: string, count: number, extra = ""): HTMLElement => {
+const monsterTile = (id: string, count: number, extra = ""): HTMLElement => {
   const picture = monsterPortrait(id, "icon");
   const element = tile(
     portrait(picture),
@@ -96,7 +96,7 @@ export const monsterTile = (id: string, count: number, extra = ""): HTMLElement 
   return element;
 };
 
-export const championTile = (champion: PlanSummary["champions"][number]): HTMLElement => {
+const championTile = (champion: PlanSummary["champions"][number]): HTMLElement => {
   const picture = championPortrait(championByType(champion.t) ?? `G${champion.t}`, champion.l, "icon");
   const element = tile(
     portrait(picture),

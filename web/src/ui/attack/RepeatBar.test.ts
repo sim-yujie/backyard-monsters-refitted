@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AutoAttackPlanResponse, AutoAttackResponse, PlanSummary } from "@/api/autoAttack";
 import { setClassicLook } from "@/game/classicLook";
 import { AutoAttackFlow, type AutoAttackCalls } from "./AutoAttackFlow";
-import { RepeatBar, marchersOf, tribeGoalPicture } from "./RepeatBar";
+import { MAX_MARCHERS, RepeatBar, marchersOf, tribeGoalPicture } from "./RepeatBar";
 import { REPEAT_BAR_FULL_HOLD_MS, type BarTimers } from "./repeatBarTiming";
 
 /**
@@ -222,18 +222,18 @@ describe("the bar's timing on Repeat attack", () => {
     const { modal, timers, bar, value } = await pressAttack(() => answer.promise, queue);
     const line = () => modal.querySelector<HTMLElement>(".auto-attack__line-words")!;
     const note = () => modal.querySelector<HTMLElement>(".auto-attack__line-note")!;
-    const glass = () => modal.querySelector<HTMLImageElement>(".auto-attack__line-icon")!;
+    const badge = () => modal.querySelector<HTMLElement>(".repeat-bar__wait-place")!;
     // Nothing asked at first: almost every Repeat is answered before then.
     await timers.advance(1000);
     expect(queue).not.toHaveBeenCalled();
-    expect(glass().hidden).toBe(true);
+    expect(badge().textContent).toBe("");
     await timers.advance(300);
     expect(queue).toHaveBeenCalledTimes(1);
     expect(line().textContent).toBe("Waiting in line · #3");
     expect(note().hidden).toBe(false);
     expect(note().textContent).toBe("Nothing spent yet · starts by itself");
-    expect(glass().hidden).toBe(false);
-    expect(glass().getAttribute("src")).toContain("hourglass.png");
+    // The scene's badge shows the same words (the line is for a screen reader).
+    expect(badge().textContent).toBe("Waiting in line · #3");
     expect(bar()!.classList.contains("repeat-bar--waiting")).toBe(true);
     // The army halts where it was.
     const halted = value();
@@ -246,7 +246,7 @@ describe("the bar's timing on Repeat attack", () => {
     place = null;
     await timers.advance(1000);
     expect(line().textContent).toBe("Attacking…");
-    expect(glass().hidden).toBe(true);
+    expect(badge().textContent).toBe("");
     expect(note().hidden).toBe(true);
     expect(bar()!.classList.contains("repeat-bar--waiting")).toBe(false);
     await timers.advance(200);
@@ -318,54 +318,95 @@ describe("the bar's timing on Repeat attack", () => {
 });
 
 describe("the marching army", () => {
-  it("big counts are short on the bar: 1.2K, not 1,240", () => {
+  const units = (bar: RepeatBar) => [...bar.element.querySelectorAll<HTMLElement>(".repeat-bar__unit")];
+  const counts = (bar: RepeatBar) => units(bar).map((one) => one.querySelector(".repeat-bar__count, .repeat-bar__more")?.textContent);
+
+  it("big counts are short on the scene: 1.2K, not 1,240", () => {
     const bar = new RepeatBar({ plan: { ...PLAN, monsters: { C3: 1_240 }, champions: [] }, reducedMotion: false });
     expect(bar.element.querySelector(".repeat-bar__count")?.textContent).toBe("1.2K");
+    expect(bar.element.querySelector(".repeat-bar__total")?.textContent).toBe("×1.2K");
   });
 
-  it("every kind marches with its count (owner, 20 Nov 2026: five kinds showed four), champions lead, the tribe waits at the end", () => {
+  it("every kind marches with its count (owner, 20 Nov 2026), the champion leads, the tribe waits at the road's end", () => {
     const marchers = marchersOf(PLAN);
     expect(marchers.map((one) => one.name)).toEqual(["Pokey", "Octo-ooze", "D.A.V.E.", "Eye-ra", "Brain", "Fomor"]);
     expect(marchers.filter((one) => one.count !== null)).toHaveLength(Object.keys(PLAN.monsters).length);
 
     const bar = new RepeatBar({ plan: PLAN, reducedMotion: false });
-    const units = [...bar.element.querySelectorAll(".repeat-bar__marcher")];
-    expect(units).toHaveLength(6);
-    // Left to right: smallest kind at the back, the champion in front.
-    expect(units.map((one) => one.querySelector(".repeat-bar__count")?.textContent ?? "champion")).toEqual([
-      "1",
-      "3",
-      "9",
-      "12",
-      "40",
-      "champion",
+    const all = units(bar);
+    expect(all).toHaveLength(6);
+    // Leaders first: the champion, then the kinds by size; two ranks of three, the leaders at the front (right).
+    expect(counts(bar)).toEqual(["Lv 6", "40", "12", "9", "3", "1"]);
+    expect(bar.element.querySelector(".repeat-bar__block--two")).not.toBeNull();
+    expect(all.map((one) => [one.style.gridColumn, one.style.gridRow])).toEqual([
+      ["3", "1"],
+      ["3", "2"],
+      ["2", "1"],
+      ["2", "2"],
+      ["1", "1"],
+      ["1", "2"],
     ]);
-    // Neighbours' counts take turns below and above, so two never overlap.
-    expect(units.slice(0, 5).map((one) => one.querySelector(".repeat-bar__count--high") !== null)).toEqual([
-      false,
-      true,
-      false,
-      true,
-      false,
-    ]);
-    expect(units[0]!.getAttribute("title")).toBe("Brain ×1");
-    expect(units[0]!.querySelector("img")!.getAttribute("src")).toContain("C9");
+    expect(all[5]!.getAttribute("title")).toBe("Brain ×1");
+    expect(all[5]!.querySelector("img")!.getAttribute("src")).toContain("C9");
     // Modern's square monster paintings march as round tokens; the champion's cut-out as it is.
-    expect(units[0]!.classList.contains("repeat-bar__marcher--token")).toBe(true);
-    expect(units[5]!.classList.contains("repeat-bar__marcher--token")).toBe(false);
-    expect(bar.element.querySelector<HTMLImageElement>(".repeat-bar__goal-pic")!.getAttribute("src")).toBe(
-      "/tribes/abunakki-256.png",
-    );
+    expect(all[5]!.classList.contains("repeat-bar__unit--token")).toBe(true);
+    expect(all[0]!.classList.contains("repeat-bar__unit--champion")).toBe(true);
+    expect(all[0]!.classList.contains("repeat-bar__unit--token")).toBe(false);
+    expect(bar.element.querySelector<HTMLImageElement>(".repeat-bar__goal-pic")!.getAttribute("src")).toBe("/tribes/abunakki-256.png");
+    // Your army's size over its side, the camp over the camp's (neon round 1).
+    expect(bar.element.querySelector(".repeat-bar__total")?.textContent).toBe("×65");
+    expect(bar.element.querySelector(".repeat-bar__camp")?.textContent).toBe("Abunakki campLv 31");
     expect(bar.element.getAttribute("role")).toBe("progressbar");
+  });
+
+  it("one rank up to five marchers, one big marcher alone", () => {
+    const five = new RepeatBar({ plan: { ...PLAN, monsters: { C12: 9, C1: 40, C5: 3, C2: 12 } }, reducedMotion: false });
+    expect(units(five)).toHaveLength(5);
+    expect(five.element.querySelector(".repeat-bar__block--two")).toBeNull();
+    expect(units(five).map((one) => one.style.gridColumn)).toEqual(["5", "4", "3", "2", "1"]);
+
+    const one = new RepeatBar({ plan: { ...PLAN, monsters: { C12: 6 }, champions: [] }, reducedMotion: false });
+    expect(units(one)).toHaveLength(1);
+    expect(one.element.querySelector(".repeat-bar__block--solo")).not.toBeNull();
+  });
+
+  it("more kinds than the block holds: nine march and the rest are one \"+N\"", () => {
+    const monsters = { C1: 90, C2: 80, C3: 70, C4: 60, C5: 50, C6: 40, C7: 30, C8: 20, C9: 10, C10: 5, C11: 4, C12: 3 };
+    const bar = new RepeatBar({ plan: { ...PLAN, monsters }, reducedMotion: false });
+    expect(units(bar)).toHaveLength(MAX_MARCHERS);
+    expect(counts(bar).at(-1)).toBe("+4");
+    expect(units(bar).at(-1)!.getAttribute("title")).toBe("Brain ×10, Crabatron ×5, Project X ×4, D.A.V.E. ×3");
+  });
+
+  it("the march, then the fight at the camp's gate", () => {
+    const timers = fakeTimers();
+    const bar = new RepeatBar({ plan: PLAN, timers, reducedMotion: false, freeze: 0.34 });
+    bar.start();
+    bar.update();
+    expect(bar.element.style.getPropertyValue("--march")).toBe("0.5000");
+    expect(bar.element.classList.contains("repeat-bar--fighting")).toBe(false);
+    const fight = new RepeatBar({ plan: PLAN, timers, reducedMotion: false, freeze: 0.8 });
+    fight.start();
+    fight.update();
+    expect(fight.element.style.getPropertyValue("--march")).toBe("1.0000");
+    expect(fight.element.classList.contains("repeat-bar--fighting")).toBe(true);
+  });
+
+  it("the place in the battle line on the scene's badge", () => {
+    const bar = new RepeatBar({ plan: PLAN, reducedMotion: false });
+    bar.showPlace(3);
+    expect(bar.element.querySelector(".repeat-bar__wait-place")?.textContent).toBe("Waiting in line · #3");
+    expect(bar.element.querySelector(".repeat-bar__wait-note")?.textContent).toBe("Nothing spent yet · starts by itself");
+    expect(bar.element.querySelector(".repeat-bar__wait-icon")?.getAttribute("src")).toContain("hourglass.png");
+    bar.showPlace(null);
+    expect(bar.element.querySelector(".repeat-bar__wait-place")?.textContent).toBe("");
   });
 
   it("in Classic: Flash's monster icons and the tribe's Flash splash", () => {
     setClassicLook(true);
     const bar = new RepeatBar({ plan: PLAN, reducedMotion: false });
-    expect(bar.element.querySelector(".repeat-bar__marcher img")!.getAttribute("src")).toBe(
-      "/assets/monsters/C9-small.png",
-    );
-    expect(bar.element.querySelector(".repeat-bar__marcher--token")).toBeNull();
+    expect(units(bar)[5]!.querySelector("img")!.getAttribute("src")).toBe("/assets/monsters/C9-small.png");
+    expect(bar.element.querySelector(".repeat-bar__unit--token")).toBeNull();
     expect(tribeGoalPicture("Abunakki")).toBe("/assets/popups/tribe_abunakki.v2.png");
     expect(tribeGoalPicture("Nobody")).toBeNull();
   });
@@ -375,11 +416,10 @@ describe("the marching army", () => {
     expect(still.element.classList.contains("repeat-bar--still")).toBe(true);
     const moving = new RepeatBar({ plan: null, reducedMotion: false });
     expect(moving.element.classList.contains("repeat-bar--still")).toBe(false);
-    expect(moving.element.querySelectorAll(".repeat-bar__marcher")).toHaveLength(0);
+    expect(units(moving)).toHaveLength(0);
     expect(moving.element.querySelector(".repeat-bar__goal--none")).not.toBeNull();
-    // One look only: no other look's parts, no art pulled in by custom property.
+    // One look only: no switch left behind.
     expect(moving.element.className).toBe("repeat-bar");
-    expect(moving.element.getAttribute("style")).not.toContain("--repeat-art");
   });
 
   it("never goes backwards, and stays put once stopped", () => {

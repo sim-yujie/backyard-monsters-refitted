@@ -130,6 +130,10 @@ export const CONFIRM_STATES = [
   "big-moves",
   "working5",
   "queued",
+  "working1",
+  "working2",
+  "working-many",
+  "working-failed",
 ] as const;
 
 export type ConfirmState = (typeof CONFIRM_STATES)[number];
@@ -198,7 +202,7 @@ const setups = (): Record<ConfirmState, Setup> => ({
       movesKey: "kb",
     }),
   },
-  // The owner's own case: five kinds and one champion (one rank, under RANKS_FROM).
+  // The owner's own case: five kinds and one champion (two ranks of three).
   working5: {
     answer: answerOf({ plan: planOf({ monsters: { C3: 1_240, C5: 180, C14: 120, C10: 60, C12: 40 }, champions: [{ t: 3, l: 6 }] }) }),
     run: never,
@@ -208,6 +212,38 @@ const setups = (): Record<ConfirmState, Setup> => ({
   // Waiting in the server's battle line (patch 9.1) at its busiest: the
   // last place the line allows (20) under the ten-marcher army.
   queued: { answer: answerOf(), run: never, progressBar: true, press: true, queue: async () => ({ error: 0, place: 20 }) },
+  // The smallest army: one kind, no champion.
+  working1: {
+    answer: answerOf({ plan: planOf({ monsters: { C12: 6 }, champions: [] }) }),
+    run: never,
+    progressBar: true,
+    press: true,
+  },
+  // A small one: a champion and one kind (one rank).
+  working2: {
+    answer: answerOf({ plan: planOf({ monsters: { C12: 6 }, champions: [{ t: 3, l: 6 }] }) }),
+    run: never,
+    progressBar: true,
+    press: true,
+  },
+  // More kinds than the block holds: nine march, "+9" for the other nine.
+  "working-many": {
+    answer: answerOf({
+      plan: planOf({
+        monsters: { ...ARMY, C2: 30, C4: 12, C7: 8, C9: 5, C11: 4, C13: 3, C15: 2, C16: 2 },
+      }),
+    }),
+    run: never,
+    progressBar: true,
+    press: true,
+  },
+  // No server partway through the march: the bar stops and the refusal shows.
+  "working-failed": {
+    answer: answerOf(),
+    run: () => new Promise((_, reject) => setTimeout(() => reject("offline"), 2500)),
+    progressBar: true,
+    press: true,
+  },
 });
 
 /** Opens the sheet in `state` in `modal`; returns a function that closes it. */

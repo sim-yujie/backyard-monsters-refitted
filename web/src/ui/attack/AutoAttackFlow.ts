@@ -37,9 +37,7 @@ import { armyParts, campHead, movesPart, roomParts, shortageList, watchMoreRows 
 import { resultView } from "./autoAttackResultView";
 import { RepeatBar } from "./RepeatBar";
 import { REAL_TIMERS, type BarTimers } from "./repeatBarTiming";
-import { repeatFreeze, repeatLook } from "./repeatLook";
-import { watchQueuePlace } from "./repeatQueue";
-import { artUrl } from "@/artUrl";
+import { QUEUE_NOTE, queueWords, watchQueuePlace } from "./repeatQueue";
 import "@/ui/styles/autoattack.css";
 
 /**
@@ -113,15 +111,12 @@ const sheet = (title: string, className: string): { backdrop: HTMLElement; panel
   // The working bar's sheet, and the confirm and refusal sheets, are compact
   // cards on a phone upright, not the whole screen (attack.css, autoattack.css;
   // the confirm and refusal ones since the lead's vetting, 16 Nov 2026).
-  backdrop.className = `popup-backdrop attack-end__backdrop${
+  // Every sheet of the flow (confirm, march, refusal, result) sits in the
+  // same place, so nothing jumps sideways between them; beside the camp's
+  // drawer where a centred one would cover it (autoattack.css).
+  backdrop.className = `popup-backdrop attack-end__backdrop auto-attack__backdrop${
     className.includes("auto-attack--bar") ? " auto-attack__backdrop--bar" : ""
-  }${/auto-attack--(confirm|failed|result)/.test(className) ? " auto-attack__backdrop--card" : ""}${
-    className.includes("auto-attack--look-c")
-      ? " auto-attack__backdrop--look auto-attack__backdrop--banner"
-      : className.includes("auto-attack--look")
-        ? " auto-attack__backdrop--look"
-        : ""
-  }`;
+  }${/auto-attack--(confirm|failed|result)/.test(className) ? " auto-attack__backdrop--card" : ""}`;
   const panel = new Panel({ title, closable: false, className: `map-panel attack-end auto-attack ${className}` });
   panel.element.setAttribute("role", "dialog");
   panel.element.setAttribute("aria-modal", "true");
@@ -243,48 +238,28 @@ const columnsOf = (army: HTMLElement, side: HTMLElement, banner: HTMLElement | n
   return columns;
 };
 
-/** The hourglass beside the place in the battle line: painted, as the game's icons are (patch 9.1). */
-export const QUEUE_ICON = artUrl("/assets/popups/hourglass.png");
-
-/** The words under the working bar: "Attacking…", or the place in line (neon round 1, 26 Nov 2026). */
-export const queueWords = (place: number | null): string => (place === null ? "Attacking…" : `Waiting in line · #${place}`);
-
-/** Under the place: that nothing is taken yet and the attack needs no tap. */
-export const QUEUE_NOTE = "Nothing spent yet · starts by itself";
-
 /**
- * The line under the working bar, which swaps to the place in line and back.
- * It always keeps room for two rows, so the sheet never moves.
+ * The working sheet's words for a screen reader: "Attacking…", or the place
+ * in the server's battle line. The march scene shows the same words on its
+ * own badge (RepeatBar), so this line is not drawn.
  */
 const workingLine = (): { element: HTMLElement; show: (place: number | null) => void } => {
   const element = document.createElement("div");
-  element.className = "auto-attack__working";
+  element.className = "auto-attack__working u-visually-hidden";
   element.setAttribute("aria-live", "polite");
-  const row = document.createElement("p");
-  row.className = "auto-attack__line u-muted";
-  const glass = document.createElement("img");
-  glass.className = "auto-attack__line-icon";
-  glass.alt = "";
-  glass.draggable = false;
-  glass.src = QUEUE_ICON;
-  glass.hidden = true;
-  const words = document.createElement("span");
+  const words = document.createElement("p");
   words.className = "auto-attack__line-words";
   words.textContent = queueWords(null);
-  row.append(glass, words);
   const note = document.createElement("p");
   note.className = "auto-attack__line-note";
   note.textContent = QUEUE_NOTE;
   note.hidden = true;
-  element.append(row, note);
+  element.append(words, note);
   return {
     element,
     show: (place) => {
-      const waiting = place !== null;
-      glass.hidden = !waiting;
-      note.hidden = !waiting;
-      row.classList.toggle("u-muted", !waiting);
-      element.classList.toggle("auto-attack__working--line", waiting);
+      note.hidden = place === null;
+      element.classList.toggle("auto-attack__working--line", place !== null);
       words.textContent = queueWords(place);
     },
   };
@@ -529,22 +504,14 @@ export class AutoAttackFlow {
    */
   private async runWithBar(): Promise<void> {
     const timers = this.options.barTimers ?? REAL_TIMERS;
-    const look = repeatLook();
     const bar = new RepeatBar({
       plan: this.plan,
       timers,
-      look,
-      freeze: repeatFreeze,
       ...(this.options.barReducedMotion === undefined ? {} : { reducedMotion: this.options.barReducedMotion }),
     });
     this.bar = bar;
     const line = workingLine();
-    this.show(
-      "Repeat attack",
-      `auto-attack--running auto-attack--bar${look === "today" ? "" : ` auto-attack--look auto-attack--look-${look}`}`,
-      [bar.element, line.element],
-      [],
-    );
+    this.show("Repeat attack", "auto-attack--running auto-attack--bar", [bar.element, line.element], []);
     bar.start();
     const ask = this.calls.queue;
     const stopWatching = ask
