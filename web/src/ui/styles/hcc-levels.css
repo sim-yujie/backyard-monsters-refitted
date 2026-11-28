@@ -1883,6 +1883,13 @@
   color: var(--colour-accent);
   font-size: var(--text-sm);
 }
+/* With an empty queue there is no blue "+N": the batch takes its place at the right end. */
+.hcc-housing__batch--row {
+  margin-left: auto;
+}
+.hcc-housing__coming + .hcc-housing__batch--row {
+  margin-left: 0;
+}
 .hcc-housing__batch--over {
   color: var(--colour-warning);
 }
@@ -1903,5 +1910,17 @@
   }
   .hcc-housing__batch--track {
     display: inline;
+  }
+}
+/* A phone: the numbers row is ~126 px, and "2,080/2,160" with the queue's "+17K" pill
+   needed ~149, so the pill stuck out of the housing box. While the queue's "+N"
+   shows, the house icon makes room for it (the bar and the numbers still say
+   housing); with an empty queue the icon stays. */
+@container hatch (max-width: 559px) {
+  .hcc-housing__numbers:has(> .hcc-housing__coming) > .hcc-housing__icon {
+    display: none;
+  }
+  .hcc-housing--over .hcc-housing__coming {
+    padding: 0 4px;
   }
 }

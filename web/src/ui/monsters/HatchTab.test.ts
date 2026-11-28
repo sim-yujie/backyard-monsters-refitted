@@ -1371,9 +1371,9 @@ describe("the HCC's levels 2 and 3 (beta 9): switcher, presets", () => {
     // 5 Pokeys take 50 of the yard's 1,080, and the bar grows with the count.
     type(box(element), "5");
     expect(addingPart(element)!.style.width).toBe("4.63%");
-    // The number says it too, after the queue's blue one.
+    // The number says it too; the queue is empty, so no blue "+0" stands beside it.
     expect(batchNumber(element)!.textContent).toBe("+50");
-    expect(batchNumber(element)!.previousElementSibling!.classList.contains("hcc-housing__coming")).toBe(true);
+    expect(stripHousing(element).querySelector(".hcc-housing__coming")).toBeNull();
     expect(batchNumber(element)!.classList.contains("hcc-housing__batch--over")).toBe(false);
     expect(batchAtBar(element)!.textContent).toBe("+50");
     expect(addingPart(element)!.classList.contains("hcc-housing__adding--over")).toBe(false);
@@ -1386,6 +1386,15 @@ describe("the HCC's levels 2 and 3 (beta 9): switcher, presets", () => {
     expect(addingPart(element)).toBeNull();
     expect(batchNumber(element)).toBeNull();
     expect(batchAtBar(element)).toBeNull();
+  });
+
+  it("the queue's blue +N shows only when the queue adds something, and the batch's number follows it", () => {
+    const empty = setup(hccAt(2)).element;
+    expect(stripHousing(empty).querySelector(".hcc-housing__coming")).toBeNull();
+    const { element } = setup(hccAt(2, { monsters: { saved: T0, housed: {}, hid: [10, 11], h: [["", 0, []], ["", 0, []]], hstage: [0, 0], hcc: [["C1", 6, 1]] } } as Partial<BaseLoadResponse>), { monster: "C1" });
+    expect(stripHousing(element).querySelector(".hcc-housing__coming")!.textContent).toBe("+60");
+    type(box(element), "5");
+    expect(batchNumber(element)!.previousElementSibling!.classList.contains("hcc-housing__coming")).toBe(true);
   });
 
   it("past the room the batch still shows, in the warning colour, and the bar is scaled to fit", () => {

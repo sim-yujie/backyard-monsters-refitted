@@ -436,8 +436,10 @@ export class HccBench {
       art("housing", 24, "hcc-housing__icon"),
       el("span", "hcc-housing__now", `${housed.toLocaleString("en-US")}/${room.toLocaleString("en-US")}`),
       el("span", "hcc-housing__compact", `${short(housed)}/${short(room)}`),
-      el("span", "hcc-housing__coming", `+${short(coming)}`),
     );
+    // The queue's "+N" only when it adds something (or the yard is over its room):
+    // no "+0" beside the batch's number (owner's lead, 28 Nov 2026).
+    if (coming > 0 || over) numbers.append(el("span", "hcc-housing__coming", `+${short(coming)}`));
     // The batch's space as a number too, as the tab's own housing box says it
     // ("+35"): a small batch is only a sliver on the bar (owner, desk card
     // hatch-preview B, 28 Nov 2026). In the bar's colour for it: after the
