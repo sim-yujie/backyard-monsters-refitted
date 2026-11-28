@@ -275,8 +275,8 @@ export const grantedKorathText = (granted: readonly GrantedReward[]): string | n
  * The events to list: the ones on now first, then the ones over with a reward
  * still to claim, then what is coming up soonest first.
  */
-/** 0 for a wave event, which the page puts first among the events on. */
-const waveFirst = (event: EventView): number => (event.kind === "wave" ? 0 : 1);
+/** 0 for an event the dashboard started (a wave event, or a Brukkarg yard event), which the page puts first among the events on. */
+const waveFirst = (event: EventView): number => (event.kind === "wave" || event.kind === "yards" ? 0 : 1);
 
 export const sortEvents = (events: readonly EventView[]): { active: EventView[]; upcoming: EventView[] } => ({
   active: [

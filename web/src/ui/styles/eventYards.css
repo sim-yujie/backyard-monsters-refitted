@@ -5,6 +5,13 @@
  * the light theme follow.
  */
 
+/* Brukkarg War: the wave part (wave track, "Start wave N") above the yards. */
+.yard-card-parts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
 /* ── The yard track ─────────────────────────────────────────────────────── */
 
 .yard-card {

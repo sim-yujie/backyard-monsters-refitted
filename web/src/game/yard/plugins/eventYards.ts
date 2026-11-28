@@ -10,6 +10,7 @@ import {
 import { EVENT_EXTRAS } from "@/ui/events/EventsPanel";
 import { el } from "@/ui/dom";
 import { openYardPrizePopup, wantsPrizePopup, yardCardBody } from "@/ui/eventYards/yardEventUi";
+import { waveCardPart } from "@/ui/waves/waveEventCard";
 import { YARD_PLUGINS, type YardPlugin } from "../yardPlugins";
 
 /**
@@ -24,10 +25,11 @@ import { YARD_PLUGINS, type YardPlugin } from "../yardPlugins";
  *
  * Main yard only, as the Events page.
  *
- * When the dashboard's generic event control (`feat/wave-events`) runs these
- * events, their card comes as kind `wave` with id `carnage-…`/`brukwar-…`:
- * register {@link yardsExtra} for those ids there too (see the server's
- * `yardEventRun.ts` hook).
+ * The dashboard's event control starts them (server `waves/waveEvents.ts`):
+ * their card stays kind `yards`, with id `carnage-…`/`brukwar-…`. Brukkarg
+ * War also has waves, whose part (the wave track and "Start wave N",
+ * `ui/waves/waveEventCard.ts`) sits above its yards, as every 5 waves won
+ * open the next yard.
  */
 
 /** The yards for an event card, fetched once per card draw. */
@@ -52,7 +54,17 @@ export const yardsExtra = (
   return slot;
 };
 
-EVENT_EXTRAS.set("yards", (event) => yardsExtra(event));
+/** The yard card's part: the wave part first when the event has waves on the feed, then the yards. */
+export const yardCardExtra = (event: Pick<EventView, "id">, waves: (event: Pick<EventView, "id">) => HTMLElement = waveCardPart): HTMLElement => {
+  const yards = yardsExtra(event);
+  const wave = waves(event);
+  if (wave.childElementCount === 0) return yards;
+  const parts = el("div", "yard-card-parts");
+  parts.append(wave, yards);
+  return parts;
+};
+
+EVENT_EXTRAS.set("yards", (event) => yardCardExtra(event));
 
 export const eventYardsPlugin: YardPlugin = (mounts) => {
   if (mounts.store.kind !== "main") return;

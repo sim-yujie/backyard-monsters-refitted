@@ -5,7 +5,12 @@ import { CARNAGE_GLIMMERS, yardEventByKey } from "../../../game-data/events/yard
 import { Reward } from "../../../enums/Rewards.js";
 import { townHallDown } from "./eventYardLanding.js";
 import { copyOfOwnYard, COPY_YARD_LOOT, eventYardViews, playerLockOf } from "./yardEventGate.js";
-import { liveYardEventRun, readYardRuns, startYardRun, stopYardRun, yardEventRunEvents, yardRunIdAt } from "./yardEventRun.js";
+import { liveYardEventRun, yardEventRuns, yardRunIdAt } from "./yardEventRun.js";
+import { readRuns, startWaveRun, stopWaveRun, type WaveRun } from "../waves/waveRuns.js";
+import { waveEventByKey } from "../waves/waveEvents.js";
+import { waveRunEvents } from "../waves/waveRunEvents.js";
+import { planWave } from "../waves/wavePlan.js";
+import { BRUKWAR_WAVES_PER_YARD } from "../../../game-data/events/yardEvents.js";
 import { applySpurtzReward, prizesDue } from "./yardPrizes.js";
 import { landedState, repairsAt, standingHealth, YARD_REPAIR_SECONDS, type YardState } from "./yardStore.js";
 import { EVENT_COPY_YARDS } from "../../../game-data/tribes/events/index.js";
@@ -24,22 +29,30 @@ const state = (over: Partial<YardState> = {}): YardState => ({
   ...over,
 });
 
-describe("yard event runs", () => {
-  test("one at a time; stop ends it now; ids are <key>-<start>", () => {
-    const started = startYardRun([], "carnage", 1_000)!;
+describe("yard event runs (the dashboard's event control)", () => {
+  test("one event at a time with the wave events; stop ends it now; ids are <key>-<start>", () => {
+    const started = startWaveRun([], "carnage", 1_000) as WaveRun[];
     expect(started).toEqual([{ event: "carnage", startsAt: 1_000, endsAt: 1_000 + 7 * DAY }]);
-    expect(startYardRun(started, "brukwar", 2_000)).toBeNull();
+    expect(startWaveRun(started, "brukwar", 2_000)).toBe("alreadyRunning");
+    expect(startWaveRun(started, "wmi1", 2_000)).toBe("alreadyRunning");
     expect(liveYardEventRun(2_000, started)?.id).toBe("carnage-1000");
-    const stopped = stopYardRun(started, 5_000)!;
+    const stopped = stopWaveRun(started, 5_000)!;
     expect(stopped[0]!.endsAt).toBe(5_000);
     expect(liveYardEventRun(5_000, stopped)).toBeNull();
-    expect(stopYardRun(stopped, 6_000)).toBeNull();
+    expect(stopWaveRun(stopped, 6_000)).toBeNull();
+  });
+
+  test("a wave event on is not a yard event", () => {
+    const runs = [{ event: "wmi1", startsAt: 1_000, endsAt: 2_000 }];
+    expect(liveYardEventRun(1_500, runs)).toBeNull();
+    expect(yardEventRuns(runs)).toEqual([]);
   });
 
   test("an attack lands on the run it began in, even after the run ended", () => {
     const runs = [
-      { event: "carnage" as const, startsAt: 1_000, endsAt: 2_000 },
-      { event: "carnage" as const, startsAt: 3_000, endsAt: 4_000 },
+      { event: "carnage", startsAt: 1_000, endsAt: 2_000 },
+      { event: "wmi1", startsAt: 2_100, endsAt: 2_900 },
+      { event: "carnage", startsAt: 3_000, endsAt: 4_000 },
     ];
     expect(yardRunIdAt("carnage", 1_500, runs)).toBe("carnage-1000");
     expect(yardRunIdAt("carnage", 2_500, runs)).toBe("carnage-1000");
@@ -48,21 +61,53 @@ describe("yard event runs", () => {
     expect(yardRunIdAt("brukwar", 3_500, runs)).toBeNull();
   });
 
-  test("the stored value drops unknown events and bad windows", () => {
+  test("the stored runs keep the yard events (the wave runs' store)", () => {
     expect(
-      readYardRuns({
+      readRuns({
         runs: [
           { event: "carnage", startsAt: 10, endsAt: 20 },
-          { event: "wmi1", startsAt: 10, endsAt: 20 },
+          { event: "nope", startsAt: 10, endsAt: 20 },
           { event: "brukwar", startsAt: 30, endsAt: 30 },
+          { event: "brukwar", startsAt: 40, endsAt: 50 },
         ],
       })
-    ).toEqual([{ event: "carnage", startsAt: 10, endsAt: 20 }]);
+    ).toEqual([
+      { event: "carnage", startsAt: 10, endsAt: 20 },
+      { event: "brukwar", startsAt: 40, endsAt: 50 },
+    ]);
   });
 
-  test("each run is an Events page entry of kind yards", () => {
-    const [entry] = yardEventRunEvents([{ event: "brukwar", startsAt: 1_764_230_400, endsAt: 1_764_230_400 + DAY }]);
-    expect(entry).toMatchObject({ id: "brukwar-1764230400", kind: "yards", title: "Brukkarg War" });
+  test("each run is ONE Events page entry of kind yards, with the yard event's title, words, days and banners", () => {
+    const entries = waveRunEvents([{ event: "brukwar", startsAt: 1_764_230_400, endsAt: 1_764_230_400 + DAY }]);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      id: "brukwar-1764230400",
+      kind: "yards",
+      series: "yards-brukwar",
+      title: brukwar.title,
+      text: brukwar.text,
+      banner: brukwar.banner.modern,
+      bannerClassic: brukwar.banner.classic,
+    });
+    for (const yard of [carnage, brukwar]) {
+      const event = waveEventByKey(yard.key)!;
+      expect(event).toMatchObject({ title: yard.title, text: yard.text, days: yard.days, banner: yard.banner, card: "yards" });
+    }
+  });
+
+  test("Carnage has no waves; Brukkarg War has Flash's 25, five per yard", () => {
+    expect(waveEventByKey("carnage")!.waves).toHaveLength(0);
+    const war = waveEventByKey("brukwar")!;
+    expect(war.waves).toHaveLength(25);
+    expect(war.prizes).toHaveLength(25);
+    expect(war.waves.length).toBe(BRUKWAR_WAVES_PER_YARD * 5);
+    expect(war.firstBonusWave).toBe(26);
+    expect(war.totemType).toBeUndefined();
+    // Flash wave 1: 50 Octo-oozes and 50 Banditos; wave 10 brings six Krallen (G5), three from each side.
+    expect(planWave({ event: war, wave: 1, quarter: 0 })!.army).toEqual({ C2: 50, C6: 50 });
+    const krallen = planWave({ event: war, wave: 10, quarter: 0 })!.events.filter((one) => one.champion?.t === 5);
+    expect(krallen).toHaveLength(6);
+    expect(planWave({ event: war, wave: 26, quarter: 0 })).toBeNull();
   });
 });
 

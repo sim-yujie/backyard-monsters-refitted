@@ -38,8 +38,9 @@ const em = {} as EntityManager;
 const DAY = 86_400;
 
 describe("the Flash tables", () => {
-  test("each event has 30 waves, 2 bonus waves and a prize per wave", () => {
-    for (const event of WAVE_EVENTS) {
+  test("each invasion has 30 waves, 2 bonus waves and a prize per wave", () => {
+    // The Brukkarg attack events (card `yards`) have their own tables: `yards/yardEvents.test.ts`.
+    for (const event of WAVE_EVENTS.filter((one) => one.card === undefined)) {
       expect(event.waves.length).toBe(32);
       expect(event.prizes.length).toBe(32);
       expect(event.firstBonusWave).toBe(31);

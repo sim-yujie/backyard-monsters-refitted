@@ -1,7 +1,32 @@
+import { yardEventByKey } from "../../../game-data/events/yardEvents.js";
+import type { YardEventKey } from "../../../game-data/tribes/events/index.js";
+import { BRUKWAR_WAVES } from "./data/brukwarWaves.js";
 import { WMI1_WAVES } from "./data/wmi1Waves.js";
 import { WMI2_WAVES } from "./data/wmi2Waves.js";
-import { flashWavePrizes } from "./waveRewards.js";
-import type { WaveEventDefinition } from "./waveTypes.js";
+import { brukwarWavePrizes, flashWavePrizes } from "./waveRewards.js";
+import type { WavePrize, WaveEventDefinition, WaveTable } from "./waveTypes.js";
+
+/**
+ * A Brukkarg attack event (`game-data/events/yardEvents.ts`, bruk-port) on
+ * the event control: its title, words, days and banners are the yard
+ * event's own; its card is the yard card; its waves, if any, unlock its
+ * yards (`services/events/yards/yardEventGate.ts`).
+ */
+const yardEvent = (key: YardEventKey, waves: WaveTable, prizes: readonly WavePrize[]): WaveEventDefinition => {
+  const event = yardEventByKey(key)!;
+  return {
+    key,
+    title: event.title,
+    text: event.text,
+    days: event.days,
+    waves,
+    prizes,
+    firstBonusWave: waves.length + 1,
+    banner: event.banner,
+    requires: { tutorial: true },
+    card: "yards",
+  };
+};
 
 /**
  * Every wave event the dashboard can start (beta 10). Adding one:
@@ -42,6 +67,10 @@ export const WAVE_EVENTS: readonly WaveEventDefinition[] = [
     banner: { modern: "/events/wmi2-banner.jpg", classic: "/events/wmi2-banner-classic.jpg" },
     requires: { tutorial: true },
   },
+  // Creature Carnage: attack yards only, no waves ("Next wave" refuses it).
+  yardEvent("carnage", [], []),
+  // Brukkarg War: 25 waves; every 5 beaten opens the next yard.
+  yardEvent("brukwar", BRUKWAR_WAVES, brukwarWavePrizes(BRUKWAR_WAVES.length)),
 ];
 
 /** The wave event with this key, or null. */

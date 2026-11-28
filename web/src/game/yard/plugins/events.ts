@@ -368,7 +368,8 @@ export class EventsDoor {
     this.panel?.render(view);
     if (this.scrollToWave && view.kind === "list") {
       this.scrollToWave = false;
-      this.panel?.showCard("wave");
+      // Brukkarg War's waves start from its yard card.
+      if (!this.panel?.showCard("wave")) this.panel?.showCard("yards");
     }
     if (this.scrollToClaim && view.kind === "list") {
       this.scrollToClaim = false;

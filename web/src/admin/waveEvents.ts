@@ -7,8 +7,8 @@ import { duration } from "./format";
  * wave event (server `controllers/admin/waveEvents.ts`). Owner, 27 Nov 2026:
  * Wild Monster Invasion 1 and 2 run only when started here, one wave event at
  * a time, for a week from that moment (Flash's length); later wave events
- * (Monster Blitzkrieg, Brukkarg War's waves, Christmas) appear here by
- * themselves. Players call each of the 30 waves and 2 bonus waves on their own
+ * (Monster Blitzkrieg, Christmas) appear here by themselves, as Creature
+ * Carnage and Brukkarg War (the Brukkarg attack events, bruk-port) do. Players call each of the 30 waves and 2 bonus waves on their own
  * yard; every wave beaten pays Glimmers and the totem waves raise the totem.
  * Both buttons ask first; a change reaches players within a minute.
  */
@@ -56,7 +56,7 @@ export class WaveEventsView {
     const question =
       change.action === "start"
         ? `Start ${change.title} now, for ${change.days} days? Every player sees it at once.`
-        : `Stop ${change.title} now? Players can no longer call waves.`;
+        : `Stop ${change.title} now? Players can no longer take part.`;
     if (!(this.options.confirm ?? ((words: string) => window.confirm(words)))(question)) return;
     this.busy = true;
     this.render();
@@ -109,7 +109,11 @@ export class WaveEventsView {
     replace(
       this.element,
       h("h3", {}, "Wave events"),
-      h("p", { class: "hint" }, "One at a time. Players call 30 waves and 2 bonus waves on their own yard; every wave beaten pays Glimmers, totem waves raise the totem."),
+      h(
+        "p",
+        { class: "hint" },
+        "One at a time. Invasions: players call 30 waves and 2 bonus waves on their own yard; every wave beaten pays Glimmers, totem waves raise the totem. Creature Carnage and Brukkarg War: players attack the Brukkarg yards from the Events card (Brukkarg War: 5 waves open each yard).",
+      ),
       ...rows,
     );
   }

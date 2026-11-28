@@ -1,5 +1,4 @@
 import type { EntityManager } from "@mikro-orm/core";
-import type { EntityManager as SqlEntityManager } from "@mikro-orm/postgresql";
 
 import type { YardEventDefinition } from "../../../game-data/events/yardEvents.js";
 import {
@@ -15,6 +14,7 @@ import { eventYardRefusedErr } from "../../../errors/errors.js";
 import type { JsonObject } from "../../../types/JsonObject.js";
 import type { SaveData } from "../../../types/EntityData.js";
 import { eventPlayerOf, type EventPlayerSave } from "../eventPlayer.js";
+import { waveProgressStore } from "../waves/waveProgress.js";
 import { liveYardEventRun } from "./yardEventRun.js";
 import { readYardCopy, readYardStates, repairsAt, standingHealth, writeYardCopyOnce, type YardState } from "./yardStore.js";
 
@@ -22,7 +22,7 @@ import { readYardCopy, readYardStates, repairsAt, standingHealth, writeYardCopyO
  * Who may attack which Brukkarg event yard, and the event's yards as the
  * player sees them (beta 10, bruk-port).
  *
- * - An event must be on (`yardEventRun.ts`) and the yard one of its own.
+ * - An event must be on (`yardEventRun.ts`, the dashboard's event control) and the yard one of its own.
  * - Creature Carnage: Town Hall 2 to 4 (Flash `Battletoads.doesQualify`).
  * - The yards fall in order: only the first one not yet wrecked can be
  *   attacked (Flash attacks the lowest yard not destroyed).
@@ -35,19 +35,13 @@ import { readYardCopy, readYardStates, repairsAt, standingHealth, writeYardCopyO
 export const COPY_YARD_LOOT = { r1: 4_000_000, r2: 4_000_000, r3: 3_000_000, r4: 2_000_000 } as const;
 
 /**
- * Waves beaten in the Brukkarg War run: `event_progress.counter` of the run's
- * row, which `feat/wave-events`' `waveProgressStore` writes. Swappable for the
- * tests, and for trying the yards before the waves exist.
+ * Waves beaten in the Brukkarg War run, as the wave events keep them
+ * (`waveProgressStore`, `event_progress.counter` of the run's row).
+ * Swappable for the tests, and for trying the yards without the waves.
  */
 export type WavesBeaten = (em: EntityManager, userid: number, runId: string) => Promise<number>;
 
-const sqlWavesBeaten: WavesBeaten = async (em, userid, runId) => {
-  const [row] = await (em as SqlEntityManager).execute<{ counter: number | string }[]>(
-    `SELECT counter FROM bym.event_progress WHERE userid = ? AND event_id = ?`,
-    [userid, runId]
-  );
-  return Math.max(0, Math.floor(Number(row?.counter) || 0));
-};
+const sqlWavesBeaten: WavesBeaten = async (em, userid, runId) => (await waveProgressStore().read(em, userid, runId)).beaten;
 
 /** Local only: `BRUKWAR_NO_WAVES=1` opens every Brukkarg yard without waves (never on production). */
 export const noWaves = (env: NodeJS.ProcessEnv = process.env): boolean =>
