@@ -573,7 +573,7 @@ describe("takeoverCell: New to Map Room 2", () => {
   });
 
   test("after the 10 days the price is the usual one", async () => {
-    welcome.rows.set(TAKER, newWelcome(now() - MR2_WELCOME_SECONDS - 1));
+    welcome.rows.set(TAKER, newWelcome(now() - MR2_WELCOME_SECONDS - 86_400));
     await run({ baseid: CAMP });
     expect(takerResources().r1).toBe(100_000_000 - fullBase());
   });

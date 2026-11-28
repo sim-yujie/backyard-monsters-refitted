@@ -18,9 +18,12 @@ import { el } from "@/ui/dom";
  * The server decides everything (`GET /bm/events` `mr2Welcome`). The card
  * stays all 10 days, rewards used or not (owner, 9 Nov: it left once both
  * were used); null only when the days are over, and then there is no card.
- * The days count from the player's own start (launch, or the day they joined
- * Map Room 2 after it); a reward used today is back at the daily reset (UTC
- * midnight), which the panel's tick shows without a new answer.
+ * The days are daily resets (owner, 28 Nov 2026): day 1 is the UTC day the
+ * pass started (`startsAt`, its 00:00 UTC), each reset (UTC midnight) starts
+ * the next, and the pass ends at `endsAt`, the reset after the last day: 10
+ * days, 11 for a pass from before patch 9.1 (it keeps its old end, rounded up
+ * to a reset). A reward used today is back at the daily reset, which the
+ * panel's tick shows without a new answer.
  */
 
 const DAY = 86_400;
@@ -59,9 +62,22 @@ export const welcomeDaysText = (endsAt: number, now: number): string => {
 /** "5/7 left". */
 export const welcomeLeftText = (left: number, sets: number): string => `${left}/${sets} left`;
 
-/** Which of the 10 days `at` falls on: 1 on the first day, 10 on the last (kept inside them). */
-export const welcomeDay = (startsAt: number, at: number): number =>
-  Math.min(WELCOME_DAYS, Math.max(1, Math.floor((at - startsAt) / DAY) + 1));
+/** The UTC day number (days since 1970) `at` falls in; a new one at each daily reset. */
+const utcDayNumber = (at: number): number => Math.floor(at / DAY);
+
+/**
+ * How many days the pass has: the daily resets from `startsAt`'s day to
+ * `endsAt` (10; 11 for a pass from before patch 9.1).
+ */
+export const welcomeDayCount = (startsAt: number, endsAt: number): number =>
+  Math.max(1, Math.ceil((endsAt - utcDayNumber(startsAt) * DAY) / DAY));
+
+/**
+ * Which day of the pass `at` falls on, counted in daily resets: 1 on the UTC
+ * day it started, 2 after the next 00:00 UTC (kept inside 1..`days`).
+ */
+export const welcomeDay = (startsAt: number, at: number, days: number = WELCOME_DAYS): number =>
+  Math.min(days, Math.max(1, utcDayNumber(at) - utcDayNumber(startsAt) + 1));
 
 const picture = (src: string, alt: string): HTMLImageElement => {
   const image = el("img", "events-welcome__picture");
@@ -145,8 +161,9 @@ const MARK_STATES = ["gone", "today", "left"] as const;
  * today lit, the days before it gone. Its own start is on the list.
  */
 export const paintWelcomeTimeline = (timeline: HTMLElement, now: number): void => {
-  const today = welcomeDay(Number(timeline.dataset["welcomeStart"]), now);
-  timeline.setAttribute("aria-label", `Day ${today} of ${WELCOME_DAYS}`);
+  const days = Number(timeline.dataset["welcomeDays"]) || WELCOME_DAYS;
+  const today = welcomeDay(Number(timeline.dataset["welcomeStart"]), now, days);
+  timeline.setAttribute("aria-label", `Day ${today} of ${days}`);
   for (const mark of timeline.querySelectorAll<HTMLElement>("[data-day]")) {
     const state = markState(Number(mark.dataset["day"]), today);
     for (const name of MARK_STATES) mark.classList.toggle(`events-welcome__mark--${name}`, name === state);
@@ -164,20 +181,23 @@ interface UsedKind {
 }
 
 /**
- * The 10 days as marks in a row on a track: each day's number in a dot, the
+ * The days (10, or 11 for a pass from before 9.1) as marks in a row on a track: each day's number in a dot, the
  * days gone filled, today lit and bigger, the days left hollow; over each day
  * a reward was used, its picture (one per reward a day). Numbers and
  * pictures, no words (the words on hover and for a screen reader).
  */
 const timeline = (status: Mr2WelcomeStatus, now: number): HTMLElement => {
   const list = el("ol", "events-welcome__timeline");
+  const dayCount = welcomeDayCount(status.startsAt, status.endsAt);
   list.dataset["welcomeStart"] = String(status.startsAt);
-  const daysOf = (uses: readonly number[]) => new Set(uses.map((at) => welcomeDay(status.startsAt, at)));
+  list.dataset["welcomeDays"] = String(dayCount);
+  list.style.setProperty("--welcome-days", String(dayCount));
+  const daysOf = (uses: readonly number[]) => new Set(uses.map((at) => welcomeDay(status.startsAt, at, dayCount)));
   const kinds: UsedKind[] = [
     { key: "takeover", src: FIRST_OPEN_ART, words: "Wild camp takeover used", days: daysOf(status.takeoverUses) },
     { key: "kit", src: KIT_THUMBNAIL, words: "Regular Starter Kit used", days: daysOf(status.kitUses) },
   ];
-  for (let day = 1; day <= WELCOME_DAYS; day++) {
+  for (let day = 1; day <= dayCount; day++) {
     const mark = el("li", "events-welcome__mark");
     mark.dataset["day"] = String(day);
     const onDay = kinds.filter((kind) => kind.days.has(day));

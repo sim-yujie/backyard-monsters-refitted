@@ -17,6 +17,9 @@ import {
   onMapRoom2,
   recordMr2Join,
   useWelcomeStore,
+  welcomeDayOf,
+  welcomeDayStart,
+  welcomeEnd,
   welcomeReady,
   welcomeState,
   welcomeStatus,
@@ -25,11 +28,14 @@ import {
 
 const DAY = 86_400;
 const HOUR = 3_600;
-/** 08:00 UTC; the next daily reset is 16 hours later. */
+/** 08:00 UTC on 15 Jan 2027; the next daily reset is 16 hours later. */
 const T0 = 1_800_000_000;
 const MIDNIGHT = T0 + 16 * HOUR;
+/** 00:00 UTC on 15 Jan 2027: day 1 of a pass joined on that day. */
+const DAY1 = T0 - 8 * HOUR;
 const em = {} as EntityManager;
-const fresh = newWelcome(T0);
+/** A pass joined on 15 Jan 2027 (kept as that day's 00:00 UTC). */
+const fresh = newWelcome(DAY1);
 
 describe("the pass days", () => {
   test("10 days with 7 sets (owner, 11 Nov)", () => {
@@ -38,11 +44,11 @@ describe("the pass days", () => {
     expect(MR2_WELCOME_SECONDS).toBe(10 * DAY);
   });
 
-  test("open from the start for exactly 10 days", () => {
-    expect(welcomeReady(fresh, "takeover", T0 - 1)).toBe(false);
-    expect(welcomeReady(fresh, "takeover", T0)).toBe(true);
-    expect(welcomeReady(fresh, "kit", T0 + MR2_WELCOME_SECONDS - 1)).toBe(true);
-    expect(welcomeReady(fresh, "kit", T0 + MR2_WELCOME_SECONDS)).toBe(false);
+  test("open for exactly 10 daily resets from the joining day's 00:00 UTC", () => {
+    expect(welcomeReady(fresh, "takeover", DAY1 - 1)).toBe(false);
+    expect(welcomeReady(fresh, "takeover", DAY1)).toBe(true);
+    expect(welcomeReady(fresh, "kit", DAY1 + MR2_WELCOME_SECONDS - 1)).toBe(true);
+    expect(welcomeReady(fresh, "kit", DAY1 + MR2_WELCOME_SECONDS)).toBe(false);
     expect(welcomeReady(null, "kit", T0)).toBe(false);
   });
 
@@ -66,8 +72,8 @@ describe("the pass days", () => {
 
   test("the card: days left of 10, each reward's left of 7 and today's state, gone only when the days are over", () => {
     expect(welcomeStatus(fresh, T0)).toEqual({
-      startsAt: T0,
-      endsAt: T0 + 10 * DAY,
+      startsAt: DAY1,
+      endsAt: DAY1 + 10 * DAY,
       daysLeft: 10,
       sets: 7,
       takeover: true,
@@ -107,12 +113,86 @@ describe("the pass days", () => {
     expect(onMapRoom2(null)).toBe(false);
   });
 });
+describe("the days are daily resets (owner, 28 Nov: a brand new day, not the joining time)", () => {
+  /** Rygnus's live pass, written before patch 9.1 at the joining moment (21 Nov 2026 03:56:02 UTC). */
+  const RYGNUS_START = 1_795_233_362;
+  const rygnus = {
+    start: RYGNUS_START,
+    kitUses: [1_795_233_733, 1_795_307_246, 1_795_397_401, 1_795_486_975, 1_795_575_899, 1_795_651_994, 1_795_744_345],
+    takeoverUses: [1_795_233_713, 1_795_307_238, 1_795_397_396, 1_795_486_969, 1_795_575_892, 1_795_651_989, 1_795_744_340],
+    kitDay: "2026-11-27",
+    takeoverDay: "2026-11-27",
+  };
+  const at = (iso: string) => Date.parse(iso) / 1000;
+
+  test("Rygnus: 7 uses on 7 resets land on days 1-7, 28 Nov is day 8", () => {
+    expect(rygnus.kitUses.map((use) => welcomeDayOf(RYGNUS_START, use))).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(rygnus.takeoverUses.map((use) => welcomeDayOf(RYGNUS_START, use))).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    const now = at("2026-11-28T03:02:48Z");
+    expect(welcomeDayOf(RYGNUS_START, now)).toBe(8);
+    const status = welcomeStatus(rygnus, now)!;
+    expect(status.startsAt).toBe(at("2026-11-21T00:00:00Z"));
+    expect(welcomeDayOf(status.startsAt, now)).toBe(8);
+    expect(status).toMatchObject({ takeoverLeft: 0, kitLeft: 0, daysLeft: 4 });
+  });
+
+  test("a pass from before 9.1 loses no time: its old end, rounded up to the next reset (an 11th day)", () => {
+    const oldEnd = RYGNUS_START + 10 * DAY;
+    expect(new Date(oldEnd * 1000).toISOString()).toBe("2026-12-01T03:56:02.000Z");
+    expect(welcomeEnd(RYGNUS_START)).toBe(at("2026-12-02T00:00:00Z"));
+    expect(welcomeEnd(RYGNUS_START)).toBeGreaterThanOrEqual(oldEnd);
+    const unused = newWelcome(RYGNUS_START);
+    expect(welcomeReady(unused, "kit", oldEnd)).toBe(true);
+    expect(welcomeReady(unused, "kit", at("2026-12-01T23:59:59Z"))).toBe(true);
+    expect(welcomeReady(unused, "kit", at("2026-12-02T00:00:00Z"))).toBe(false);
+    expect(welcomeDayOf(RYGNUS_START, at("2026-12-01T12:00:00Z"))).toBe(11);
+    // Any joining moment: never earlier than 10 x 24 hours, never a whole day more.
+    for (let start = T0; start < T0 + DAY; start += 997) {
+      expect(welcomeEnd(start)).toBeGreaterThanOrEqual(start + 10 * DAY);
+      expect(welcomeEnd(start)).toBeLessThan(start + 11 * DAY);
+      expect(welcomeEnd(start) % DAY).toBe(0);
+    }
+  });
+
+  test("a pass written since 9.1 starts at a reset: exactly 10 days", () => {
+    expect(welcomeEnd(DAY1)).toBe(DAY1 + 10 * DAY);
+    expect(welcomeDayStart(T0)).toBe(DAY1);
+    expect(welcomeDayStart(DAY1)).toBe(DAY1);
+  });
+
+  describe("a player who joins at 23:59 UTC", () => {
+    let previous = welcomeStore();
+    afterEach(() => useWelcomeStore(previous));
+    const JOIN = at("2027-01-15T23:59:00Z");
+
+    test("day 1 is that last minute, day 2 starts at midnight, the pass ends at the reset after day 10", async () => {
+      expect(JOIN).toBe(DAY1 + DAY - 60);
+      const store = memoryWelcomeStore();
+      previous = useWelcomeStore(store);
+      await recordMr2Join(em, 21, JOIN);
+      expect(store.rows.get(21)?.start).toBe(DAY1);
+
+      expect(await claimWelcome(em, 21, "takeover", JOIN + 30)).toBe(true);
+      expect(welcomeStatus(store.rows.get(21)!, JOIN + 40)).toMatchObject({ daysLeft: 10, takeoverToday: true });
+      // A new day at 00:00 UTC: day 2's takeover.
+      expect(await claimWelcome(em, 21, "takeover", DAY1 + DAY + 30)).toBe(true);
+      const uses = store.rows.get(21)!.takeoverUses as number[];
+      expect(uses.map((use) => welcomeDayOf(DAY1, use))).toEqual([1, 2]);
+      expect(welcomeStatus(store.rows.get(21)!, DAY1 + DAY + 60)?.daysLeft).toBe(9);
+      // Day 10 is 24 Jan; over at 00:00 UTC on 25 Jan.
+      expect(welcomeDayOf(DAY1, at("2027-01-24T12:00:00Z"))).toBe(10);
+      expect(await claimWelcome(em, 21, "kit", at("2027-01-24T23:59:59Z"))).toBe(true);
+      expect(await claimWelcome(em, 21, "takeover", at("2027-01-25T00:00:00Z"))).toBe(false);
+      expect(welcomeStatus(store.rows.get(21)!, at("2027-01-25T00:00:00Z"))).toBeNull();
+    });
+  });
+});
 
 describe("when the days start", () => {
   let previous = welcomeStore();
   afterEach(() => useWelcomeStore(previous));
 
-  test("a new joiner starts on joining, once ever", async () => {
+  test("a new joiner starts on the joining day (its 00:00 UTC), once ever", async () => {
     const store = memoryWelcomeStore(T0 - 30 * DAY);
     previous = useWelcomeStore(store);
 
