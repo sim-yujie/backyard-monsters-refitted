@@ -53,6 +53,7 @@ describe("YardSwitcher", () => {
   beforeEach(() => {
     document.body.replaceChildren();
     resetOutpostLabels();
+    resetYardArrival();
     onSelect = vi.fn<(target: OwnYardTarget) => void>();
     switcher = new YardSwitcher({ onSelect });
     document.body.append(switcher.element);
@@ -265,6 +266,7 @@ describe("outpost names and pins (beta 7)", () => {
   beforeEach(() => {
     document.body.replaceChildren();
     resetOutpostLabels();
+    resetYardArrival();
     rename = vi.fn<(baseid: string, name: string) => Promise<OutpostLabels>>();
     pin = vi.fn<(baseid: string, pin: boolean) => Promise<OutpostLabels>>();
     switcher = new YardSwitcher({ onSelect: () => undefined, api: { rename, pin } });
@@ -437,6 +439,118 @@ describe("outpost names and pins (beta 7)", () => {
     rows.scrollTop = 0;
     rows.dispatchEvent(new Event("scroll"));
     expect(rows.classList.contains("yard-switcher__rows--scrolled")).toBe(false);
+  });
+});
+
+describe("the list keeps its place from yard to yard (owner, 28 Nov 2026)", () => {
+  // 51 outposts, as a player with many: Main is row 0, then 10000 on.
+  const MANY: BaseLoadResponse["outposts"] = Array.from({ length: 51 }, (_, i) => [
+    100 + i,
+    200,
+    String(10_000 + i),
+  ]);
+  // The rows' box is 100-500 on screen; each row is 46 px (2 px apart counted in), after a 4 px pad.
+  const VIEW_TOP = 100;
+  const VIEW_HEIGHT = 400;
+  const ROW = 46;
+  const rowTop = (index: number, scrollTop: number): number => VIEW_TOP + 4 + index * ROW - scrollTop;
+  let switcher: YardSwitcher;
+  let onSelect: ReturnType<typeof vi.fn<(target: OwnYardTarget) => void>>;
+
+  beforeEach(() => {
+    document.body.replaceChildren();
+    resetOutpostLabels();
+    resetYardArrival();
+    // jsdom lays nothing out: the rows get the box above, each row its place in it.
+    const rect = (top: number, height: number): DOMRect =>
+      ({ top, left: 0, width: 300, height, right: 300, bottom: top + height, x: 0, y: top }) as DOMRect;
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      if (this.classList.contains("yard-switcher__rows")) return rect(VIEW_TOP, VIEW_HEIGHT);
+      // A row, or what is in it (the open yard is marked on its button), at the row's place.
+      const row = this.closest<HTMLElement>(".yard-switcher__row");
+      if (row) {
+        const rows = row.closest<HTMLElement>(".yard-switcher__rows")!;
+        return rect(rowTop(Number(row.dataset["index"]), rows.scrollTop), ROW - 2);
+      }
+      return rect(0, 0);
+    });
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains("yard-switcher__rows") && !this.closest("[hidden]") ? VIEW_HEIGHT : 0;
+    });
+    onSelect = vi.fn<(target: OwnYardTarget) => void>();
+    switcher = new YardSwitcher({ onSelect });
+    document.body.append(switcher.element);
+  });
+
+  afterEach(() => {
+    switcher.destroy();
+    vi.restoreAllMocks();
+  });
+
+  const rows = (): HTMLElement => switcher.element.querySelector<HTMLElement>(".yard-switcher__rows")!;
+  const open = (): void => switcher.element.querySelector<HTMLButtonElement>(".yard-switcher__button")!.click();
+  const targetAt = (index: number): OwnYardTarget => switcher.entries[index]!.target;
+  /** The scene goes to another yard: the dock, and its switcher, are built again. */
+  const arriveAt = (target: OwnYardTarget): void => {
+    switcher.destroy();
+    switcher = new YardSwitcher({ onSelect });
+    document.body.append(switcher.element);
+    switcher.bind(bindingFor(MANY, target));
+  };
+
+  it("opens the first time with the open yard's row in view", () => {
+    switcher.bind(bindingFor(MANY, MAIN_YARD));
+    open();
+    expect(rows().scrollTop).toBe(0);
+
+    resetYardArrival();
+    arriveAt(targetAt(20));
+    open();
+    // Row 20 (1024-1068 unscrolled) brought up to the bottom edge (500), no further.
+    expect(rows().scrollTop).toBe(rowTop(20, 0) + ROW - 2 - (VIEW_TOP + VIEW_HEIGHT));
+    const current = switcher.element.querySelector('[aria-current="true"]');
+    expect(current?.closest(".yard-switcher__row")?.getAttribute("data-index")).toBe("20");
+  });
+
+  it("opens again where it was left after a yard is picked from it", () => {
+    switcher.bind(bindingFor(MANY, MAIN_YARD));
+    open();
+    rows().scrollTop = 600;
+    rows().dispatchEvent(new Event("scroll"));
+    // At that scroll row 16 sits at 240-284, inside the 100-500 view.
+    switcher.element.querySelector<HTMLButtonElement>('.yard-switcher__row[data-index="16"] .yard-switcher__item')!.click();
+    expect(switcher.open).toBe(false);
+    expect(onSelect).toHaveBeenLastCalledWith(targetAt(16));
+
+    arriveAt(targetAt(16));
+    open();
+    expect(rows().scrollTop).toBe(600);
+    expect(rows().classList.contains("yard-switcher__rows--scrolled")).toBe(true);
+  });
+
+  it("after the arrows moved on, scrolls just enough to show the open yard's row", () => {
+    switcher.bind(bindingFor(MANY, MAIN_YARD));
+    open();
+    rows().scrollTop = 600;
+    open(); // the middle again: closed
+
+    // Several yards on, below the view: its bottom brought to the bottom edge.
+    arriveAt(targetAt(30));
+    open();
+    expect(rows().scrollTop).toBe(rowTop(30, 0) + ROW - 2 - (VIEW_TOP + VIEW_HEIGHT));
+    const below = rows().scrollTop;
+    open();
+
+    // Still in view: the list stays exactly where it was.
+    arriveAt(targetAt(28));
+    open();
+    expect(rows().scrollTop).toBe(below);
+    open();
+
+    // Back up above the view: its top brought just under the fade at the top edge.
+    arriveAt(targetAt(5));
+    open();
+    expect(rows().scrollTop).toBe(rowTop(5, 0) - VIEW_TOP - 14);
   });
 });
 
