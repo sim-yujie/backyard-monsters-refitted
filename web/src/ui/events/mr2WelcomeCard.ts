@@ -4,6 +4,7 @@ import { STARTER_KIT_SUMMARIES } from "@/game/yard/starterKits";
 import { gameIcon } from "@/ui/gameIcon";
 import { eventsArt } from "./eventsArt";
 import { el } from "@/ui/dom";
+import { formatCountdown } from "@/ui/format";
 
 /**
  * The "Frontier Pass" card on the Events page (owner, 9 Nov 2026; 7 sets in
@@ -18,12 +19,14 @@ import { el } from "@/ui/dom";
  * The server decides everything (`GET /bm/events` `mr2Welcome`). The card
  * stays all 10 days, rewards used or not (owner, 9 Nov: it left once both
  * were used); null only when the days are over, and then there is no card.
- * The days are daily resets (owner, 28 Nov 2026): day 1 is the UTC day the
- * pass started (`startsAt`, its 00:00 UTC), each reset (UTC midnight) starts
- * the next, and the pass ends at `endsAt`, the reset after the last day: 10
- * days, 11 for a pass from before patch 9.1 (it keeps its old end, rounded up
- * to a reset). A reward used today is back at the daily reset, which the
- * panel's tick shows without a new answer.
+ * The days are daily resets (owner, 28 Nov 2026): a pass starts at the
+ * next reset after joining (`startsAt`, 00:00 UTC; until then the card says
+ * "Starts in 6h", the rewards wait and no day is lit), each reset starts
+ * the next day, and the pass ends at `endsAt`, the reset after day 10. A pass
+ * from before patch 9.1 keeps its old end rounded up to a reset, one day
+ * later: the track still has 10 marks and its day 10 lasts two days (the
+ * days left count both). A reward used today is back at the daily reset,
+ * which the panel's tick shows without a new answer.
  */
 
 const DAY = 86_400;
@@ -41,11 +44,12 @@ export const WELCOME_HELP = {
   lead: `Frontier Pass: ${WELCOME_SETS} sets over your first ${WELCOME_DAYS} days in Map Room 2.`,
   takeover: "Wild camp takeover: 10% of the resources. Paying Shiny does not use it.",
   kit: "Regular Starter Kit free, on any outpost. Builds over time, no worker.",
-  days: `1 set a day, on any ${WELCOME_SETS} of the ${WELCOME_DAYS} days. New day at 00:00 UTC.`,
+  days: `Starts at the next 00:00 UTC. 1 set a day, on any ${WELCOME_SETS} of the ${WELCOME_DAYS} days.`,
 } as const;
 
 /** The state words on a reward. */
 export const WELCOME_STATE_TEXT = {
+  soon: "Soon",
   ready: "Ready today",
   today: "Used today, back tomorrow",
   done: "All used",
@@ -59,6 +63,10 @@ export const welcomeDaysText = (endsAt: number, now: number): string => {
   return days === 1 ? "1 day left" : `${days} days left`;
 };
 
+/** "Starts in 6h 12m", before the pass's first reset. */
+export const welcomeStartsText = (startsAt: number, now: number): string =>
+  `Starts in ${formatCountdown(Math.max(1, startsAt - now))}`;
+
 /** "5/7 left". */
 export const welcomeLeftText = (left: number, sets: number): string => `${left}/${sets} left`;
 
@@ -66,18 +74,12 @@ export const welcomeLeftText = (left: number, sets: number): string => `${left}/
 const utcDayNumber = (at: number): number => Math.floor(at / DAY);
 
 /**
- * How many days the pass has: the daily resets from `startsAt`'s day to
- * `endsAt` (10; 11 for a pass from before patch 9.1).
+ * Which of the 10 days `at` falls on, counted in daily resets: 1 on the UTC
+ * day the pass started, 2 after the next 00:00 UTC, kept inside 1 to 10 (a
+ * pass from before 9.1 has its extra day on day 10).
  */
-export const welcomeDayCount = (startsAt: number, endsAt: number): number =>
-  Math.max(1, Math.ceil((endsAt - utcDayNumber(startsAt) * DAY) / DAY));
-
-/**
- * Which day of the pass `at` falls on, counted in daily resets: 1 on the UTC
- * day it started, 2 after the next 00:00 UTC (kept inside 1..`days`).
- */
-export const welcomeDay = (startsAt: number, at: number, days: number = WELCOME_DAYS): number =>
-  Math.min(days, Math.max(1, utcDayNumber(at) - utcDayNumber(startsAt) + 1));
+export const welcomeDay = (startsAt: number, at: number): number =>
+  Math.min(WELCOME_DAYS, Math.max(1, utcDayNumber(at) - utcDayNumber(startsAt) + 1));
 
 const picture = (src: string, alt: string): HTMLImageElement => {
   const image = el("img", "events-welcome__picture");
@@ -91,7 +93,7 @@ const picture = (src: string, alt: string): HTMLImageElement => {
 
 const KIT_THUMBNAIL = STARTER_KIT_SUMMARIES.find((kit) => kit.id === 1)?.thumbnail ?? "";
 
-const REWARD_STATES: readonly RewardState[] = ["ready", "today", "done"];
+const REWARD_STATES: readonly RewardState[] = ["soon", "ready", "today", "done"];
 
 /** Puts `state`'s mark and words on a reward row. */
 const paintRewardState = (row: HTMLElement, state: RewardState): void => {
@@ -100,11 +102,11 @@ const paintRewardState = (row: HTMLElement, state: RewardState): void => {
   const chip = row.querySelector<HTMLElement>(".events-welcome__state");
   if (!chip) return;
   chip.className = `events-welcome__state events-welcome__state--${state}`;
-  // A gift while ready, a clock until tomorrow, the claimed tick once all are used.
+  // A gift while ready, a clock until it starts or until tomorrow, the claimed tick once all are used.
   const mark =
     state === "ready"
       ? eventsArt("gift", 16, "events-welcome__state-mark")
-      : state === "today"
+      : state === "today" || state === "soon"
         ? gameIcon("time", { size: 16, decorative: true, className: "events-welcome__state-mark" })
         : eventsArt("tick", 16, "events-welcome__state-mark");
   chip.replaceChildren(mark, el("span", "", WELCOME_STATE_TEXT[state]));
@@ -133,6 +135,7 @@ const reward = (
   usedToday: boolean,
   nextDayAt: number,
   now: number,
+  startsAt: number,
 ): HTMLElement => {
   const row = el("li", "events-welcome__reward");
   row.dataset["reward"] = key;
@@ -141,16 +144,17 @@ const reward = (
   figures.append(el("span", "events-welcome__figure", figure), el("span", "events-welcome__left", welcomeLeftText(left, sets)));
   words.append(el("span", "events-welcome__name", name), figures);
   row.append(picture(src, alt), words, el("span", "events-welcome__state"));
-  const state: RewardState = left <= 0 ? "done" : usedToday ? "today" : "ready";
+  const state: RewardState = now < startsAt ? "soon" : left <= 0 ? "done" : usedToday ? "today" : "ready";
   paintRewardState(row, state);
-  if (state === "today") {
-    row.dataset["backAt"] = String(nextDayAt);
+  // Waiting for the first reset or for tomorrow's: Ready today when it comes.
+  if (state === "soon" || state === "today") {
+    row.dataset["backAt"] = String(state === "soon" ? startsAt : nextDayAt);
     paintWelcomeReward(row, now);
   }
   return row;
 };
 
-/** A day mark's state: gone, today or still to come. */
+/** A day mark's state: gone, today or still to come (`today` 0 before the pass starts). */
 const markState = (day: number, today: number): "gone" | "today" | "left" =>
   day < today ? "gone" : day === today ? "today" : "left";
 
@@ -161,9 +165,9 @@ const MARK_STATES = ["gone", "today", "left"] as const;
  * today lit, the days before it gone. Its own start is on the list.
  */
 export const paintWelcomeTimeline = (timeline: HTMLElement, now: number): void => {
-  const days = Number(timeline.dataset["welcomeDays"]) || WELCOME_DAYS;
-  const today = welcomeDay(Number(timeline.dataset["welcomeStart"]), now, days);
-  timeline.setAttribute("aria-label", `Day ${today} of ${days}`);
+  const start = Number(timeline.dataset["welcomeStart"]);
+  const today = now < start ? 0 : welcomeDay(start, now);
+  timeline.setAttribute("aria-label", today === 0 ? welcomeStartsText(start, now) : `Day ${today} of ${WELCOME_DAYS}`);
   for (const mark of timeline.querySelectorAll<HTMLElement>("[data-day]")) {
     const state = markState(Number(mark.dataset["day"]), today);
     for (const name of MARK_STATES) mark.classList.toggle(`events-welcome__mark--${name}`, name === state);
@@ -181,23 +185,20 @@ interface UsedKind {
 }
 
 /**
- * The days (10, or 11 for a pass from before 9.1) as marks in a row on a track: each day's number in a dot, the
+ * The 10 days as marks in a row on a track: each day's number in a dot, the
  * days gone filled, today lit and bigger, the days left hollow; over each day
  * a reward was used, its picture (one per reward a day). Numbers and
  * pictures, no words (the words on hover and for a screen reader).
  */
 const timeline = (status: Mr2WelcomeStatus, now: number): HTMLElement => {
   const list = el("ol", "events-welcome__timeline");
-  const dayCount = welcomeDayCount(status.startsAt, status.endsAt);
   list.dataset["welcomeStart"] = String(status.startsAt);
-  list.dataset["welcomeDays"] = String(dayCount);
-  list.style.setProperty("--welcome-days", String(dayCount));
-  const daysOf = (uses: readonly number[]) => new Set(uses.map((at) => welcomeDay(status.startsAt, at, dayCount)));
+  const daysOf = (uses: readonly number[]) => new Set(uses.map((at) => welcomeDay(status.startsAt, at)));
   const kinds: UsedKind[] = [
     { key: "takeover", src: FIRST_OPEN_ART, words: "Wild camp takeover used", days: daysOf(status.takeoverUses) },
     { key: "kit", src: KIT_THUMBNAIL, words: "Regular Starter Kit used", days: daysOf(status.kitUses) },
   ];
-  for (let day = 1; day <= dayCount; day++) {
+  for (let day = 1; day <= WELCOME_DAYS; day++) {
     const mark = el("li", "events-welcome__mark");
     mark.dataset["day"] = String(day);
     const onDay = kinds.filter((kind) => kind.days.has(day));
@@ -239,8 +240,15 @@ export const mr2WelcomeCard = (status: Mr2WelcomeStatus, now: number, onGo: () =
   const title = el("h3", "events-card__title", WELCOME_TITLE);
   const days = el("p", "events-card__countdown events-welcome__days");
   days.append(gameIcon("time", { size: 24, decorative: true, className: "events-welcome__time" }));
-  const daysText = el("span", "events-welcome__days-text", welcomeDaysText(status.endsAt, now));
-  daysText.dataset["welcomeEnds"] = String(status.endsAt);
+  const ahead = now < status.startsAt;
+  const daysText = el(
+    "span",
+    "events-welcome__days-text",
+    ahead ? welcomeStartsText(status.startsAt, now) : welcomeDaysText(status.endsAt, now),
+  );
+  // Before the first reset the line counts down to it; the page is read again when it comes.
+  if (ahead) daysText.dataset["welcomeStarts"] = String(status.startsAt);
+  else daysText.dataset["welcomeEnds"] = String(status.endsAt);
   days.append(daysText);
 
   const help = el("button", "btn btn--ghost events-welcome__help-button", "?");
@@ -269,8 +277,8 @@ export const mr2WelcomeCard = (status: Mr2WelcomeStatus, now: number, onGo: () =
   const sets = status.sets;
   const rewards = el("ul", "events-welcome__rewards");
   rewards.append(
-    reward(FIRST_OPEN_ART, "An outpost", "Wild camp takeover", "10% price", "takeover", status.takeoverLeft, sets, status.takeoverToday, status.nextDayAt, now),
-    reward(KIT_THUMBNAIL, "The Regular Starter Kit", "Regular Starter Kit", "Free", "kit", status.kitLeft, sets, status.kitToday, status.nextDayAt, now),
+    reward(FIRST_OPEN_ART, "An outpost", "Wild camp takeover", "10% price", "takeover", status.takeoverLeft, sets, status.takeoverToday, status.nextDayAt, now, status.startsAt),
+    reward(KIT_THUMBNAIL, "The Regular Starter Kit", "Regular Starter Kit", "Free", "kit", status.kitLeft, sets, status.kitToday, status.nextDayAt, now, status.startsAt),
   );
 
   card.append(head, note, timeline(status, now), rewards);

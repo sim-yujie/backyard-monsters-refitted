@@ -24,16 +24,18 @@ import { nextUtcMidnight, utcDay } from "./schedule.js";
  * used or the 10 days are over.
  *
  * **The days are reset days** (owner, 28 Nov 2026: "issued on brand new
- * day rather than joining time"). Day 1 is the UTC day the pass starts on,
- * from its 00:00 UTC; day N is N-1 resets later ({@link welcomeDayOf}); the
- * pass ends at the reset after its last day ({@link welcomeEnd}). Until patch
+ * day rather than joining time", then "issued on next valid clock reset").
+ * A pass starts at a daily reset (00:00 UTC); day N is N-1 resets later
+ * ({@link welcomeDayOf}); the pass ends at the reset after day 10
+ * ({@link welcomeEnd}). Until patch
  * 9.1 the days were 24-hour blocks from the joining moment, so the one-a-day
  * reset could fall twice inside one block and the card drew two uses on one
  * day.
  *
  * **When the days start.** A player who joins Map Room 2 after this ships
- * starts on joining ({@link recordMr2Join}, from `setMapVersion` and
- * `joinMapRoom2`), kept as that day's 00:00 UTC ({@link welcomeDayStart}). A player already on Map Room 2 when it ships has no row,
+ * starts at the next daily reset after joining ({@link recordMr2Join}, from
+ * `setMapVersion` and `joinMapRoom2`; {@link welcomeNextReset}). Until then
+ * nothing is ready and the card says when it starts. A player already on Map Room 2 when it ships has no row,
  * so the first read for them writes one starting on the launch day: the
  * first time any server with this feature started, kept once in
  * `bym.game_setting` under {@link LAUNCH_SETTING_KEY} ({@link launchTime}).
@@ -70,6 +72,9 @@ export const MR2_WELCOME_SECONDS = MR2_WELCOME_DAYS * DAY;
 /** 00:00 UTC of the day `at` falls in (the daily reset before it). */
 export const welcomeDayStart = (at: number): number => Math.floor(at / DAY) * DAY;
 
+/** The first daily reset (00:00 UTC) at or after `at`: when a pass joined at `at` starts. */
+export const welcomeNextReset = (at: number): number => Math.ceil(at / DAY) * DAY;
+
 /**
  * When a pass starting at `start` ends: the first daily reset (00:00 UTC) at
  * or after `start` + 10 days.
@@ -79,7 +84,8 @@ export const welcomeDayStart = (at: number): number => Math.floor(at / DAY) * DA
  *   day 10.
  * - A pass written before 9.1 started at the joining moment. It ended 10 x 24
  *   hours later; rounded up to the next reset it keeps every hour it had and
- *   its last part-day becomes a whole 11th day (e.g. joined 21 Nov 03:56 UTC:
+ *   its last part-day becomes a whole extra day (the card shows it as a longer
+ *   day 10; e.g. joined 21 Nov 03:56 UTC:
  *   was over on 1 Dec 03:56, now at 2 Dec 00:00).
  *
  * The claim's SQL repeats this sum (`claim` in {@link sqlWelcomeStore}).
@@ -116,9 +122,9 @@ export type WelcomeReward = "takeover" | "kit";
 export interface WelcomeStatus {
   /** 00:00 UTC of day 1 (unix seconds); the days count in daily resets from here. */
   startsAt: number;
-  /** The reset after the last day ({@link welcomeEnd}): 10 days after `startsAt`, 11 for a pass from before 9.1. */
+  /** The reset after the last day ({@link welcomeEnd}): 10 days after `startsAt`, one more for a pass from before 9.1. */
   endsAt: number;
-  /** Days left counting today: 10 on day 1 of 10, 1 on the last day. */
+  /** Days left counting today: 10 on day 1 of 10 (and before it starts), 1 on the last day. */
   daysLeft: number;
   /** How many of each reward the pass gives ({@link MR2_WELCOME_SETS}). */
   sets: number;
@@ -166,17 +172,20 @@ export const welcomeReady = (state: WelcomeState | null, reward: WelcomeReward, 
 const known = (uses: readonly (number | null)[]): number[] => uses.filter((at): at is number => at !== null);
 
 /**
- * The card's status: null only when the window is not running. The card stays
- * on the Events page for all the days, rewards used or not (owner, 9 Nov
- * 2026: it left once both were used).
+ * The card's status: null only when the pass is over (or there is none). The
+ * card stays on the Events page for all the days, rewards used or not (owner,
+ * 9 Nov 2026: it left once both were used). Between joining and the first
+ * reset it is there with nothing ready (`now` < `startsAt`), saying when it
+ * starts.
  */
 export const welcomeStatus = (state: WelcomeState | null, now: number): WelcomeStatus | null => {
-  if (!welcomeOpen(state, now)) return null;
+  if (state === null) return null;
   const endsAt = welcomeEnd(state.start);
+  if (now >= endsAt) return null;
   return {
     startsAt: welcomeDayStart(state.start),
     endsAt,
-    daysLeft: Math.max(1, Math.ceil((endsAt - now) / DAY)),
+    daysLeft: now < state.start ? MR2_WELCOME_DAYS : Math.max(1, Math.ceil((endsAt - now) / DAY)),
     sets: MR2_WELCOME_SETS,
     takeover: welcomeReady(state, "takeover", now),
     kit: welcomeReady(state, "kit", now),
@@ -409,12 +418,14 @@ export const readWelcome = async (
 };
 
 /**
- * Starts a player's pass on joining Map Room 2 (nothing if they ever had one),
- * kept as 00:00 UTC of the joining day: day 1 is the day they join and the
- * pass is exactly 10 reset days ({@link welcomeEnd}).
+ * Writes a player's pass on joining Map Room 2 (nothing if they ever had one),
+ * starting at the next daily reset (owner, 28 Nov 2026: "issued on next valid
+ * clock reset"): day 1 is the day after they join (the same day if they join
+ * at 00:00 UTC exactly) and the pass is exactly 10 reset days
+ * ({@link welcomeEnd}). Nothing is ready before it starts.
  */
 export const recordMr2Join = (em: EntityManager, userid: number, now: number): Promise<void> =>
-  welcomeStore().start(em, userid, welcomeDayStart(now));
+  welcomeStore().start(em, userid, welcomeNextReset(now));
 
 /** Uses one of `reward` if one is ready today; whether it did. */
 export const claimWelcome = (em: EntityManager, userid: number, reward: WelcomeReward, now: number): Promise<boolean> =>

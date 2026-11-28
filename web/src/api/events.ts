@@ -130,7 +130,7 @@ export interface EventsBody extends ApiEnvelope {
 export interface Mr2WelcomeStatus {
   /** 00:00 UTC of day 1 (unix seconds); the days are daily resets from here (owner, 28 Nov 2026). */
   startsAt: number;
-  /** The reset after the last day: 10 days after `startsAt`, 11 for a pass from before patch 9.1. */
+  /** The reset after day 10 (a pass from before patch 9.1: one more day, its day 10 lasting two). */
   endsAt: number;
   /** Days left counting today. */
   daysLeft: number;

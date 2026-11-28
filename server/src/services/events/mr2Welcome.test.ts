@@ -20,6 +20,7 @@ import {
   welcomeDayOf,
   welcomeDayStart,
   welcomeEnd,
+  welcomeNextReset,
   welcomeReady,
   welcomeState,
   welcomeStatus,
@@ -34,7 +35,7 @@ const MIDNIGHT = T0 + 16 * HOUR;
 /** 00:00 UTC on 15 Jan 2027: day 1 of a pass joined on that day. */
 const DAY1 = T0 - 8 * HOUR;
 const em = {} as EntityManager;
-/** A pass joined on 15 Jan 2027 (kept as that day's 00:00 UTC). */
+/** A pass that starts at 00:00 UTC on 15 Jan 2027 (joined on 14 Jan, or at 00:00 on the 15th). */
 const fresh = newWelcome(DAY1);
 
 describe("the pass days", () => {
@@ -136,7 +137,7 @@ describe("the days are daily resets (owner, 28 Nov: a brand new day, not the joi
     expect(status).toMatchObject({ takeoverLeft: 0, kitLeft: 0, daysLeft: 4 });
   });
 
-  test("a pass from before 9.1 loses no time: its old end, rounded up to the next reset (an 11th day)", () => {
+  test("a pass from before 9.1 loses no time: its old end, rounded up to the next reset (one extra day)", () => {
     const oldEnd = RYGNUS_START + 10 * DAY;
     expect(new Date(oldEnd * 1000).toISOString()).toBe("2026-12-01T03:56:02.000Z");
     expect(welcomeEnd(RYGNUS_START)).toBe(at("2026-12-02T00:00:00Z"));
@@ -160,30 +161,57 @@ describe("the days are daily resets (owner, 28 Nov: a brand new day, not the joi
     expect(welcomeDayStart(DAY1)).toBe(DAY1);
   });
 
-  describe("a player who joins at 23:59 UTC", () => {
+  describe("joining before the first reset: nothing until 00:00 UTC", () => {
     let previous = welcomeStore();
     afterEach(() => useWelcomeStore(previous));
-    const JOIN = at("2027-01-15T23:59:00Z");
+    const DAY2 = DAY1 + DAY;
 
-    test("day 1 is that last minute, day 2 starts at midnight, the pass ends at the reset after day 10", async () => {
-      expect(JOIN).toBe(DAY1 + DAY - 60);
+    test("a 23:59 joiner starts one minute later and has 10 days from there", async () => {
+      const JOIN = at("2027-01-15T23:59:00Z");
+      expect(JOIN).toBe(DAY2 - 60);
+      expect(welcomeNextReset(JOIN)).toBe(DAY2);
       const store = memoryWelcomeStore();
       previous = useWelcomeStore(store);
       await recordMr2Join(em, 21, JOIN);
-      expect(store.rows.get(21)?.start).toBe(DAY1);
+      expect(store.rows.get(21)?.start).toBe(DAY2);
 
-      expect(await claimWelcome(em, 21, "takeover", JOIN + 30)).toBe(true);
-      expect(welcomeStatus(store.rows.get(21)!, JOIN + 40)).toMatchObject({ daysLeft: 10, takeoverToday: true });
-      // A new day at 00:00 UTC: day 2's takeover.
-      expect(await claimWelcome(em, 21, "takeover", DAY1 + DAY + 30)).toBe(true);
+      // Before the reset: the card is there, nothing is ready.
+      expect(await claimWelcome(em, 21, "takeover", JOIN + 30)).toBe(false);
+      expect(welcomeStatus(store.rows.get(21)!, JOIN + 30)).toMatchObject({
+        startsAt: DAY2,
+        endsAt: DAY2 + 10 * DAY,
+        daysLeft: 10,
+        takeover: false,
+        kit: false,
+        takeoverLeft: 7,
+        kitLeft: 7,
+        takeoverToday: false,
+        kitToday: false,
+      });
+      // 00:00 UTC on 16 Jan: day 1.
+      expect(await claimWelcome(em, 21, "takeover", DAY2 + 30)).toBe(true);
+      expect(await claimWelcome(em, 21, "takeover", DAY2 + DAY + 30)).toBe(true);
       const uses = store.rows.get(21)!.takeoverUses as number[];
-      expect(uses.map((use) => welcomeDayOf(DAY1, use))).toEqual([1, 2]);
-      expect(welcomeStatus(store.rows.get(21)!, DAY1 + DAY + 60)?.daysLeft).toBe(9);
-      // Day 10 is 24 Jan; over at 00:00 UTC on 25 Jan.
-      expect(welcomeDayOf(DAY1, at("2027-01-24T12:00:00Z"))).toBe(10);
-      expect(await claimWelcome(em, 21, "kit", at("2027-01-24T23:59:59Z"))).toBe(true);
-      expect(await claimWelcome(em, 21, "takeover", at("2027-01-25T00:00:00Z"))).toBe(false);
-      expect(welcomeStatus(store.rows.get(21)!, at("2027-01-25T00:00:00Z"))).toBeNull();
+      expect(uses.map((use) => welcomeDayOf(DAY2, use))).toEqual([1, 2]);
+      expect(welcomeStatus(store.rows.get(21)!, DAY2 + 60)?.daysLeft).toBe(10);
+      expect(welcomeStatus(store.rows.get(21)!, DAY2 + DAY + 60)?.daysLeft).toBe(9);
+      // Day 10 is 25 Jan; over at 00:00 UTC on 26 Jan.
+      expect(welcomeDayOf(DAY2, at("2027-01-25T12:00:00Z"))).toBe(10);
+      expect(await claimWelcome(em, 21, "kit", at("2027-01-25T23:59:59Z"))).toBe(true);
+      expect(await claimWelcome(em, 21, "takeover", at("2027-01-26T00:00:00Z"))).toBe(false);
+      expect(welcomeStatus(store.rows.get(21)!, at("2027-01-26T00:00:00Z"))).toBeNull();
+    });
+
+    test("a 00:01 joiner waits almost a day", async () => {
+      const JOIN = at("2027-01-15T00:01:00Z");
+      const store = memoryWelcomeStore();
+      previous = useWelcomeStore(store);
+      await recordMr2Join(em, 22, JOIN);
+      expect(store.rows.get(22)?.start).toBe(DAY2);
+      expect(await claimWelcome(em, 22, "kit", JOIN + 60)).toBe(false);
+      expect(await claimWelcome(em, 22, "kit", DAY2 - 1)).toBe(false);
+      expect(welcomeStatus(store.rows.get(22)!, JOIN + 60)).toMatchObject({ startsAt: DAY2, kit: false, daysLeft: 10 });
+      expect(await claimWelcome(em, 22, "kit", DAY2)).toBe(true);
     });
   });
 });
@@ -192,13 +220,13 @@ describe("when the days start", () => {
   let previous = welcomeStore();
   afterEach(() => useWelcomeStore(previous));
 
-  test("a new joiner starts on the joining day (its 00:00 UTC), once ever", async () => {
+  test("a new joiner starts at the next daily reset (owner, 28 Nov: \"next valid clock reset\"), once ever", async () => {
     const store = memoryWelcomeStore(T0 - 30 * DAY);
     previous = useWelcomeStore(store);
 
     await recordMr2Join(em, 7, T0);
     await recordMr2Join(em, 7, T0 + 50 * DAY);
-    expect(await welcomeState(em, 7, true, T0 + DAY)).toEqual(fresh);
+    expect(await welcomeState(em, 7, true, T0 + DAY)).toEqual(newWelcome(MIDNIGHT));
   });
 
   test("a player on Map Room 2 at launch with no row starts at the launch time, the same for everyone", async () => {
@@ -223,7 +251,9 @@ describe("when the days start", () => {
   test("one of each a day, 7 of each, only inside the days", async () => {
     const store = memoryWelcomeStore(T0);
     previous = useWelcomeStore(store);
-    await recordMr2Join(em, 11, T0);
+    // Joined at 00:00 UTC exactly: that reset is the start.
+    await recordMr2Join(em, 11, DAY1);
+    expect(store.rows.get(11)?.start).toBe(DAY1);
 
     expect(await claimWelcome(em, 11, "takeover", T0 + 10 * DAY)).toBe(false);
     expect(await claimWelcome(em, 11, "takeover", T0 + HOUR)).toBe(true);

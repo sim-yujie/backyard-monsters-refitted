@@ -1232,7 +1232,8 @@
   opacity: 0.6;
 }
 
-.events-welcome__reward--today {
+.events-welcome__reward--today,
+.events-welcome__reward--soon {
   border-color: var(--colour-border-subtle);
 }
 
@@ -1319,6 +1320,11 @@
   color: var(--colour-success);
 }
 
+/* Before the pass's first reset: waiting, like a reward used today. */
+.events-welcome__state--soon {
+  color: var(--colour-text-muted);
+}
+
 .events-welcome__go {
   align-self: center;
   min-width: 220px;
@@ -1369,8 +1375,7 @@
   --mark-used: 22px;
 
   display: grid;
-  /* 10 days; 11 for a pass from before patch 9.1 (set by mr2WelcomeCard.ts). */
-  grid-template-columns: repeat(var(--welcome-days, 10), minmax(0, 1fr));
+  grid-template-columns: repeat(10, minmax(0, 1fr));
   margin: 0;
   padding: 0;
   list-style: none;

@@ -103,6 +103,8 @@ export class EventsDoor {
   private events: readonly EventView[] | null = null;
   /** The "New to Map Room 2" card, or null. */
   private welcome: Mr2WelcomeStatus | null = null;
+  /** The Frontier Pass was read before its first reset: read again once it starts. */
+  private welcomeAhead = false;
   private clock: ServerClock | null = null;
   private loadFailed: string | null = null;
   private claiming: string | null = null;
@@ -175,6 +177,7 @@ export class EventsDoor {
       this.events = body.events;
       setEventsFeed(body.events, this.clock);
       this.welcome = body.mr2Welcome ?? null;
+      this.welcomeAhead = this.welcome !== null && body.now < this.welcome.startsAt;
       // An event that started since the yard loaded dresses it now. The yard's
       // own load already chose among overlapping events (a forced one first),
       // so a season whose event is still on is kept rather than replaced by
@@ -376,7 +379,7 @@ export class EventsDoor {
     }
     if (!this.events) return;
     const stale =
-      (this.welcome !== null && now >= this.welcome.endsAt) ||
+      (this.welcome !== null && (now >= this.welcome.endsAt || (this.welcomeAhead && now >= this.welcome.startsAt))) ||
       this.events.some(
         (event) => isOver(event, now) || (event.calendar?.nextAt != null && now >= event.calendar.nextAt),
       );
