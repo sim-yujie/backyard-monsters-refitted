@@ -1,3 +1,5 @@
+import type {
+  TilingSprite} from "pixi.js";
 import {
   ColorMatrixFilter,
   Container,
@@ -52,12 +54,14 @@ import {
   type NumberMods,
   type Side,
 } from "./creepFx";
-import { FOMOR_ID } from "@/game/combat/rules/champions";
+import { DRULL_ID, FOMOR_ID } from "@/game/combat/rules/champions";
 import { DAVE_ID } from "@/game/combat/rules/specialMoves";
 import { BlastFx, type PunchyStrength } from "./blastFx";
 import { RingFx } from "./ringFx";
+import { AbilityBits } from "./abilityBits";
 import {
   ABILITY_LOOKS,
+  AbilityPainter,
   BubbleFx,
   StoneFx,
   TauntFx,
@@ -65,6 +69,7 @@ import {
   abilityStateTint,
   pounceLift,
   type BubbleAt,
+  type CreepPlace,
   type StoneAt,
   type TauntAt,
 } from "./abilityFx";
@@ -686,6 +691,8 @@ export interface AttackBattleLayerOptions {
   readonly siegeArt?: SiegeArt;
   /** The towers' shot sheet; a test hands in its own. */
   readonly shotSheet?: (url: string) => Promise<Texture>;
+  /** The champion abilities' painted sheet (`abilityBits.ts`); a test hands in its own. */
+  readonly abilitySheet?: (url: string) => Promise<Texture>;
   /** The bomb rain's randomness; `Math.random` unless a test fixes it. */
   readonly random?: () => number;
   /** Wall-clock milliseconds, for the rain after the end; `performance.now` unless a test fixes it. */
@@ -753,6 +760,10 @@ interface CreepView {
   dirtTick: number;
   /** Its dig/arise sound, which waits for the state to hold (`settleBurrow`). */
   burrowSound: BurrowSound;
+  /** The tick its health last rose (Drull's Bloodthirst draws its blood off it). */
+  healTick: number;
+  /** Gorgo's stone surface over his body while Stone Skin lasts, masked to his shape. */
+  stoneCoat: { readonly root: Container; readonly tiles: TilingSprite; readonly mask: Sprite } | null;
 }
 
 type DeathEvent = Extract<BattleVisualEvent, { kind: "death" }>;
@@ -920,6 +931,13 @@ export class AttackBattleLayer {
   private readonly stoneFx = new StoneFx();
   private readonly tauntFx = new TauntFx();
   private readonly trailFx = new TrailFx();
+  /** The abilities' painted pieces (owner, desk card mm-abilities2): over the creeps, and the ground's under them. */
+  private readonly abilityAir = new Container();
+  private readonly abilityBits: AbilityBits;
+  private readonly painter: AbilityPainter;
+  /** Who was in Stone Skin or a Bubble last frame, to crumble or pop it when it ends. */
+  private readonly wasStone = new Set<number>();
+  private readonly wasBubbled = new Set<number>();
   /** Gorgo's Stone Skin greys his body: a colour-matrix filter per creep, while it lasts. */
   private readonly stoneFilters = new Map<number, ColorMatrixFilter>();
   /** The tick of each champion's last ability word and how many went off on it. */
@@ -1013,6 +1031,14 @@ export class AttackBattleLayer {
     this.classic = options.classic ?? classicLook();
     this.juice = this.classic ? "off" : (options.juice ?? juiceLevel());
     this.effectsLow = (options.effectsQuality ?? effectsQuality()) === "low";
+    this.abilityAir.eventMode = "none";
+    this.abilityBits = new AbilityBits(
+      { air: this.abilityAir, ground: () => this.debrisLayer() },
+      this.classic,
+      this.effectsLow || this.juice === "reduced",
+      ...(options.abilitySheet ? [options.abilitySheet] : []),
+    );
+    this.painter = new AbilityPainter(this.abilityBits, this.classic);
 
     for (const building of options.yard.buildings) {
       if (building.maxHp !== null && building.maxHp > 0) {
@@ -1142,6 +1168,7 @@ export class AttackBattleLayer {
     this.effects.addChild(this.tauntFx.root);
     this.effects.addChild(this.bubbleFx.root);
     this.effects.addChild(this.stoneFx.root);
+    this.effects.addChild(this.abilityAir);
     // The blast over the bars; the splats it leaves come after, over it.
     this.effects.addChild(this.blastAir);
 
@@ -1211,6 +1238,8 @@ export class AttackBattleLayer {
     const tick = battle.tick;
     // The effects' clock: the battle's, and after the end the wall's.
     const shown = this.shownTick(tick);
+    // The abilities' held pieces (a bubble, a target mark) are laid again each frame.
+    this.abilityBits.begin();
 
     if (!this.settled) {
       // Creeps the engine still has first, then this frame's events, and only
@@ -1250,7 +1279,9 @@ export class AttackBattleLayer {
     const marks = battle.abilityMarks?.();
     this.towerStatus.sync(battle.weakenedTowers(), marks?.stunned ?? [], marks?.marked ?? []);
     this.drawTaunts(marks?.taunted ?? [], shown);
+    this.drawTowerMarks(marks?.stunned ?? [], marks?.marked ?? [], shown);
     this.trailFx.update(shown);
+    this.abilityBits.update(shown);
 
     if (this.damageDirty) {
       this.damageDirty = false;
@@ -1522,6 +1553,7 @@ export class AttackBattleLayer {
     this.stoneFx.destroy();
     this.tauntFx.destroy();
     this.trailFx.destroy();
+    this.abilityBits.destroy();
     for (const filter of this.stoneFilters.values()) filter.destroy();
     this.stoneFilters.clear();
     for (const burst of this.bursts) burst.ring.destroy();
@@ -1754,13 +1786,17 @@ export class AttackBattleLayer {
   private paintCreeps(tick: number): void {
     const bubbles: BubbleAt[] = [];
     const stones: StoneAt[] = [];
+    const painted = this.painter.ready;
     for (const view of this.views.values()) {
       const shield = view.snapshot?.shield ?? 0;
-      if (shield > 0 && !this.died.has(view.id)) {
-        bubbles.push({ x: view.lastX, y: view.lastY, top: view.top, shield });
+      const alive = !this.died.has(view.id);
+      const stone = view.snapshot?.stone === true && alive;
+      if (painted) {
+        this.paintAbilityStates(view, tick, shield > 0 && alive, stone);
+      } else {
+        if (shield > 0 && alive) bubbles.push({ x: view.lastX, y: view.lastY, top: view.top, shield });
+        if (stone) stones.push({ id: view.id, x: view.lastX, y: view.lastY, top: view.top });
       }
-      const stone = view.snapshot?.stone === true && !this.died.has(view.id);
-      if (stone) stones.push({ id: view.id, x: view.lastX, y: view.lastY, top: view.top });
       this.paintStone(view, stone);
       const bar = view.snapshot?.champion ? CHAMPION_BAR : BAR;
       view.barFront.width = Math.max(0, bar.width * this.shownFraction(view));
@@ -1776,6 +1812,73 @@ export class AttackBattleLayer {
     }
     this.bubbleFx.draw(bubbles);
     this.stoneFx.draw(stones);
+  }
+
+  /**
+   * The states the abilities leave on a creep, painted (owner, desk card
+   * mm-abilities2): Gorgo's stone surface and its crumbling, a Bubble and its
+   * pop, a stunned creep's stars, an acid-marked one's drips, Drull's dust
+   * trail through a Pounce.
+   */
+  private paintAbilityStates(view: CreepView, tick: number, bubbled: boolean, stone: boolean): void {
+    const id = view.id;
+    const place = this.placeOf(id);
+    this.paintStoneCoat(view, stone && place !== null);
+    if (stone) this.wasStone.add(id);
+    else if (this.wasStone.delete(id) && place) this.painter.stoneCrumble(tick, place, tick * 13 + id);
+    if (!place) return;
+    if (bubbled) {
+      this.wasBubbled.add(id);
+      this.painter.bubbleOn(tick, place, id);
+    } else if (this.wasBubbled.delete(id)) {
+      this.painter.bubblePop(tick, place);
+    }
+    const snapshot = view.snapshot;
+    if (snapshot?.stunned) this.painter.dizzy(tick, { x: place.x, y: place.top - 4 }, id);
+    if (snapshot?.marked) this.painter.acidOn(tick, { x: place.mid.x, y: place.mid.y - 6 }, id);
+    if (snapshot?.leap !== undefined) this.painter.pounceTrail(tick, place);
+  }
+
+  /**
+   * Gorgo's stone surface while Stone Skin lasts: the painted stone repeated
+   * over his body, cut to his shape by his own picture as a mask, over the
+   * grey. Low effects keep just the grey.
+   */
+  private paintStoneCoat(view: CreepView, on: boolean): void {
+    if (!on || this.abilityBits.lowEffects || !view.sheet) {
+      if (view.stoneCoat) view.stoneCoat.root.visible = false;
+      return;
+    }
+    let coat = view.stoneCoat;
+    if (!coat) {
+      const tiles = this.abilityBits.stoneTiles();
+      if (!tiles) return;
+      const mask = new Sprite(view.body.texture);
+      mask.eventMode = "none";
+      const root = new Container();
+      root.eventMode = "none";
+      root.addChild(mask, tiles);
+      tiles.mask = mask;
+      tiles.alpha = this.classic ? 0.55 : 0.65;
+      this.depth.addChild(root);
+      coat = { root, tiles, mask };
+      view.stoneCoat = coat;
+    }
+    const body = view.body;
+    coat.mask.texture = body.texture;
+    coat.mask.anchor.copyFrom(body.anchor);
+    coat.mask.position.copyFrom(body.position);
+    coat.mask.scale.copyFrom(body.scale);
+    const width = body.texture.width * Math.abs(body.scale.x);
+    const height = body.texture.height * Math.abs(body.scale.y);
+    coat.tiles.position.set(Math.min(body.x, body.x + body.texture.width * body.scale.x), body.y);
+    coat.tiles.width = width;
+    coat.tiles.height = height;
+    // The stone stays put on him as he moves: its repeat follows his body.
+    coat.tiles.tileScale.set(0.32);
+    coat.root.zIndex = body.zIndex + 0.4;
+    coat.root.alpha = body.alpha;
+    coat.root.visible = body.visible;
   }
 
   /**
@@ -1799,11 +1902,14 @@ export class AttackBattleLayer {
   /** Chest Pound's holds: a line from each taunted tower to its Gorgo. */
   private drawTaunts(taunted: readonly { readonly tower: number; readonly by: number }[], tick: number): void {
     const lines: TauntAt[] = [];
+    const painted = this.painter.ready;
     for (const { tower, by } of taunted) {
       const from = this.towerTop(tower);
       const gorgo = this.views.get(by);
       if (!from || !gorgo || this.died.has(by)) continue;
-      lines.push({ from, to: { x: gorgo.lastX, y: (gorgo.lastY + gorgo.top) / 2 } });
+      const to = { x: gorgo.lastX, y: (gorgo.lastY + gorgo.top) / 2 };
+      if (painted) this.painter.taunt(tick, { x: from.x, y: from.y - 10 }, to, tower);
+      else lines.push({ from, to });
     }
     this.tauntFx.draw(lines, tick);
   }
@@ -1973,6 +2079,8 @@ export class AttackBattleLayer {
       burrowed: false,
       surfaceTick: Number.NEGATIVE_INFINITY,
       dirtTick: 0,
+      healTick: Number.NEGATIVE_INFINITY,
+      stoneCoat: null,
       burrowSound: freshBurrowSound(),
     };
   }
@@ -1993,6 +2101,10 @@ export class AttackBattleLayer {
       stone.destroy();
       this.stoneFilters.delete(view.id);
     }
+    if (view.stoneCoat) view.stoneCoat.root.visible = false;
+    this.wasStone.delete(view.id);
+    this.wasBubbled.delete(view.id);
+    view.healTick = Number.NEGATIVE_INFINITY;
     view.barBack.visible = false;
     view.barFront.visible = false;
     view.status.hide();
@@ -2012,6 +2124,11 @@ export class AttackBattleLayer {
   private dispose(view: CreepView): void {
     this.depth.removeChild(view.body);
     view.body.destroy();
+    if (view.stoneCoat) {
+      this.depth.removeChild(view.stoneCoat.root);
+      view.stoneCoat.root.destroy({ children: true });
+      view.stoneCoat = null;
+    }
     if (view.glint) {
       this.depth.removeChild(view.glint);
       view.glint.destroy();
@@ -2057,6 +2174,7 @@ export class AttackBattleLayer {
         const gained = creep.hp - view.lastHp;
         const over = { x: ground.x, y: view.top - 6 };
         this.fx.number(tick, `creep:${creep.id}`, creep.id, gained, over, "heal");
+        view.healTick = tick;
       }
       view.lastHp = creep.hp;
       this.tunnel(view, creep, ground, tick);
@@ -2270,6 +2388,18 @@ export class AttackBattleLayer {
       target = { x: at.x, y: at.y - aimLift(other?.snapshot) };
     }
     if (!target) target = groundWorld(event.targetIx, event.targetIy, this.origin);
+    // Drull's Bloodthirst: the blow healed him, so blood flies off what he bit into him.
+    if (
+      view &&
+      monsterId === DRULL_ID &&
+      view.snapshot?.champion &&
+      view.healTick >= event.tick &&
+      view.healTick - event.tick <= 4 &&
+      this.painter.ready
+    ) {
+      const id = event.creepId;
+      this.painter.bloodthirst(event.tick, target, () => this.placeOf(id), event.tick * 31 + id);
+    }
 
     if (projectile) {
       const altitude = event.flying ? flyerAltitude(monsterId) : 0;
@@ -2934,13 +3064,27 @@ export class AttackBattleLayer {
       event.toIx !== undefined && event.toIy !== undefined
         ? groundWorld(event.toIx, event.toIy, this.origin)
         : null;
-    if (event.radius > 0) this.spawnRing(event.tick, ground, event.radius, look.colour);
-    if (to && look.landRing > 0) this.spawnRing(event.tick, to, look.landRing, look.colour);
-    if (look.castRing > 0) this.spawnRing(event.tick, ground, look.castRing, look.colour);
-    const middle = { x: ground.x, y: ((view?.top ?? ground.y - BODY_HEIGHT) + ground.y) / 2 };
-    if (to && look.beam) this.trailFx.beam(event.tick, middle, { x: to.x, y: to.y - 14 }, look.colour);
-    if (event.ability === "healingMist") this.mistOver(event, ground, look.colour);
-    if (look.punchy) this.punchy(event.tick, ground, Math.max(40, event.radius * 0.6), look.punchy);
+    if (this.painter.ready) {
+      // The painted look (owner, desk card mm-abilities2, 28 Nov 2026).
+      const id = event.creepId;
+      const place = this.placeOf(id) ?? { ...ground, top: ground.y - BODY_HEIGHT, mid: { x: ground.x, y: ground.y - BODY_HEIGHT / 2 } };
+      const landing = to ? this.landingOf(event, to) : null;
+      this.painter.cast(event.tick, event.ability, place, () => this.placeOf(id), event.radius, landing, event.tick * 31 + id);
+      if (event.ability === "healingMist") this.healedBy(event, ground);
+    } else {
+      if (event.radius > 0) this.spawnRing(event.tick, ground, event.radius, look.colour);
+      if (to && look.landRing > 0) this.spawnRing(event.tick, to, look.landRing, look.colour);
+      if (look.castRing > 0) this.spawnRing(event.tick, ground, look.castRing, look.colour);
+      const middle = { x: ground.x, y: ((view?.top ?? ground.y - BODY_HEIGHT) + ground.y) / 2 };
+      if (to && look.beam) this.trailFx.beam(event.tick, middle, { x: to.x, y: to.y - 14 }, look.colour);
+      if (event.ability === "healingMist") this.mistOver(event, ground, look.colour);
+    }
+    if (look.punchy) {
+      // The painted dust and shockwave stand in for the blast's own ring: its flash stays, and the shake.
+      const painted = this.painter.ready && look.punchy === "full";
+      this.punchy(event.tick, ground, Math.max(40, event.radius * 0.6), painted ? "flash" : look.punchy);
+      if (painted && !this.classic) this.blastFx.jolt(event.tick, 5, 24);
+    }
     // A Pounce shows its word as he takes off, not again as he lands.
     if (!look.word || (event.ability === "pounce" && !to)) return;
     // Two going off on one tick (Fomor's mist and spit) stack, not overlap.
@@ -2949,6 +3093,87 @@ export class AttackBattleLayer {
     this.abilityWords.set(event.creepId, { tick: event.tick, count: stacked + 1 });
     const at = { x: ground.x, y: (view?.top ?? ground.y - BODY_HEIGHT) - 14 - stacked * 16 };
     this.fx.word(event.tick, `ability:${event.creepId}:${stacked}`, event.creepId, look.word, at);
+  }
+
+  /** Where creep `id` is drawn now (feet, top, body's middle), or null once it is gone. */
+  private placeOf(id: number): CreepPlace | null {
+    const view = this.views.get(id);
+    if (!view || this.died.has(id) || !view.body.visible) return null;
+    const body = view.body;
+    const width = body.texture.width * body.scale.x;
+    const height = body.texture.height * body.scale.y;
+    const mid = view.sheet
+      ? { x: body.x + width / 2, y: body.y + height / 2 }
+      : { x: view.lastX, y: (view.top + view.lastY) / 2 };
+    return { x: view.lastX, y: view.lastY, top: view.top, mid };
+  }
+
+  /**
+   * Where a Bubble, an Acid Spit or a Twin Bite lands: the creep standing
+   * there, followed as it moves, or the building's middle.
+   */
+  private landingOf(
+    event: Extract<BattleVisualEvent, { kind: "ability" }>,
+    to: Point,
+  ): { readonly at: Point; readonly follow: (() => Point | null) | null } {
+    let best: CreepView | null = null;
+    let near = 30 * 30;
+    for (const view of this.views.values()) {
+      if (view.id === event.creepId || this.died.has(view.id) || !view.body.visible) continue;
+      const dx = view.lastX - to.x;
+      const dy = view.lastY - to.y;
+      if (dx * dx + dy * dy < near) {
+        near = dx * dx + dy * dy;
+        best = view;
+      }
+    }
+    if (best) {
+      const id = best.id;
+      const at = this.placeOf(id)?.mid ?? to;
+      return { at, follow: () => this.placeOf(id)?.mid ?? null };
+    }
+    // A building: the middle of the nearest one, a little up its picture.
+    let centre: Point | null = null;
+    let closest = 90 * 90;
+    for (const building of this.yard.buildings) {
+      const middle = this.host.centreOf(building.id);
+      if (!middle) continue;
+      const dx = middle.x - to.x;
+      const dy = middle.y - to.y;
+      if (dx * dx + dy * dy < closest) {
+        closest = dx * dx + dy * dy;
+        centre = middle;
+      }
+    }
+    return { at: centre ? { x: centre.x, y: centre.y - 20 } : { x: to.x, y: to.y - 20 }, follow: null };
+  }
+
+  /** Healing Mist: green crosses rise off each of Fomor's side inside its ring. */
+  private healedBy(event: Extract<BattleVisualEvent, { kind: "ability" }>, ground: Point): void {
+    if (event.radius <= 0) return;
+    for (const view of this.views.values()) {
+      const snapshot = view.snapshot;
+      if (!snapshot || view.id === event.creepId || this.died.has(view.id)) continue;
+      if (snapshot.friendly !== event.friendly || snapshot.hp >= snapshot.maxHp) continue;
+      const dx = (view.lastX - ground.x) / event.radius;
+      const dy = (view.lastY - ground.y) / (event.radius / 2);
+      if (dx * dx + dy * dy > 1) continue;
+      const id = view.id;
+      this.painter.healOn(event.tick, () => this.placeOf(id), event.tick * 17 + id);
+    }
+  }
+
+  /** The towers Ground Slam stuns and the buildings Acid Spit marks: dizzy stars, dripping acid. */
+  private drawTowerMarks(stunned: readonly number[], marked: readonly number[], tick: number): void {
+    if (!this.painter.ready) return;
+    for (const id of stunned) {
+      const top = this.towerTop(id);
+      if (top) this.painter.dizzy(tick, { x: top.x, y: top.y - 8 }, id);
+    }
+    for (const id of marked) {
+      const centre = this.host.centreOf(id);
+      if (centre) this.painter.acidOn(tick, { x: centre.x, y: centre.y - 24 }, id);
+    }
   }
 
   /**
