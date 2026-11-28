@@ -1,0 +1,17 @@
+Generate an image using your image generation tool (one image only). Then save the final PNG as sheet.png in the current working directory.
+
+Reference 1 shows the real painted ability icons from the game "Backyard Monsters". Reference 2 is the champion Drull: a dark red two-headed dragon with yellow-orange crests, cream belly plates, gold spots and pale fangs and claws.
+
+Paint SIX different icon designs for Drull's ability OBSIDIAN HIDE: every bite he lands grows black volcanic-glass armour over his hide, so attacks bounce off him. The owner wants these COOL and DRAMATIC, full of character, like Drull's own fearsome power: think the drama of "Twin Bite" (the two snarling red jaws) and "Fists of Doom" (the molten fist) in reference 1, NOT a flat generic buff symbol.
+
+Keep only the frame from the set: each design is ONE bold painted sticker with a thick clean white edge all around it, glossy, slightly 3D, centred in its own cell. Big simple shapes, strong light/dark contrast, so each one still reads at 30 px. Any loose shards or sparks must be few, large, and touching the main shape (inside the white edge).
+
+Layout: a 3 x 2 sheet, 1536 x 1024, flat pure magenta (#FF00FF) background, wide magenta gaps between cells. The six must differ in SILHOUETTE, not only subject:
+(1) TALL shape: ONE Drull head in three-quarter view, snarling with pale fangs, its snout and crest mostly encased in jagged glossy black obsidian, orange lava glowing in the cracks; just a little dark red skin and the yellow crest showing.
+(2) DIAGONAL shape: Drull's dragon foreleg with OPEN, splayed pale claws reaching forward, armoured in sharp black volcanic-glass plates with thin orange lava seams; mostly black and dark red, not a fist.
+(3) ROUND shape: one big dark obsidian dragon-scale plate with a glowing molten orange rim, a red-hot cannonball smashing flat against it and shattering, a few big sparks.
+(4) WIDE shape: Drull's two-headed silhouette roaring, dark red, behind a cracked wall of black glass splitting outward, lava light glowing through the cracks.
+(5) STAR / BURST shape: big black obsidian spikes bursting outward from a white-hot orange molten core, like a volcanic glass explosion.
+(6) A close-up of one fierce yellow dragon eye with a slit pupil glaring out through a crack in black obsidian armour plating, lava glowing in the crack edges.
+
+Colours: glossy black obsidian with dark red and bright orange-yellow lava glow. Do NOT use any pink, purple or magenta inside the art. No text, letters or numbers. Painted, glossy, like the references; not flat line icons.
