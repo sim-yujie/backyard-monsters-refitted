@@ -1,14 +1,13 @@
 {
- "name": "neon",
+ "name": "krampus-neon",
+ "model": "neon",
  "round": "round-1",
  "cells": [
-  "aura_wind_arc",
   "blizzard_gust_plume",
   "blizzard_swirl_1",
   "blizzard_swirl_2",
   "blizzard_swirl_3",
   "blizzard_swirl_4",
-  "cold_mist_swirl",
   "flyer_chill_crystals",
   "frost_ground_patch",
   "frost_shock_arc",
@@ -16,7 +15,6 @@
   "frost_streak",
   "frost_wisp_puff",
   "gathering_frost_vortex",
-  "ground_frost_star",
   "horn_frost_flare",
   "ice_chunk_debris",
   "ice_shard_chip",
@@ -32,15 +30,10 @@
   "stomp_ice_crater",
   "stomp_ice_spire",
   "stomp_ice_spire_alt",
-  "tower_blind_shroud",
   "tower_ice_clamp"
  ],
  "columns": 6,
  "bounds": {
-  "aura_wind_arc": [
-   0.9115,
-   0.9167
-  ],
   "blizzard_gust_plume": [
    0.9167,
    0.7812
@@ -60,10 +53,6 @@
   "blizzard_swirl_4": [
    0.9219,
    0.8802
-  ],
-  "cold_mist_swirl": [
-   0.9167,
-   0.8646
   ],
   "flyer_chill_crystals": [
    0.8177,
@@ -92,10 +81,6 @@
   "gathering_frost_vortex": [
    0.875,
    0.9167
-  ],
-  "ground_frost_star": [
-   0.9167,
-   0.8854
   ],
   "horn_frost_flare": [
    0.901,
@@ -157,205 +142,12 @@
    0.9167,
    0.901
   ],
-  "tower_blind_shroud": [
-   0.9167,
-   0.7656
-  ],
   "tower_ice_clamp": [
    0.9167,
    0.8229
   ]
  },
  "plan": {
-  "frostAura": {
-   "held": [
-    {
-     "cell": "ground_frost_star",
-     "anchor": "caster_feet",
-     "follow": true,
-     "loop_ms": 3600,
-     "size": [
-      "reach*0.30",
-      "reach*0.34"
-     ],
-     "pulse": true,
-     "squash": 0.5,
-     "spin_deg_s": 6,
-     "fade_in_ms": 300,
-     "peak": 0.58,
-     "hold": 0.6,
-     "blend": "normal",
-     "layer": "ground"
-    },
-    {
-     "cell": "aura_wind_arc",
-     "anchor": "caster_feet",
-     "follow": true,
-     "loop_ms": 2800,
-     "count": 5,
-     "ring": "reach*0.46",
-     "orbit_deg_s": 15,
-     "phase_stagger": 0.2,
-     "size": [
-      170,
-      210
-     ],
-     "pulse": true,
-     "squash": 0.5,
-     "spin_deg_s": 15,
-     "fade_in_ms": 300,
-     "peak": 0.5,
-     "hold": 0.4,
-     "tint": [
-      "#dff9ff",
-      "#7ee0ff",
-      "#48b6f5"
-     ],
-     "tint_classic": [
-      "#d6e4ec",
-      "#96b8ce",
-      "#7094ae"
-     ],
-     "blend": "add",
-     "layer": "ground"
-    },
-    {
-     "cell": "snow_flurry_cluster",
-     "anchor": "caster_feet",
-     "follow": true,
-     "loop_ms": 2400,
-     "count": 3,
-     "ring": "reach*0.25",
-     "orbit_deg_s": -22,
-     "phase_stagger": 0.333,
-     "z": 18,
-     "size": [
-      72,
-      94
-     ],
-     "pulse": true,
-     "spin_deg_s": 18,
-     "fade_in_ms": 250,
-     "peak": 0.52,
-     "hold": 0.45,
-     "tint": [
-      "#f4fdff",
-      "#b5eeff",
-      "#7bd6ff"
-     ],
-     "tint_classic": [
-      "#e0eaf0",
-      "#b2cad8",
-      "#8caac0"
-     ],
-     "blend": "add",
-     "layer": "air"
-    }
-   ],
-   "on_each": [
-    {
-     "cell": "frost_snap_burst",
-     "anchor": "tower_top",
-     "start_ms": 0,
-     "life_ms": 400,
-     "size": [
-      22,
-      88
-     ],
-     "ease": "out",
-     "spin_deg_s": 28,
-     "fade_in_ms": 25,
-     "peak": 0.85,
-     "hold": 0.25,
-     "tint": [
-      "#ffffff",
-      "#8ee8ff",
-      "#3ca8f0"
-     ],
-     "tint_classic": [
-      "#e0ecf4",
-      "#98bbd0",
-      "#688ca6"
-     ],
-     "blend": "add",
-     "layer": "air"
-    },
-    {
-     "cell": "ice_shard_chip",
-     "anchor": "tower_top",
-     "start_ms": 20,
-     "life_ms": 460,
-     "count": 3,
-     "ring": 14,
-     "radial_speed": 68,
-     "vz": 52,
-     "gravity": 200,
-     "stagger_ms": 20,
-     "jitter": 0.35,
-     "size": [
-      16,
-      11
-     ],
-     "spin_deg_s": 260,
-     "fade_in_ms": 20,
-     "peak": 0.95,
-     "hold": 0.5,
-     "blend": "normal",
-     "layer": "air"
-    }
-   ],
-   "held_each": [
-    {
-     "cell": "tower_blind_shroud",
-     "anchor": "tower_top",
-     "offset": [
-      0,
-      2
-     ],
-     "loop_ms": 1800,
-     "size": [
-      54,
-      60
-     ],
-     "pulse": true,
-     "fade_in_ms": 220,
-     "peak": 0.88,
-     "hold": 0.7,
-     "blend": "normal",
-     "layer": "air"
-    },
-    {
-     "cell": "cold_mist_swirl",
-     "anchor": "tower_top",
-     "offset": [
-      0,
-      -2
-     ],
-     "loop_ms": 2200,
-     "size": [
-      50,
-      62
-     ],
-     "pulse": true,
-     "spin_deg_s": 32,
-     "fade_in_ms": 220,
-     "peak": 0.45,
-     "hold": 0.5,
-     "tint": [
-      "#dcf8ff",
-      "#88dfff",
-      "#56bff5"
-     ],
-     "tint_classic": [
-      "#cedee8",
-      "#94b4c8",
-      "#7494aa"
-     ],
-     "blend": "add",
-     "layer": "air"
-    }
-   ]
-  },
   "iceShards": {
    "launch": [
     {
@@ -653,7 +445,7 @@
      "pulse": true,
      "fade_in_ms": 120,
      "peak": 0.92,
-     "hold": 0.7,
+     "hold": 1,
      "blend": "normal",
      "layer": "air"
     },
@@ -671,7 +463,7 @@
       44
      ],
      "pulse": true,
-     "fade_in_ms": 120,
+     "fade_in_ms": 200,
      "peak": 0.62,
      "hold": 0.45,
      "tint": [
@@ -1096,7 +888,7 @@
      "pulse": true,
      "fade_in_ms": 140,
      "peak": 0.95,
-     "hold": 0.7,
+     "hold": 1,
      "blend": "normal",
      "layer": "air"
     },
@@ -1114,7 +906,7 @@
      ],
      "pulse": true,
      "spin_deg_s": -18,
-     "fade_in_ms": 160,
+     "fade_in_ms": 300,
      "peak": 0.48,
      "hold": 0.45,
      "tint": [

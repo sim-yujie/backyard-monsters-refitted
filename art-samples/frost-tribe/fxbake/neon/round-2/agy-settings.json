@@ -1,0 +1,1 @@
+{"permissions": {"allow": ["read_file", "read_file(*)", "write_file", "write_file(*)", "edit_file", "edit_file(*)", "invoke_subagent", "invoke_subagent(*)", "manage_subagents", "manage_subagents(*)", "update_steps", "manage_task", "command(ls)", "command(ls *)", "command(cp *)", "command(mv *)", "command(mkdir *)", "command(file *)"]}}

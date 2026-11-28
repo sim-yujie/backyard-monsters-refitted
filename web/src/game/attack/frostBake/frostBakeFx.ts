@@ -1,24 +1,30 @@
 import { Assets, type Container, Rectangle, Sprite, Texture } from "pixi.js";
 import type { Point } from "@/game/yard/YardGrid";
 import { artUrl } from "../../../artUrl";
-import astraSet from "./astra.json";
-import neonSet from "./neon.json";
+import auraAstraSet from "./aura-astra.json";
+import auraNeonSet from "./aura-neon.json";
+import krampusNeonSet from "./krampus-neon.json";
 
 /**
- * The krampus-fx bake-off (owner, 28 Nov 2026, desk frost-abil2: "If we wanna
- * do a frost aura, how would it look? No simple circle nonsense ... propose
- * animations using astra, or neon for me to vet"). Krampus's Frost aura, Ice
- * Shards and Blizzard Stomp as each designer model planned them
- * (`art-samples/frost-tribe/fxbake/<model>/round-N/motion.json`, from the one
- * shared brief `fxbake/brief.md`), drawn from that model's own sheet. A dev
- * switch, `?frostFx=current|astra|neon` (named apart from mm-anim's `?fxSet=`);
- * `current`, the default, is today's look, untouched. Every set is played by
- * this one reader, so neither is built with more care than the other.
- * Drawing only: nothing here reaches the battle.
+ * Krampus's frost abilities, drawn from a designer model's plan and sheet
+ * (the krampus-fx bake-off, owner 28 Nov 2026, desk frost-abil2: "No simple
+ * circle nonsense"). Every set is played by this one reader, so no designer's
+ * plan is built with more care than another's. Drawing only: nothing here
+ * reaches the battle.
+ *
+ * - Ice Shards and Blizzard Stomp: neon's (owner's pick, 28 Nov 2026), for
+ *   every player ({@link KRAMPUS_ABILITY_SET}, `krampus-neon.json`, from
+ *   `art-samples/frost-tribe/fxbake/neon/round-1/motion-hold.json`: its plan
+ *   with neon's own answer on which held marks stay steady).
+ * - Frost aura: round 2 of the bake-off (round 1: "Neither: try again"),
+ *   astra's and neon's behind the DEV-only switch `?frostFx=astra|neon`
+ *   (`aura-astra.json`, `aura-neon.json`, from `fxbake/<model>/round-2/`);
+ *   `current`, the default, draws no aura, as today.
  */
 
 export type FrostFxId = "current" | "astra" | "neon";
 
+/** The DEV switch for the aura bake-off; "current" (no aura drawn) unless it names a model. */
 export const frostFxFromUrl = (): FrostFxId => {
   if (typeof location === "undefined") return "current";
   const wanted = new URLSearchParams(location.search).get("frostFx");
@@ -105,6 +111,8 @@ export interface FrostPlan {
 
 export interface FrostSet {
   readonly name: string;
+  readonly model?: string;
+  readonly round?: string;
   readonly cells: readonly string[];
   readonly columns: number;
   /** Each cell's visible bounds as a share of its 192 px cell [width, height]. */
@@ -113,12 +121,16 @@ export interface FrostSet {
   readonly plan: FrostPlan;
 }
 
-const SETS: Record<Exclude<FrostFxId, "current">, FrostSet> = {
-  astra: astraSet as unknown as FrostSet,
-  neon: neonSet as unknown as FrostSet,
+/** Ice Shards and Blizzard Stomp for every player: neon's. */
+export const KRAMPUS_ABILITY_SET = krampusNeonSet as unknown as FrostSet;
+
+const AURA_SETS: Record<Exclude<FrostFxId, "current">, FrostSet> = {
+  astra: auraAstraSet as unknown as FrostSet,
+  neon: auraNeonSet as unknown as FrostSet,
 };
 
-export const frostSet = (id: FrostFxId): FrostSet | null => (id === "current" ? null : SETS[id]);
+/** A round-2 aura set for the DEV switch, or null for today's (no aura drawn). */
+export const frostAuraSet = (id: FrostFxId): FrostSet | null => (id === "current" ? null : AURA_SETS[id]);
 
 const CELL = 192;
 

@@ -1,0 +1,32 @@
+{
+ "sheets": [
+  {
+   "file": "modern-sheet.jpg",
+   "look": "modern",
+   "kind": "solid",
+   "columns": 3,
+   "rows": 2,
+   "cells": [
+    "core_permafrost",
+    "rime_bank_wide",
+    "rime_bank_crest",
+    "mid_frost_patch",
+    "tower_frost_crown",
+    "ice_chip_pop"
+   ]
+  },
+  {
+   "file": "lights-sheet.jpg",
+   "look": "both",
+   "kind": "light",
+   "columns": 2,
+   "rows": 2,
+   "cells": [
+    "frost_fern_frame",
+    "frost_snap_burst",
+    "frost_air_motes",
+    "frost_zone_ring"
+   ]
+  }
+ ]
+}

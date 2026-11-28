@@ -1,6 +1,6 @@
 import { creepSkin } from "./monsterSkins";
 import { FrostAreaFx, auraEllipse } from "./frostAuraFx";
-import { FrostBakeFx, frostFxFromUrl, frostSet } from "./frostBake/frostBakeFx";
+import { FrostBakeFx, type FrostBakeHost, frostAuraSet, frostFxFromUrl, KRAMPUS_ABILITY_SET } from "./frostBake/frostBakeFx";
 import { KRAMPUS_ID, QUAKE_STRIKE_FRAME, krampusAuraRadius } from "@/game/combat/rules/champions";
 import {
   ColorMatrixFilter,
@@ -957,8 +957,10 @@ export class AttackBattleLayer {
 
   /** Projectiles, smoke and damage numbers (#63, #68); its root sits last in the overlay. */
   private readonly fx: CreepFx;
-  /** DEV only (`?frostFx=astra|neon`): the krampus-fx bake-off's Krampus abilities ({@link FrostBakeFx}). */
+  /** Krampus's Ice Shards and Blizzard Stomp, neon's design ({@link FrostBakeFx}). */
   private frostBake: FrostBakeFx | null = null;
+  /** DEV only (`?frostFx=astra|neon`): the krampus-fx bake-off's round-2 Frost aura ({@link FrostBakeFx}). */
+  private frostAura: FrostBakeFx | null = null;
   /** Loot orbs and loot numbers (`ParticleLoot`, `ParticleText`). */
   private readonly lootFx: LootFx;
   /** The damage step each building was last seen at, for the smoke on a crossing. */
@@ -1081,30 +1083,31 @@ export class AttackBattleLayer {
       this.classic,
     );
     this.overlay.addChild(this.fx.root);
-    const bakeSet = import.meta.env.DEV ? frostSet(frostFxFromUrl()) : null;
-    if (bakeSet) {
-      this.frostBake = new FrostBakeFx(bakeSet, {
-        air: () => this.airLayer(),
-        ground: () => this.debrisLayer(),
-        krampus: () => this.bakeKrampus(),
-        creep: (id) => {
-          const view = this.views.get(id);
-          return view ? { feet: { x: view.lastX, y: view.lastY }, top: view.top, lift: aimLift(view.snapshot ?? undefined) } : null;
-        },
-        tower: (id) => {
-          const base = this.host.centreOf(id);
-          const building = options.yard.buildings.find((each) => each.id === id);
-          if (!base || !building) return null;
-          return { base, top: { x: base.x, y: Math.min(building.worldY + BAR_OFFSET.y - 6, base.y - 50) } };
-        },
-        blinded: () => this.session.battle()?.blindedTowers?.() ?? [],
-        towerPoints: () => (this.session.battle()?.towerSights?.() ?? []).map((one) => ({ id: one.id, x: one.x, y: one.y })),
-        jolt: (tick, strength, life) => this.blastFx.jolt(tick, strength, life),
-        auraRadius: (level) => krampusAuraRadius(level),
-        classic: this.classic,
-        low: this.effectsLow,
-      });
-    }
+    const frostHost: FrostBakeHost = {
+      air: () => this.airLayer(),
+      ground: () => this.debrisLayer(),
+      krampus: () => this.bakeKrampus(),
+      creep: (id) => {
+        const view = this.views.get(id);
+        return view ? { feet: { x: view.lastX, y: view.lastY }, top: view.top, lift: aimLift(view.snapshot ?? undefined) } : null;
+      },
+      tower: (id) => {
+        const base = this.host.centreOf(id);
+        const building = options.yard.buildings.find((each) => each.id === id);
+        if (!base || !building) return null;
+        return { base, top: { x: base.x, y: Math.min(building.worldY + BAR_OFFSET.y - 6, base.y - 50) } };
+      },
+      blinded: () => this.session.battle()?.blindedTowers?.() ?? [],
+      towerPoints: () => (this.session.battle()?.towerSights?.() ?? []).map((one) => ({ id: one.id, x: one.x, y: one.y })),
+      jolt: (tick, strength, life) => this.blastFx.jolt(tick, strength, life),
+      auraRadius: (level) => krampusAuraRadius(level),
+      classic: this.classic,
+      // "Reduce effects" draws fewer bits, as the towers' effects do.
+      low: this.effectsLow || this.juice === "reduced",
+    };
+    this.frostBake = new FrostBakeFx(KRAMPUS_ABILITY_SET, frostHost);
+    const auraSet = import.meta.env.DEV ? frostAuraSet(frostFxFromUrl()) : null;
+    if (auraSet) this.frostAura = new FrostBakeFx(auraSet, frostHost);
 
     // The building side (issues #64, #66, #67). The towers draw into the same
     // `fire` graphics the tracers used; the building bars go under the splats,
@@ -1273,6 +1276,7 @@ export class AttackBattleLayer {
       }
       this.frostBake.update(shown);
     }
+    this.frostAura?.update(shown);
 
     if (this.damageDirty) {
       this.damageDirty = false;
@@ -1549,6 +1553,8 @@ export class AttackBattleLayer {
     for (const scorch of this.scorches) scorch.destroy();
     this.scorches.length = 0;
     this.blastFx.destroy();
+    this.frostBake?.destroy();
+    this.frostAura?.destroy();
     this.raiseFx.destroy();
     for (const filter of this.zombieFilters.values()) filter.destroy();
     this.zombieFilters.clear();
@@ -2764,15 +2770,11 @@ export class AttackBattleLayer {
     if (event.kind === "quake") {
       const at = groundWorld(event.ix, event.iy, this.origin);
       if (this.frostBake && this.views.get(event.creepId)?.monsterId === KRAMPUS_ID) {
-        // The bake-off's Blizzard Stomp in place of Korath's rings and the icy one.
+        // Krampus's Blizzard Stomp (neon's) in place of Korath's rings.
         this.frostBake.slam(event.tick, event.creepId, event.ix, event.iy, event.radius);
         return;
       }
       this.spawnQuake(event.tick, at, event.radius);
-      // Krampus's Blizzard Stomp (beta 10): an icy ring over the quake.
-      if (this.views.get(event.creepId)?.monsterId === "G6") {
-        this.spawnRing(event.tick, at, event.radius, 0x9fe4ff);
-      }
       return;
     }
     if (event.kind === "charge") {

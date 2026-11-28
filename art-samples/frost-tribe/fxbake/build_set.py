@@ -1,14 +1,18 @@
 """Cuts one krampus-fx entrant's sheets into the game's 192 px atlas, the same way for every entrant
 (after mm-anim's bake/build_set.py, so both bake-offs cut alike).
 
-python3 -I art-samples/frost-tribe/fxbake/build_set.py <worktree> <set>     (set = astra | neon)
+python3 -I art-samples/frost-tribe/fxbake/build_set.py <worktree> <model> [round] [name] [abilities] [motion file]
+  e.g.  build_set.py <wt> neon round-1 krampus-neon iceShards,blizzardStomp motion-hold.json
+        build_set.py <wt> astra round-2 aura-astra frostAura
 
-Reads fxbake/<set>/<round>/ (round from fxbake/<set>/use.txt): sheets.json (the entrant's cells.json in one
+Reads fxbake/<model>/<round>/ (round from fxbake/<model>/use.txt if not given): sheets.json (the entrant's cells.json in one
 form: {"sheets": [{"file", "look": modern|classic|both, "kind": solid|light, "columns", "rows", "cells"}]}) and
 motion.json, and writes:
-- server/public/assets/fx/frostbake/<set>.modern.webp and <set>.classic.webp: every named cell, 6 across, the
-  same order in both looks; a cell only one look has is copied into the other;
-- web/src/game/attack/frostBake/<set>.json: { name, round, cells, columns, bounds, plan } for frostBakeFx.ts.
+- server/public/assets/fx/frostbake/<name>.modern.webp and <name>.classic.webp: every cell the kept abilities use,
+  6 across, the same order in both looks; a cell only one look has is copied into the other;
+- web/src/game/attack/frostBake/<name>.json: { name, model, round, cells, columns, bounds, plan } for frostBakeFx.ts.
+`abilities` (comma list, default all) keeps only those abilities of the plan, and only their cells in the atlas.
+`motion file` (default motion.json) names the plan in the round folder; keys starting with "_" (notes) are dropped.
 
 Solid sheets: magenta keyed off (artlib.key + clean). Light sheets: black is see-through, brightness is alpha,
 drawn white (the game tints). Every single piece is cropped to what it holds and fitted to 176 px, centred.
@@ -23,9 +27,12 @@ from PIL import Image
 sys.path.insert(0, "/home/yujiesim/Coding/backyard-monsters-refitted/.claude/skills/game-art/scripts")
 from artlib import cells as grid_cells, clean, key  # noqa: E402
 
-WT, SET = sys.argv[1], sys.argv[2]
-BASE = os.path.join(WT, "art-samples", "frost-tribe", "fxbake", SET)
-ROUND = open(os.path.join(BASE, "use.txt")).read().strip()
+WT, MODEL = sys.argv[1], sys.argv[2]
+BASE = os.path.join(WT, "art-samples", "frost-tribe", "fxbake", MODEL)
+ROUND = sys.argv[3] if len(sys.argv) > 3 else open(os.path.join(BASE, "use.txt")).read().strip()
+SET = sys.argv[4] if len(sys.argv) > 4 else MODEL
+KEEP = sys.argv[5].split(",") if len(sys.argv) > 5 and sys.argv[5] else None
+MOTION = sys.argv[6] if len(sys.argv) > 6 else "motion.json"
 SRC = os.path.join(BASE, ROUND)
 CELL, FIT, COLS = 192, 176, 6
 
@@ -80,7 +87,8 @@ def flipbooks_of(node, found):
 
 
 spec = json.load(open(os.path.join(SRC, "sheets.json")))
-plan = json.load(open(os.path.join(SRC, "motion.json")))
+plan = json.load(open(os.path.join(SRC, MOTION)))
+plan = {k: v for k, v in plan.items() if not k.startswith("_") and (KEEP is None or k in KEEP)}
 flipbooks = flipbooks_of(plan, [])
 raw = {"modern": {}, "classic": {}}
 for sheet in spec["sheets"]:
@@ -96,7 +104,23 @@ for sheet in spec["sheets"]:
         for look in looks:
             raw[look][name] = piece
 
-names = sorted(set(raw["modern"]) | set(raw["classic"]))
+used = set()
+
+
+def _used(node):
+    if isinstance(node, dict):
+        if isinstance(node.get("cell"), str):
+            used.add(node["cell"])
+        for v in node.values():
+            _used(v)
+    elif isinstance(node, list):
+        for v in node:
+            _used(v)
+
+
+_used(plan)
+used |= {f for book in flipbooks for f in book}
+names = sorted((set(raw["modern"]) | set(raw["classic"])) & used)
 fitted = {"modern": {}, "classic": {}}
 for look in ("modern", "classic"):
     have = raw[look]
@@ -136,21 +160,9 @@ for frames in flipbooks:
         union = [max(bounds[f][0] for f in frames), max(bounds[f][1] for f in frames)]
         for f in frames:
             bounds[f] = union
-used = set()
-def _used(node):
-    if isinstance(node, dict):
-        if isinstance(node.get("cell"), str):
-            used.add(node["cell"])
-        for v in node.values():
-            _used(v)
-    elif isinstance(node, list):
-        for v in node:
-            _used(v)
-_used(plan)
-used |= {f for book in flipbooks for f in book}
 if used - set(names):
     print("CELLS THE PLAN NAMES BUT NO SHEET HOLDS:", sorted(used - set(names)))
 web = os.path.join(WT, "web/src/game/attack/frostBake", f"{SET}.json")
-json.dump({"name": SET, "round": ROUND, "cells": names, "columns": COLS, "bounds": bounds, "plan": plan},
+json.dump({"name": SET, "model": MODEL, "round": ROUND, "cells": names, "columns": COLS, "bounds": bounds, "plan": plan},
           open(web, "w"), indent=1)
 print(web, len(names), "cells")
