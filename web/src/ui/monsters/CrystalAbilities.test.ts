@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ChampionSaveEntry } from "@/api/types";
-import { abilitiesUnlocked, crystalsHeld } from "@/game/events/crystals";
-import { CrystalAbilities, ownedChampion, unlockNote } from "./CrystalAbilities";
+import { CHAMPION_ABILITIES, abilitiesUnlocked, crystalsHeld } from "@/game/events/crystals";
+import { CrystalAbilities, abilityIconUrl, ownedChampion, unlockNote } from "./CrystalAbilities";
 
 /**
  * The Champion tab's Abilities view (Monster Madness crystals, 27 Nov 2026):
@@ -86,5 +88,23 @@ describe("the Abilities view", () => {
     await vi.waitFor(() => expect(crystal).toHaveBeenCalledWith(2));
     await vi.waitFor(() => expect(document.querySelector(".crystal-dialog--unlocked")).not.toBeNull());
     expect(document.querySelector(".crystal-dialog--unlocked")?.textContent).toContain("Ready when you get Drull.");
+  });
+});
+
+describe("ability icons", () => {
+  const all = Object.values(CHAMPION_ABILITIES).flat();
+  const file = (ability: (typeof all)[number]) => abilityIconUrl(ability).replace(/^.*?\/(?=ui\/|status-icons\/)/, "");
+
+  it("gives every ability a painted icon on disk", () => {
+    for (const ability of all) {
+      const onDisk = path.resolve(__dirname, "../../../public", file(ability));
+      expect(existsSync(onDisk), `${ability.id}: ${onDisk}`).toBe(true);
+    }
+  });
+
+  it("gives every ability its own icon (Obsidian Hide no longer borrows Stone Skin's)", () => {
+    const files = all.map(file);
+    expect(new Set(files).size).toBe(files.length);
+    expect(file(all.find((a) => a.id === "obsidianHide")!)).toBe("ui/abilities/obsidian-hide.webp");
   });
 });
