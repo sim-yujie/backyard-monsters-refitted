@@ -571,3 +571,25 @@ export const openMoveTray = async (page: Page, state: "in" | "out"): Promise<boo
     .catch(() => undefined);
   return true;
 };
+
+/**
+ * Opens the "Your outpost" card (bug 73) from the build's preview: a busy
+ * outpost, seven kinds housed, every button (no outposts in a sandbox).
+ */
+export const openYardCard = async (page: Page): Promise<boolean> => {
+  const opened = await page.evaluate(() => {
+    const open = (globalThis as Record<string, unknown>)["__yardCardPreview"];
+    if (typeof open !== "function") return false;
+    const shut = (open as () => unknown)();
+    (globalThis as Record<string, unknown>)["__yardCardClose"] = shut;
+    return typeof shut === "function";
+  });
+  if (!opened) return false;
+  await page.locator(".overlay__layer .yard-card").first().waitFor({ timeout: 10_000 });
+  await page
+    .waitForFunction(() => [...document.querySelectorAll(".overlay__layer .yard-card img")].every((image) => (image as HTMLImageElement).complete), null, {
+      timeout: 10_000,
+    })
+    .catch(() => undefined);
+  return true;
+};
