@@ -37,9 +37,17 @@ export interface DefenceWatch {
 /** Why a defence cannot be watched: fought under other rules, or kept without its battle. */
 export type DefenceRefusal = "update" | "missing";
 
+/**
+ * What a replay fought under older battle rules says instead of playing
+ * (beta 10, owner, desk b10-numbers, 27 Nov 2026: the rebalance changes every
+ * battle, so defences from before it stay in the list but do not play). Name
+ * the release here again whenever a later one changes the battle rules.
+ */
+export const OLDER_RULES_REPLAY_TEXT = "Recorded before beta 10";
+
 /** What the player is told instead of Watch (owner decision 5). */
 export const DEFENCE_REFUSAL_TEXT: Readonly<Record<DefenceRefusal, string>> = {
-  update: "Replay not available after a game update",
+  update: OLDER_RULES_REPLAY_TEXT,
   missing: "Replay not available",
 };
 

@@ -172,9 +172,11 @@ import {
   TESLA_WIND_END,
   TESLA_ZAP_FRAMES,
   SPURTZ_CULL_FRAMES,
+  FLASH_SPURTZ_HATCH,
+  MAIN_YARD_SPURTZ_HATCH,
+  type SpurtzHatchRule,
   SPURTZ_CULL_ROLL,
   SPURTZ_CULL_TICKS,
-  SPURTZ_HATCH_CHANCE,
   SPURTZ_ID,
   SPURTZ_LOOK,
   SPURTZ_MAX_TARGETS,
@@ -724,6 +726,12 @@ export interface BattleOptions {
   readonly descentYard?: number;
   /** Overrides {@link SHELL_BLASTS_WHERE_IT_LANDS} for this battle; absent, it holds. */
   readonly shellBlastsWhereItLands?: boolean;
+  /**
+   * Overrides {@link MAIN_YARD_SPURTZ_HATCH}, how a Spurtz Cannon hatches
+   * Spurtz on a player's main yard, for this battle (tests and balance runs);
+   * absent, it holds. Other yards hatch as Flash's whatever this says.
+   */
+  readonly spurtzHatch?: SpurtzHatchRule;
   /**
    * Whether an attacking Krallen fights by Flash's two rules of patch 8.6
    * (owner, 25 Nov 2026; fidelity note 9): she keeps her route on her walking
@@ -2374,6 +2382,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   /** The other towers' shells in the air, in the order fired (fidelity note 1). */
   const towerShells: TowerShell[] = [];
   const blastWhereItLands = options.shellBlastsWhereItLands ?? SHELL_BLASTS_WHERE_IT_LANDS;
+  // How the Spurtz Cannons hatch here: the main-yard rule on a player's main yard (beta 10).
+  const spurtzHatch: SpurtzHatchRule =
+    yard.kind === "main" ? (options.spurtzHatch ?? MAIN_YARD_SPURTZ_HATCH) : FLASH_SPURTZ_HATCH;
   /** Spurtz hatched this step, on their feet at its end: screen points, whole. */
   const pendingSpurtz: Array<{ readonly tower: Tower; readonly x: number; readonly y: number }> =
     [];
@@ -3147,6 +3158,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       { x: screenX / 2 + screenY, y: screenY - screenX / 2 },
       true,
       "defend",
+      -1,
+      spurtzHatch.strength,
     );
     spurtz.disposable = true;
     spurtz.hatchedBy = tower.building.id;
@@ -7601,9 +7614,19 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       report.damageDealt += towerHurt(report, hit.creep, dealt);
       if (before > 0 && hit.creep.hp <= 0) report.kills += 1;
     }
-    if (rng.float() > SPURTZ_HATCH_CHANCE) {
+    // Flash rolls `Math.random() > 0.5`; a chance c hatches above 1 - c, so
+    // Flash's own chance draws and decides exactly as before.
+    if (rng.float() > 1 - spurtzHatch.chance && broodRoom(tower)) {
       pendingSpurtz.push({ tower, x: Math.trunc(shell.x), y: Math.trunc(shell.y) });
     }
+  };
+
+  /** Whether this cannon may hatch another Spurtz under {@link spurtzHatch}'s `most`. */
+  const broodRoom = (tower: Tower): boolean => {
+    if (!Number.isFinite(spurtzHatch.most)) return true;
+    const alive = tower.gun?.hatched.filter((one) => one.hp > 0 && !one.gone).length ?? 0;
+    const waiting = pendingSpurtz.filter((one) => one.tower === tower).length;
+    return alive + waiting < spurtzHatch.most;
   };
 
   /**
