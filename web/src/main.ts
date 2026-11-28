@@ -148,6 +148,13 @@ if (import.meta.env.DEV || import.meta.env.VITE_LAYOUT_CHECK === "1") {
       return modal ? previewRaidAlert(modal, champion, level) : null;
     };
   });
+  // The "Your outpost" card at its busiest (bug 73: it ran off a short screen).
+  void import("@/ui/maproom/yardCardPreview").then(({ previewYardCard }) => {
+    (globalThis as Record<string, unknown>)["__yardCardPreview"] = () => {
+      const modal = document.querySelector<HTMLElement>(".overlay__layer--modal");
+      return modal ? previewYardCard(modal) : null;
+    };
+  });
   // The attack screen's dock (owner, 18 Nov 2026): the real attack scene on the own yard.
   void import("@/game/attack/attackDockPreview").then(({ previewAttackDock }) => {
     (globalThis as Record<string, unknown>)["__attackDock"] = (kind?: "attack" | "baiter") =>

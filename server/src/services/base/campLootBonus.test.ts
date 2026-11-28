@@ -33,9 +33,9 @@ describe("withCampLootBonus", () => {
     expect(withCampLootBonus(credit, false)).toBe(credit);
   });
 
-  test("Goo gets both bonuses: x1.25 then x1.15", () => {
+  test("Goo gets both bonuses: x1.25 (before the 9.1 step-down) then x1.15", () => {
     const credit = { r1: 1_000_000, r2: 1_000_000, r3: 1_000_000, r4: 1_000_000 };
-    expect(withCampLootBonus(withTribeGooBonus(credit, true), true)).toEqual({
+    expect(withCampLootBonus(withTribeGooBonus(credit, true, 0), true)).toEqual({
       r1: 1_150_000,
       r2: 1_150_000,
       r3: 1_150_000,
