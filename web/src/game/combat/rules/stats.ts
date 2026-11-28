@@ -16,8 +16,10 @@ import {
   TOWER_STATS,
   TRAP_STATS,
 } from "./combatStatsData.js";
+import { WILD_CHAMPION_PROPS } from "./wildChampions.js";
 import type {
   ChampionCombatProps,
+  ChampionCombatStat,
   GridCostRect,
   MonsterCombatProps,
   TowerLevelStats,
@@ -262,12 +264,25 @@ export const specialistMultiplier = (targetGroup: number, kind: string): number 
 
 /* ── Champions ────────────────────────────────────────────────────────────── */
 
+/**
+ * Every champion the engine can field: the ownable ones (`CHAMPION_PROPS`)
+ * and the wild ones only the game's own armies bring (`wildChampions.ts`).
+ */
+const ANY_CHAMPION: Readonly<Record<string, ChampionCombatStat>> = {
+  ...CHAMPION_PROPS,
+  ...WILD_CHAMPION_PROPS,
+};
+
+/** Whether a champion id is a wild one (Krampus): never a player's, never in a fling. */
+export const isWildChampion = (id: string | undefined): boolean =>
+  id !== undefined && Object.prototype.hasOwnProperty.call(WILD_CHAMPION_PROPS, id);
+
 /** The keys of {@link ChampionCombatProps} that hold a ladder. */
 export type ChampionStatKey = keyof ChampionCombatProps;
 
 /** One champion number stat at one level, 0 when the champion has none. */
 export const championStat = (id: string, key: ChampionStatKey, level: number): number => {
-  const values = CHAMPION_PROPS[id]?.props[key];
+  const values = ANY_CHAMPION[id]?.props[key];
   if (!values) return 0;
   const value = atLevel(values as readonly (number | string)[], level, 0);
   return typeof value === "number" ? value : 0;
@@ -287,7 +302,7 @@ export const championMode = (
   key: "movement" | "attack",
   level: number,
 ): string | undefined =>
-  atLevel<string | undefined>(CHAMPION_PROPS[id]?.props[key], level, undefined);
+  atLevel<string | undefined>(ANY_CHAMPION[id]?.props[key], level, undefined);
 
 /**
  * The champion id an `attackerchampion` entry's `t` names, or undefined.
@@ -296,9 +311,9 @@ export const championMode = (
  * (`docs/design/server-combat.md` §2.5), and the stat table is keyed by id.
  */
 export const championByType = (t: number): string | undefined =>
-  Object.keys(CHAMPION_PROPS).find((id) => CHAMPION_PROPS[id]?.t === t);
+  Object.keys(ANY_CHAMPION).find((id) => ANY_CHAMPION[id]?.t === t);
 
-/** Every champion id the table holds, in table order. */
+/** Every ownable champion id the table holds, in table order (the wild ones are not listed). */
 export const championIds = (): readonly string[] => Object.keys(CHAMPION_PROPS);
 
 /**
@@ -360,7 +375,7 @@ export const championStatWithFood = (
   const base = championStat(id, key, level);
   const rank = Math.max(Math.floor(foodBonus), 0);
   if (!rank) return base;
-  const ladder = CHAMPION_PROPS[id]?.props[CHAMPION_BONUS_KEY[key]];
+  const ladder = ANY_CHAMPION[id]?.props[CHAMPION_BONUS_KEY[key]];
   if (!ladder || ladder.length === 0) return base;
   const bonus = ladder[Math.min(rank, ladder.length) - 1];
   return base + (typeof bonus === "number" ? bonus : 0);

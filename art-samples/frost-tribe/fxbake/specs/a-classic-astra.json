@@ -1,0 +1,1 @@
+{"name": "a-classic-astra", "fx": "astra", "look": "classic", "params": "?krampus=6", "army": [{"name": "Pokey", "level": 6, "count": 2}], "drops": [{"pick": "Pokey", "x": 110, "y": 330, "at": 0.2}], "seconds": 9.5, "zoomIn": 0, "crop": {"x": 20, "y": 150, "width": 800, "height": 450}, "fps": 120, "every": 4, "slow": [[1.0, 2.6], [6.9, 8.6]]}

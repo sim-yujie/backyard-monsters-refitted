@@ -56,7 +56,7 @@ export const MAX_MARCHERS = 10;
 /** The tribe's portrait at the end of the army's road: Modern's painting, Classic's Flash splash. */
 export const tribeGoalPicture = (tribe: string, classic: boolean = classicLook()): string | null => {
   const file = tribe.toLowerCase();
-  if (!["legionnaire", "kozu", "abunakki", "dreadnaut"].includes(file)) return null;
+  if (!["legionnaire", "kozu", "abunakki", "dreadnaut", "frost"].includes(file)) return null;
   return classic ? artUrl(`/assets/popups/tribe_${file}.v2.png`) : tribePictureUrl(tribe);
 };
 

@@ -154,6 +154,8 @@ export interface RaidDropGroup {
   /** Health and damage multiplier for the monsters (not the champion); absent 1. */
   readonly strength?: number;
   readonly champion?: RaidChampion;
+  /** The frost tribe's (beta 10, `RaidEvent.frost`): every wave of the group is marked frost. */
+  readonly frost?: boolean;
 }
 
 /**
@@ -163,7 +165,10 @@ export interface RaidDropGroup {
  */
 export const dropGroupEvents = (group: RaidDropGroup): RaidEvent[] => {
   const events: RaidEvent[] = [];
-  const strength = group.strength !== undefined && group.strength !== 1 ? { strength: group.strength } : {};
+  const strength = {
+    ...(group.strength !== undefined && group.strength !== 1 ? { strength: group.strength } : {}),
+    ...(group.frost ? { frost: true as const } : {}),
+  };
   const disc = (angle: number, d: number) => raidLanding(angle, RAID_MAP_WIDTH + d / 2, d / 2);
   const wave = (angle: number, monster: string, count: number): void => {
     // A type the distances leave out lands on the ring, as the raid before beta 10 did.
@@ -188,7 +193,14 @@ export const dropGroupEvents = (group: RaidDropGroup): RaidEvent[] => {
   }
   if (group.champion) {
     const landing = disc(group.bearing, RAID_WALK);
-    events.push({ kind: "raid", t: group.t, ...landing, monsters: {}, champion: group.champion });
+    events.push({
+      kind: "raid",
+      t: group.t,
+      ...landing,
+      monsters: {},
+      champion: group.champion,
+      ...(group.frost ? { frost: true as const } : {}),
+    });
   }
   return events;
 };
@@ -206,6 +218,8 @@ export interface StagedRaidInput {
   readonly dropGapTicks: number;
   readonly swarm?: boolean;
   readonly strength?: number;
+  /** The frost tribe's army (beta 10): every wave is marked frost (`RaidEvent.frost`). */
+  readonly frost?: boolean;
   /** One champion, landing with the last group on the first side. */
   readonly champion?: RaidChampion;
   /**
@@ -251,6 +265,7 @@ export const stagedRaidEvents = (input: StagedRaidInput): RaidEvent[] => {
         ...(input.distances ? { distances: input.distances } : {}),
         ...(input.swarm ? { swarm: true } : {}),
         ...(input.strength !== undefined ? { strength: input.strength } : {}),
+        ...(input.frost ? { frost: true } : {}),
         ...(last && side === 0 && input.champion ? { champion: input.champion } : {}),
       });
     });

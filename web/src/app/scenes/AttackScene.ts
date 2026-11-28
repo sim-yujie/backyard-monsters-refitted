@@ -1,3 +1,4 @@
+import { devFrostOf, devSkins } from "@/game/attack/monsterSkins";
 import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import { tutTarget, TutTarget } from "@/game/guide/targets";
 import { Container } from "pixi.js";
@@ -551,6 +552,10 @@ export class AttackScene implements Scene {
       // Dev only: `?descentYard=13` fights a practice under the Descent burn,
       // to see it before the Descent's own attacks exist (Inferno WP 1.21).
       ...(import.meta.env.DEV && this.practice ? devDescentYard(window.location.search) : {}),
+      // Dev only: `?monsterSkin=frost` draws the attacking side as the frost tribe (beta 10).
+      ...(import.meta.env.DEV ? devSkins(window.location.search) : {}),
+      // Dev only, a practice fight: the frost skins fight with frost too (beta 10).
+      ...(import.meta.env.DEV && this.practice ? devFrostOf(window.location.search) : {}),
     });
     this.session = session;
     this.unsubscribe = session.subscribe((state) => this.onSessionChange(state));

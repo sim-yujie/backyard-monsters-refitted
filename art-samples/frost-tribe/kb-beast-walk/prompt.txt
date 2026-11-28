@@ -1,0 +1,12 @@
+Generate an image using your image generation tool (one image only, do not make variations or extra files).
+
+This is a game sprite sheet for our champion "Krampus" in Backyard Monsters Revamped.
+
+Attached:
+- krampus-levels.png: the APPROVED Krampus design at levels 1-6 (row 1: levels 1, 2, 3; row 2: levels 4, 5, 6). Paint the LEVEL 3 creature (row 1, column 3): the full goat-like four-legged beast with shaggy cool grey-white frosted fur shaded blue, dark charcoal-navy face and legs, cloven hooves, a long goat face with a fanged grin and a dark red tongue, two big curling horns of translucent ice-blue crystal, glowing icy-cyan eyes, a thin tufted tail, icicles hanging from the fur. NO armour at this level. Same colours, same proportions, same painting quality and bold weight as that portrait.
+- krallen-walk-poses.png: our game's existing four-legged champion Krallen in its run cycle: 5 columns = 5 headings (column 1 facing the viewer, column 2 facing down-left, column 3 side view facing left, column 4 facing up-left away from the viewer, column 5 facing straight away from the viewer), 4 rows = 4 frames of the run cycle. Use it ONLY for the camera angle (the game's camera, about 35 degrees above), the 5 headings and the leg positions of each run frame. Do not copy Krallen's body, colours or spots.
+
+Job: Krampus's WALK sheet: the same grid as krallen-walk-poses.png, 5 columns x 4 rows, each cell Krampus at that heading in that frame of a trotting walk cycle (legs as in the matching Krallen cell: frame 1 and 3 legs apart, frames 2 and 4 legs passing; head and horns bob slightly). The SAME creature, the SAME size and the SAME scale in all 20 cells (it must not grow or shrink between cells), hooves on the same ground line in every cell of a row, the creature centred in its cell and filling about 70% of the cell height. Horns, tail, fur and colours identical in every cell; only the heading and the legs change.
+
+Canvas 1536x1024 split into 5 columns x 4 rows of equal cells. A FLAT pure magenta #FF00FF background everywhere (no ground, no shadow, no gradient, no texture). Nothing may touch a cell edge or cross into another cell. No grid lines, numbers, text, labels or frame.
+Save the final PNG as sheet.png in the current working directory.

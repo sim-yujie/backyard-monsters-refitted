@@ -1,0 +1,17 @@
+Generate an image using your image generation tool (one image only, do not make variations or extra files).
+
+This is a game sprite sheet for our champion "Krampus" in Backyard Monsters Revamped. We need his STANDING pose (his idle), painted to match his existing walk sheet exactly.
+
+Attached:
+- walk-sheet.png: Krampus's APPROVED walk sheet, the exact creature to keep: 5 columns = 5 headings (column 1 facing the viewer, column 2 facing down-left, column 3 side view facing left, column 4 facing up-left away from the viewer, column 5 facing straight away from the viewer), 4 rows = 4 frames of his walk (rows 1 and 3 legs apart in a stride, rows 2 and 4 legs passing). The game's camera looks down at about 35 degrees.
+- krampus-levels.png: the approved Krampus design at levels 1-6. Paint the LEVEL 1 creature (row 1, column 1): the small fluffy Krampus kid: big head, big glowing icy-cyan eyes, tiny crystal horn buds, short shaggy cool grey-white frosted fur shaded blue, dark charcoal-navy face and short legs, little cloven hooves, a small fanged grin with the tip of a dark red tongue, a short tufted tail. NO armour.
+
+Today the game uses a walk frame as his idle, so he looks caught mid-step when he stands still (in one heading a hind hoof is lifted). Paint a real standing pose.
+
+Job: the SAME 5 x 4 grid as walk-sheet.png:
+- ROW 1 (new): Krampus STANDING STILL in each of the 5 headings (same column order as walk-sheet.png): a natural, square, alert four-legged stance. All four hooves flat on the ground, on one ground line; every leg straight and nearly vertical under the body; the two front legs side by side and the two hind legs side by side (in the side views the near and far leg of each pair almost overlap; face on and from behind the legs stand a little apart, about shoulder width), weight even on all four, body level, head up and looking along his heading, horns, tail, fur and gear exactly as in the walk sheet. No hoof lifted, no stride, no step.
+- ROWS 2, 3 and 4: copy rows 2, 3 and 4 of walk-sheet.png unchanged (the same poses), so the standing pose sits beside his walk at the same size.
+The SAME creature in every cell: the same size and scale as walk-sheet.png (the body in row 1 exactly as big as in rows 2-4, it must not grow or shrink), the same painting style, colours, horns, eyes, fur, face and gear; only the legs' pose changes in row 1. Each creature centred in its cell, hooves on the cell's ground line where walk-sheet.png puts them.
+
+Canvas 1536x1024 split into 5 columns x 4 rows of equal cells, the same as walk-sheet.png. A FLAT pure magenta #FF00FF background everywhere (no ground, no shadow, no gradient, no texture). Nothing may touch a cell edge or cross into another cell. No grid lines, numbers, text, labels or frame.
+Save the final PNG as sheet.png in the current working directory.

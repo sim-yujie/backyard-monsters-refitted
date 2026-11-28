@@ -111,6 +111,11 @@ export interface ReplayInput {
   readonly raidSpawnsUntil?: number;
   /** False fights Krallen by the rules before patch 8.6's (`BattleOptions.flashKrallen`). */
   readonly flashKrallen?: boolean;
+  /**
+   * The yard's monsters are a frost camp's (`BattleOptions.frostDefenders`,
+   * beta 10): set from the target the server handed out, never the page's.
+   */
+  readonly frostDefenders?: boolean;
   /** False keeps the fractions of health the rules before kept (`BattleOptions.wholeHealth`). */
   readonly wholeHealth?: boolean;
   /** Another main-yard Spurtz rule (`BattleOptions.spurtzHatch`), for tests and balance runs. */
@@ -266,6 +271,7 @@ export const replayAttack = (input: ReplayInput): ReplayOutcome => {
       ? { raidSpawnsUntil: input.raidSpawnsUntil ?? raidSpawnsUntilOf(input.log.events) }
       : {}),
     ...(input.flashKrallen === false ? { flashKrallen: false } : {}),
+    ...(input.frostDefenders === true ? { frostDefenders: true } : {}),
     ...(input.wholeHealth === false ? { wholeHealth: false } : {}),
     ...(input.spurtzHatch ? { spurtzHatch: input.spurtzHatch } : {}),
     ...(input.spurtzReload !== undefined ? { spurtzReload: input.spurtzReload } : {}),

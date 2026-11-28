@@ -62,7 +62,7 @@ describe("applyLayout", () => {
     expect(applyLayout(POKEY, {})).toBe(POKEY);
   });
 
-  it("ships only the Bandito, Pokey, Bolt, Fink, Eye-ra, Fang, Ichi, Crabatron, Brain, D.A.V.E. (both skins), Project X, Wormzer, Zafreeti, Vorg, Teratorn, Octo-ooze, Rezghul, Slimeattikus (big and mini), Korath 5 and 6, Spurtz, Zagnoid, Malphus, Valgos, Balthazar, Grokus, Sabnox and King Wormzer layouts, so every other sheet is exactly the Flash table", () => {
+  it("ships only the Bandito, Pokey, Bolt, Fink, Eye-ra, Fang, Ichi, Crabatron, Brain, D.A.V.E. (both skins), Project X, Wormzer, Zafreeti, Vorg, Teratorn, Octo-ooze, Rezghul, Slimeattikus (big and mini), Korath 5 and 6, Spurtz, Zagnoid, Malphus, Valgos, Balthazar, Grokus, Sabnox, King Wormzer and Krampus (its blow frame) layouts, so every other sheet is exactly the Flash table", () => {
     expect(Object.keys(REPAINT_LAYOUTS).sort()).toEqual([
       "monsters/13.png",
       "monsters/14.v1.png",
@@ -77,6 +77,12 @@ describe("applyLayout", () => {
       "monsters/ichi.png",
       "monsters/korath_5.png",
       "monsters/korath_6.png",
+      "monsters/krampus_1.png",
+      "monsters/krampus_2.png",
+      "monsters/krampus_3.png",
+      "monsters/krampus_4.png",
+      "monsters/krampus_5.png",
+      "monsters/krampus_6.png",
       "monsters/malphus.png",
       "monsters/octoooze.png",
       "monsters/rezghul.png",

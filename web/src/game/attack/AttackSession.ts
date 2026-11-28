@@ -1,3 +1,4 @@
+import type { BattleSkins } from "./monsterSkins";
 import type { BaseLoadResponse } from "@/api/types";
 import {
   ATTACK_COUNTDOWN_SECONDS,
@@ -288,6 +289,24 @@ export interface AttackSessionOptions {
    * absent outside the Descent.
    */
   readonly descentYard?: number;
+  /**
+   * Which side is drawn in a skin (`monsterSkins.ts`): a frost raid's or
+   * winter wave's raiders (`attackers`), a frost camp's defenders. Looks
+   * only; the battle is the same. Absent, everyone is drawn as themselves.
+   */
+  readonly skins?: BattleSkins;
+  /**
+   * DEV ONLY (`?krampus=6`, `monsterSkins.ts` `devSkins`): a Krampus of this
+   * level lands with the first drop, so the frost champion can be seen before
+   * the raids that bring it exist. Never recorded in the log the server gets.
+   */
+  readonly devKrampus?: number;
+  /**
+   * DEV ONLY, a practice fight (`?monsterSkin=frost`, `?defenderSkin=frost`):
+   * that side fights with the frost tribe's abilities (`frost.ts`), not only
+   * its look. A real attack never sets it: the server replays it without.
+   */
+  readonly devFrost?: { readonly attackers?: boolean; readonly defenders?: boolean };
   /** The clock {@link AttackSession.skipToEnd} budgets a frame by, in ms; `performance.now` by default. */
   readonly now?: () => number;
 }
@@ -512,6 +531,9 @@ export class AttackSession {
   private readonly playerLevel: number | undefined;
   private readonly clockFromFirstDrop: boolean;
   private readonly raid: boolean;
+  private skins_: BattleSkins | null;
+  private devKrampus: number;
+  private readonly devFrost: { readonly attackers?: boolean; readonly defenders?: boolean };
   /** {@link AttackSessionOptions.raidSpawnsUntil}, 0 when absent. */
   private readonly raidSpawnsUntil: number;
   private readonly descentYard: number | undefined;
@@ -523,6 +545,9 @@ export class AttackSession {
   constructor(options: AttackSessionOptions) {
     this.target = options.target;
     this.raid = options.raid ?? false;
+    this.skins_ = options.skins ?? null;
+    this.devKrampus = options.devKrampus ?? 0;
+    this.devFrost = options.devFrost ?? {};
     this.raidSpawnsUntil = Math.max(0, Math.floor(options.raidSpawnsUntil ?? 0));
     // The option (the dev practice's `?descentYard`), else the Descent target's own yard.
     this.descentYard = options.descentYard ?? descentYardOf(options.target).descentYard;
@@ -607,6 +632,9 @@ export class AttackSession {
       declareWar: this.declareWar_,
       ...(playerLevel === undefined ? {} : { playerLevel }),
       ...(this.descentYard === undefined ? {} : { descentYard: this.descentYard }),
+      ...(this.devKrampus > 0 ? { wildChampions: true } : {}),
+      ...(this.devFrost.attackers ? { frostAttackers: true } : {}),
+      ...(this.devFrost.defenders ? { frostDefenders: true } : {}),
       // The defence the server replays the battle against (issue #195).
       ...defence,
     });
@@ -828,6 +856,20 @@ export class AttackSession {
     return [...ids];
   }
 
+  /** Which side is drawn in a skin ({@link AttackSessionOptions.skins}); null for none. */
+  get skins(): BattleSkins | null {
+    return this.skins_;
+  }
+
+  /**
+   * Draws a side in a skin from now on, for a caller that learns it after the
+   * session is made (a raid's tribe arrives with its waves). Creeps already on
+   * the field keep the look they came out with.
+   */
+  setSkins(skins: BattleSkins | null): void {
+    this.skins_ = skins;
+  }
+
   /** Whether this session plays a wild monster raid on the player's own yard (#226). */
   get raiding(): boolean {
     return this.raid;
@@ -924,6 +966,11 @@ export class AttackSession {
     };
     battle.apply(event);
     this.events.push(event);
+    if (this.devKrampus > 0) {
+      // Dev only: Krampus lands with the first drop, kept out of the log.
+      battle.apply({ ...event, monsters: {}, champion: { t: 6, l: this.devKrampus } });
+      this.devKrampus = 0;
+    }
     for (const [id, count] of Object.entries(input.monsters)) {
       if (count > 0) this.flung[id] = (this.flung[id] ?? 0) + count;
     }

@@ -69,17 +69,27 @@ export const STATUS_EFFECTS: readonly StatusEffect[] = [
   // Lab "Split" (owner, beta 7): the copies a ranked Slimeattikus leaves wear
   // this mark for as long as they live.
   { id: "split", label: "Split copy", stacks: (c) => (c.splitCopy ? 1 : 0) },
+  // Beta 10's frost (owner 27 Nov 2026): slowed by Krampus's aura or a
+  // frostball, frostbitten by a frost Fang.
+  { id: "slowed", label: "Slowed", stacks: (c) => (c.chilled ? 1 : 0) },
+  { id: "frozen", label: "Frostbite", stacks: (c) => (c.frostbitten ? 1 : 0) },
 ];
 
 /** What a tower's stickers read: the engine's word on it this frame. */
 export interface TowerStatusState {
   /** It killed a ranked Octo-ooze and deals less for a while (`Battle.weakenedTowers`). */
   readonly weakened: boolean;
+  /** Slowed by frost: a frost Eye-ra's area, a frostball, Blizzard Stomp (`Battle.chilledTowers`). */
+  readonly slowed?: boolean;
+  /** Frozen solid by Krampus's blow: it does nothing till it thaws (`Battle.frozenTowers`). */
+  readonly frozen?: boolean;
 }
 
 /** Every effect a tower can show, left to right. */
 export const TOWER_STATUS_EFFECTS: readonly StatusEffect<TowerStatusState>[] = [
   { id: "weakened", label: "Weakened", stacks: (t) => (t.weakened ? 1 : 0) },
+  { id: "slowed", label: "Slowed", stacks: (t) => (t.slowed ? 1 : 0) },
+  { id: "frozen", label: "Frozen", stacks: (t) => (t.frozen ? 1 : 0) },
 ];
 
 /** The pictures in `public/status-icons/`: the effects above and the ones still waiting for the engine. */
@@ -290,9 +300,16 @@ export class TowerStatusIcons {
     return out;
   }
 
-  /** Shows the stickers of the towers in `weakened` and hides every other row. */
-  sync(weakened: readonly number[]): void {
-    const on = new Set(weakened);
+  /** Shows the stickers of the towers in `weakened`, `slowed` or `frozen` and hides every other row. */
+  sync(
+    weakened: readonly number[],
+    slowed: readonly number[] = [],
+    frozen: readonly number[] = [],
+  ): void {
+    const weak = new Set(weakened);
+    const slow = new Set(slowed);
+    const ice = new Set(frozen);
+    const on = new Set([...weakened, ...slowed, ...frozen]);
     for (const [id, row] of this.rows) if (!on.has(id)) row.hide();
     for (const id of on) {
       const bar = this.barOf(id);
@@ -303,7 +320,8 @@ export class TowerStatusIcons {
         this.rows.set(id, row);
         this.root.addChild(row.container);
       }
-      row.show(activeOf({ weakened: true }, TOWER_STATUS_EFFECTS), bar.x, bar.y);
+      const state = { weakened: weak.has(id), slowed: slow.has(id), frozen: ice.has(id) };
+      row.show(activeOf(state, TOWER_STATUS_EFFECTS), bar.x, bar.y);
     }
   }
 

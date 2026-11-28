@@ -1,0 +1,22 @@
+Generate an image using your image generation tool (one image only, do not make variations or extra files).
+
+The attached image ref-set3.png holds four REAL monster portraits from our game Backyard Monsters Revamped, in a 2x2 grid, numbered 1-4. They are detailed painted creature portraits (smooth painted 3D-looking forms, soft studio light from the upper left, a soft cast shadow on a plain light grey-beige studio ground).
+
+Job: paint a FROST version of each monster, in the same grid position, for a Christmas-only wild "Frost Tribe". Each frost monster must be instantly recognisable as the SAME monster: identical silhouette, pose, camera angle, size in the cell, body proportions, and the same count and placement of every feature (eyes, teeth, spikes, horns, legs, claws, wings). Only the surface and colour change. Paint quality, detail and lighting must match the originals exactly, as if by the same artist.
+
+The frost treatment is STRONG: they must read as frozen ice creatures even when shrunk to 30 pixels, while the silhouette stays exactly the same (the same on all four, so they read as one tribe):
+- Body colours: the original colour is mostly replaced by cold ice colours: pale ice-blue, white and frosted cyan, with only a faint tint of the original colour left in the deepest shadows (a hint of pink, red or purple), so the monster is still the same creature but clearly made of, or covered in, ice.
+- Surfaces: a thick white hoarfrost crust and snow on all top surfaces; smooth areas turn glossy and slightly translucent like glacier ice, with pale cyan light in the thin edges.
+- Ice: spikes, horns, blades and claw tips are clear pale-blue ice crystal of the same shape and length; icicles hang from lower edges.
+- Eyes: glowing pale icy-cyan eyes (irises), the same size and position.
+- Teeth stay teeth, frosted white.
+- No Santa hats, scarves, presents or other costume items. No text.
+
+The four, in the same grid positions as ref-set3.png:
+- Row 1, column 1: Frost POKEY: the round spiky ball with the big angry face and white fangs. Same ball, same number of spikes.
+- Row 1, column 2: Frost FANG: the toothy head-body with big eyes, a segmented curled tail with a claw on top, and long curved blade legs. Same parts, same number of blade legs.
+- Row 2, column 1: Frost EYE-RA: the single giant eyeball sitting on a puddle of goo. The goo becomes pale blue frozen slush and ice; the eyeball frosted with an icy cyan iris.
+- Row 2, column 2: Frost BRAIN: the big wrinkled brain on spider legs with clawed feet and a fanged face underneath. Same folds and legs.
+
+Canvas 1536x1024 split into 2 columns x 2 rows of equal cells (768x512 each). Each cell: the monster on the same plain light grey-beige studio ground with a soft shadow, exactly like the originals. No grid lines, no numbers, no text, no labels, no frame.
+Save the final PNG as frost-set3-strong.png in the current working directory.

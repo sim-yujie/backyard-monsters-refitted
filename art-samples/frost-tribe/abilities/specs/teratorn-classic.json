@@ -1,0 +1,1 @@
+{"name":"teratorn-classic","look":"classic","params":"?monsterSkin=frost","army":[{"name":"Teratorn","level":6,"count":5}],"drops":[{"pick":"Teratorn","x":150,"y":620,"at":0.3}],"seconds":8,"zoomIn":1,"pan":{"dx":-184,"dy":-124},"crop":{"x":0,"y":150,"width":912,"height":513}}

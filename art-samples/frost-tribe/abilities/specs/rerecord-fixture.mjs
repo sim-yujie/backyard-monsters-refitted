@@ -1,0 +1,11 @@
+import { readFileSync, writeFileSync } from "node:fs";
+import { replayAttack } from "/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/frost-prod/web/src/game/combat/rules/replay.js";
+import { scenarioInput, expectedOf, FIXTURE_DIR } from "/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/frost-prod/web/tools/lib/combat-scenarios.mjs";
+const name = process.argv[2];
+const file = FIXTURE_DIR + name + ".json";
+const fx = JSON.parse(readFileSync(file, "utf8"));
+const outcome = replayAttack(scenarioInput(fx));
+const before = fx.expected.digest;
+fx.expected = expectedOf(outcome, Boolean(fx.defence));
+writeFileSync(file, JSON.stringify(fx, null, 2) + "\n");
+console.log(name, before, "->", fx.expected.digest, "ticks", fx.expected.ticks);

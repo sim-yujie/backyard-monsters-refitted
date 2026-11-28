@@ -1,0 +1,1 @@
+{"name":"probe-shards","params":"?krampus=6","army":[{"name":"Pokey","level":1,"count":1}],"drops":[{"pick":"Pokey","x":560,"y":600,"at":0.2}],"seconds":10,"zoomIn":0,"pan":{"dx":-400,"dy":-60},"crop":{"x":160,"y":200,"width":800,"height":450}}

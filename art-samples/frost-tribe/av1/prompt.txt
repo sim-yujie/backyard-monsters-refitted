@@ -1,0 +1,15 @@
+Generate an image using your image generation tool (one image only, do not make variations or extra files).
+
+Our game Backyard Monsters Revamped has four wild monster tribes, each with a tribe avatar. We are adding a fifth, Christmas-only tribe: the FROST TRIBE, led by KRAMPUS.
+
+Attached:
+- tribes-modern.png: the four tribes' MODERN avatars: bold 2D cel-shaded cartoon figures with clean dark outlines, flat colour shading with one hard shadow tone and one highlight, full figure in a dramatic pose, on a plain background.
+- tribes-classic.png: the same tribes' CLASSIC (original 2009 Flash game) art: top row the full-figure tribe portraits (soft painted pre-rendered 3D, muted, grainy, dark shadow sides, no outline); bottom row the close-up face icons used at 50 px.
+- krampus-levels.png: KRAMPUS, the tribe's leader (use the level 6 creature, row 2 column 3): a goat-like four-legged horned beast with shaggy cool grey-white frosted fur shaded blue, dark charcoal-navy face and legs, cloven hooves, huge curling horns of translucent ice-blue crystal, glowing icy-cyan eyes, a fanged grin with a long dark red tongue, dark iron shoulder plates and muzzle plate, rusted chains with iron bells.
+
+Job: the Frost Tribe's avatar in both looks, Canvas 1536x1024 split into 3 columns x 1 row of equal cells (512x1024 each), each cell on a FLAT pure magenta #FF00FF background (no ground, no shadow, no gradient):
+- Column 1: the MODERN avatar: Krampus rearing up on its hind legs in a menacing pose, front hooves raised, frost swirling round its hooves, drawn exactly in the cel-shaded style, outline weight and colour treatment of tribes-modern.png, full figure filling about 80% of the cell height, centred.
+- Column 2: the CLASSIC full-figure portrait: the same Krampus pose painted in the soft Flash pre-rendered style of the top row of tribes-classic.png (no outline, muted colours, dark shadow sides, a little grain), full figure about 80% of the cell height, centred.
+- Column 3: the CLASSIC face icon: a close-up of Krampus's head (horns, glowing icy eyes, fanged grin) in the same Flash painted style as the bottom row of tribes-classic.png, on a plain pale grey-white ground instead of magenta for this cell only, the head filling the upper square part of the cell (a 512x512 square at the top of the cell), the rest of the cell plain pale grey-white.
+No text, no labels, no grid lines, no frame, no Santa hats or costume items.
+Save the final PNG as avatar.png in the current working directory.

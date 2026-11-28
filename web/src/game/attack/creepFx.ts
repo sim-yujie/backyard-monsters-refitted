@@ -201,18 +201,32 @@ const STOMPING_CHAMPIONS: ReadonlySet<string> = new Set(["G1", "G2", "G4", "G5"]
  * How a shot is drawn. `fireball` is everyone's but these four: D.A.V.E.'s
  * rockets, Fomor's magenta bolt, and the two healers' green shots.
  */
-export type ProjectileStyle = "fireball" | "rocket" | "fomor" | "zafreeti" | "vorg";
+/** `none`: lands as a shot does (numbers, flash) but draws nothing in flight (the krampus-fx bake-off draws it). */
+export type ProjectileStyle = "fireball" | "rocket" | "fomor" | "zafreeti" | "vorg" | "frostball" | "none";
 
 const STYLE_BY_MONSTER: Readonly<Record<string, ProjectileStyle>> = {
   C12: "rocket", // D.A.V.E.
   G3: "fomor",
   C15: "zafreeti",
   C16: "vorg",
+  // Krampus's Ice Shards (beta 10): ice, not Korath's fire.
+  G6: "frostball",
 };
 
-/** The style a monster's ranged swing is drawn in. */
-export const projectileStyle = (monsterId: string): ProjectileStyle =>
-  STYLE_BY_MONSTER[monsterId] ?? "fireball";
+/**
+ * The style a monster's ranged swing is drawn in. A frost monster's fireball
+ * is a frostball (beta 10, `frost.ts`: a frost Teratorn's chills towers).
+ */
+export const projectileStyle = (monsterId: string, frost = false): ProjectileStyle => {
+  const style = STYLE_BY_MONSTER[monsterId] ?? "fireball";
+  return frost && style === "fireball" ? "frostball" : style;
+};
+
+/** The frostball's ice: a pale blue haze, an icy body, a white core and sparkles. */
+const FROST_GLOW = 0x7fd4ff;
+const FROST_BODY = 0xb8ecff;
+const FROST_CORE = 0xffffff;
+const FROST_TAIL = 0x9fe4ff;
 
 /**
  * The healers' styles: Zafreeti and Vorg, the only monsters that heal
@@ -927,6 +941,11 @@ export class CreepFx {
         case "fomor":
           this.drawFomorBolt(shot, age);
           break;
+        case "frostball":
+          this.drawFrostball(shot, age);
+          break;
+        case "none":
+          break;
         case "zafreeti":
         case "vorg":
           this.drawHeal(shot, age, shot.style);
@@ -1031,6 +1050,47 @@ export class CreepFx {
     this.rockets.addChild(sprite);
     this.rocketSprites.push(sprite);
     return sprite;
+  }
+
+  /**
+   * A frost Teratorn's frostball (beta 10): an icy orb in a pale blue haze
+   * with a white core, trailing ice sparkles, and a six-point frost star that
+   * opens where it lands (it chills the towers round it, `frost.ts`).
+   */
+  private drawFrostball(shot: Projectile, age: number): void {
+    const fire = this.fire;
+    const radius = shot.big ? 6 : 5;
+    if (age >= shot.flight) {
+      const burst = (age - shot.flight) / burstTicks("frostball");
+      const fade = 1 - burst;
+      const reach = radius * (1.4 + burst * 3);
+      for (let arm = 0; arm < 6; arm += 1) {
+        const angle = (arm / 6) * Math.PI * 2 + Math.PI / 12;
+        const x = Math.cos(angle) * reach;
+        const y = Math.sin(angle) * reach * 0.6;
+        fire
+          .moveTo(shot.to.x, shot.to.y)
+          .lineTo(shot.to.x + x, shot.to.y + y)
+          .stroke({ color: FROST_BODY, width: 2.2 * fade + 0.4, alpha: 0.95 * fade });
+      }
+      fire
+        .ellipse(shot.to.x, shot.to.y, reach, reach * 0.6)
+        .stroke({ color: FROST_GLOW, width: 2, alpha: 0.7 * fade });
+      fire.circle(shot.to.x, shot.to.y, radius * fade).fill({ color: FROST_CORE, alpha: fade });
+      return;
+    }
+    const at = flightPoint(shot.from, shot.to, age, shot.flight);
+    if (!this.reducedMotion) {
+      for (let back = 1; back <= 4; back += 1) {
+        const trail = flightPoint(shot.from, shot.to, age - back * 1.3, shot.flight);
+        fire
+          .circle(trail.x, trail.y, radius * (0.6 - back * 0.1))
+          .fill({ color: FROST_TAIL, alpha: 0.8 - back * 0.16 });
+      }
+    }
+    fire.circle(at.x, at.y, radius * 1.9).fill({ color: FROST_GLOW, alpha: 0.3 });
+    fire.circle(at.x, at.y, radius).fill({ color: FROST_BODY, alpha: 0.95 });
+    fire.circle(at.x, at.y, radius * 0.45).fill({ color: FROST_CORE, alpha: 1 });
   }
 
   /**

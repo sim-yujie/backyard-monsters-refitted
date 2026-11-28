@@ -5,7 +5,7 @@ import { Assets, RenderTexture, Sprite, Texture, type ColorMatrixFilter, type Re
 import { creepZIndex } from "@/game/attack/AttackBattleLayer";
 import type { BaseLoadResponse } from "@/api/types";
 import type { YardArtAtlas } from "./yardAtlas";
-import { HIGHLIGHT_MATRIX, UPGRADE_FADE_ALPHA, YardBuildings } from "./YardBuildings";
+import { HIGHLIGHT_MATRIX, ICE_MATRIX, UPGRADE_FADE_ALPHA, YardBuildings } from "./YardBuildings";
 import { readWork } from "./buildingWork";
 import { litTint } from "./helpGlow";
 import { rowOf } from "./buildingCosts";
@@ -82,6 +82,37 @@ describe("YardBuildings.setAnimFrame", () => {
     buildings.setAnimFrame(2, 0, 9);
     buildings.show(readYard(yardResponse()), fakeAtlas());
     expect(buildings.animFrameOf(2, 0)).toBe(9);
+    buildings.destroy();
+  });
+});
+
+describe("YardBuildings.setFrozen (beta 10, Krampus's freeze)", () => {
+  it("turns any colour a pale ice blue, darks too", () => {
+    const apply = (r: number, g: number, b: number) =>
+      [0, 1, 2].map((row) => {
+        const m = ICE_MATRIX.slice(row * 5, row * 5 + 5);
+        return m[0]! * r + m[1]! * g + m[2]! * b + m[4]!;
+      });
+    for (const [r, g, b] of [[1, 0.8, 0.2], [0.1, 0.1, 0.1], [1, 1, 1]]) {
+      const [ro, go, bo] = apply(r!, g!, b!);
+      // Blue over green over red: ice, never gold.
+      expect(bo!).toBeGreaterThan(go!);
+      expect(go!).toBeGreaterThan(ro!);
+      expect(bo!).toBeGreaterThan(0.4);
+    }
+  });
+
+  it("puts the ice filter on the tower's picture and its gun strip, and takes it off on a thaw", () => {
+    const buildings = new YardBuildings();
+    buildings.show(readYard(yardResponse()), fakeAtlas());
+    const iced = () =>
+      buildings.tops.children.filter((child) => ((child as Sprite).filters as ColorMatrixFilter[] | null)?.length).length;
+    expect(iced()).toBe(0);
+    buildings.setFrozen(2, true);
+    expect(buildings.isFrozen(2)).toBe(true);
+    expect(iced()).toBeGreaterThanOrEqual(2);
+    buildings.setFrozen(2, false);
+    expect(iced()).toBe(0);
     buildings.destroy();
   });
 });

@@ -1,0 +1,22 @@
+Generate an image using your image generation tool (one image only, do not make variations or extra files).
+
+The attached image ref-set1.png holds four REAL monster portraits from our game Backyard Monsters Revamped, in a 2x2 grid, numbered 1-4. They are detailed painted creature portraits (smooth painted 3D-looking forms, soft studio light from the upper left, a soft cast shadow on a plain light grey-beige studio ground).
+
+Job: paint a FROST version of each monster, in the same grid position, for a Christmas-only wild "Frost Tribe". Each frost monster must be instantly recognisable as the SAME monster: identical silhouette, pose, camera angle, size in the cell, body proportions, and the same count and placement of every feature (eyes, teeth, spikes, horns, legs, claws, wings). Only the surface and colour change. Paint quality, detail and lighting must match the originals exactly, as if by the same artist.
+
+The frost treatment (the same on all four, so they read as one tribe):
+- Body colours: keep each monster's own colour recognisable but colder, paler and frost-bitten (pink turns to a cold pale rose-lilac, browns to cold grey-brown, reds to a cold crimson), with a thin white hoarfrost crust over raised areas.
+- Snow: a little clean snow resting on top surfaces (backs, heads, shells), not covering the face.
+- Ice: spikes, horns and claw tips turn into translucent pale-blue ice crystal of the same shape and length; a few small icicles hang from lower edges.
+- Eyes: the tribe mark is glowing pale icy-cyan eyes (irises), kept the same size and position.
+- Teeth stay teeth, but frosted white with a hint of ice.
+- No Santa hats, scarves, presents or other costume items. No text.
+
+The four, in the same grid positions as ref-set1.png:
+- Row 1, column 1: Frost POKEY: the round spiky ball with the big angry face, blue eyes and white fangs. Same ball, same number of spikes, spikes become ice crystals, body cold pale rose with frost, eyes icy cyan.
+- Row 1, column 2: Frost ICHI: the squat armoured horned beast on clawed legs. Same plates and horns; plates frost-rimed cold grey-brown with snow on the back, horns become ice, icicles under the belly edge.
+- Row 2, column 1: Frost EYE-RA: the single giant eyeball sitting on a puddle of goo. Same eye and goo shape; the goo becomes cold crimson half-frozen slush with an ice glaze and frost, the eyeball white with faint frost veins and an icy cyan iris.
+- Row 2, column 2: Frost TERATORN: the winged bird-beast breathing fire. Same wings, body and pose; feathers cold teal and frosted white, wings frosty, and instead of fire it breathes a swirling blast of icy blue-white frost and snowflakes in the same place and size as the fire.
+
+Canvas 1536x1024 split into 2 columns x 2 rows of equal cells (768x512 each). Each cell: the monster on the same plain light grey-beige studio ground with a soft shadow, exactly like the originals. No grid lines, no numbers, no text, no labels, no frame.
+Save the final PNG as frost-set1.png in the current working directory.

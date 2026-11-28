@@ -43,6 +43,12 @@ const TRIBES: Readonly<Record<string, RaidTribe>> = {
     splash: artUrl("/assets/popups/tribe_dreadnaut.v2.png"),
     taunt: "Science will prevail!",
   },
+  // Beta 10's Christmas frost tribe, led by Krampus.
+  Frost: {
+    name: "Frost",
+    splash: artUrl("/assets/popups/tribe_frost.v2.png"),
+    taunt: "Winter always comes back!",
+  },
 };
 
 /** A tribe by its name on the wire; an unknown one keeps its name, with Legionnaire's picture. */

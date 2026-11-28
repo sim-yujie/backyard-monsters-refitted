@@ -1,0 +1,31 @@
+{
+  "sheets": [
+    {
+      "file": "modern-sheet.png",
+      "look": "modern",
+      "kind": "solid",
+      "columns": 2,
+      "rows": 2,
+      "cells": [
+        "frost_network",
+        "hoof_rime",
+        "rime_brow",
+        "ice_snap"
+      ]
+    },
+    {
+      "file": "classic-sheet.png",
+      "look": "classic",
+      "kind": "solid",
+      "columns": 2,
+      "rows": 2,
+      "cells": [
+        "frost_network",
+        "hoof_rime",
+        "rime_brow",
+        "ice_snap"
+      ]
+    }
+  ]
+}
+

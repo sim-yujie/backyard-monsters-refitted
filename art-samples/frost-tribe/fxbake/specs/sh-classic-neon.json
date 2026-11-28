@@ -1,0 +1,1 @@
+{"name": "sh-classic-neon", "fx": "neon", "look": "classic", "params": "?krampus=6", "army": [{"name": "Pokey", "level": 1, "count": 1}], "drops": [{"pick": "Pokey", "x": 760, "y": 700, "at": 0.2}], "seconds": 9, "zoomIn": 2, "pan": {"dx": -747, "dy": -63}, "crop": {"x": 120, "y": 185, "width": 800, "height": 450}, "fps": 120, "every": 4, "slow": [[5.0, 6.6]]}

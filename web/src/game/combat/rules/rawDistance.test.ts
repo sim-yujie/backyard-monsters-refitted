@@ -37,7 +37,7 @@ const ALLOWED: readonly (readonly [line: string, count: number, what: string])[]
     1,
     "Decoy's blast falloff, yard",
   ],
-  ["return Math.sqrt(x * x + y * y) <= tower.range;", 1, "a tower's reach to the Vacuum hose"],
+  ["return Math.sqrt(x * x + y * y) <= sightOf(tower);", 1, "a tower's reach to the Vacuum hose (its sight, beta 10)"],
   [
     "if (distanceSquared(scan.x, scan.y, at.x, at.y) >= tower.range * tower.range) continue;",
     1,

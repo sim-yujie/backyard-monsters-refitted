@@ -123,6 +123,18 @@
  *
  * Add the version a change replaces only when that change moves no battle.
  * A change that moves any battle result must empty this list.
+ *
+ * Beta 10's frost tribe (Krampus, a wild champion, and its frost aura,
+ * `wildChampions.ts`) changes no battle without Krampus in it: a chill of 1
+ * and an unchilled tower leave every number as it was, and no log could
+ * bring a Krampus on before.
+ *
+ * Beta 10's frost monsters (`frost.ts`: the frost Eye-ra's area, the frost
+ * Teratorn's frostballs, the frost Fang's frostbite) fight only when a fight
+ * says its side is frost (`BattleOptions.frostAttackers`/`frostDefenders`, a
+ * raid wave's `frost`), which no log or attack before could; every other
+ * monster fights as before (the golden replays are unchanged). Neither
+ * adds a version here: the rebalance above already empties the list.
  */
 export const COMPATIBLE_RULES_VERSIONS: readonly string[] = [];
 

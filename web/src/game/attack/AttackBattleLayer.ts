@@ -1,3 +1,7 @@
+import { creepSkin } from "./monsterSkins";
+import { FrostAreaFx, auraEllipse } from "./frostAuraFx";
+import { FrostBakeFx, type FrostBakeHost, KRAMPUS_ABILITY_SET, KRAMPUS_AURA_SET } from "./frostBake/frostBakeFx";
+import { KRAMPUS_ID, QUAKE_STRIKE_FRAME, krampusAuraRadius } from "@/game/combat/rules/champions";
 import {
   ColorMatrixFilter,
   Container,
@@ -20,6 +24,7 @@ import {
   type Battle,
   type BattleVisualEvent,
   type CreepSnapshot,
+  type FrostArea,
 } from "@/game/combat/rules";
 import { playEffect, preloadEffects } from "@/game/sound/sound";
 import { damageStep } from "@/game/yard/YardBuildings";
@@ -295,6 +300,15 @@ export interface LayoutOptions {
  * through `GRID.as`; a creep is drawn wherever the engine has it, so its
  * motion is smooth rather than stepping a pixel at a time.
  */
+/** DEV only: `?sightRings=1` in the address draws the towers' sight rings. */
+const sightRingsAsked = (): boolean => {
+  try {
+    return new URLSearchParams(window.location.search).get("sightRings") === "1";
+  } catch {
+    return false;
+  }
+};
+
 export const groundWorld = (ix: number, iy: number, origin: Point): Point => ({
   x: ix - iy + origin.x,
   y: (ix + iy) / 2 + origin.y,
@@ -312,6 +326,8 @@ export const abilityTint = (creep: CreepSnapshot | null): number => {
   if (creep.burning) return 0xffb070;
   if (creep.enraged || creep.puttied) return 0xff9cff;
   if (creep.lootBoosted) return 0xa8ff80;
+  // Krampus's frost aura, a frostball or a frost Fang's bite (beta 10): an icy blue.
+  if (creep.chilled || creep.frostbitten) return 0x9fd8ff;
   return 0xffffff;
 };
 
@@ -625,6 +641,8 @@ export interface BattleYardHost {
   setConcealed(id: number, concealed: boolean): void;
   /** Puts one of a building's animation layers on a cell: a tower's facing. */
   setAnimFrame(id: number, layer: number, frame: number): void;
+  /** Draws a tower frozen solid (icy tint) or puts it back (beta 10); a host without one shows none. */
+  frostBuilding?(id: number, on: boolean): void;
   /** Switches a building's hit flash on or off (#63); a host without one shows no flash. */
   flashBuilding?(id: number, on: boolean): void;
   /** The camera's zoom, so damage numbers keep their size on screen (#68); 1 when absent. */
@@ -854,6 +872,10 @@ export class AttackBattleLayer {
   private readonly shadows: Container;
   /** In the overlay, in this order. */
   private readonly effects = new Container();
+  /** Frost Eye-ras' frost areas on the ground (beta 10). */
+  private frostAreas: FrostAreaFx | null = null;
+  /** DEV only (`?sightRings=1`): each tower's reach and its sight, to film Krampus's invisible aura. */
+  private sightRings: Graphics | null = null;
   /** Drawn explosions, Eye-ra's fiery one (feat/eyera-explosion); inside `effects`. */
   private readonly blastAir = new Container();
   private readonly blastFx: BlastFx;
@@ -935,6 +957,10 @@ export class AttackBattleLayer {
 
   /** Projectiles, smoke and damage numbers (#63, #68); its root sits last in the overlay. */
   private readonly fx: CreepFx;
+  /** Krampus's Ice Shards and Blizzard Stomp, neon's design ({@link FrostBakeFx}). */
+  private frostBake: FrostBakeFx | null = null;
+  /** Krampus's Frost aura, the mist (owner's pick, 28 Nov 2026; {@link FrostBakeFx}). */
+  private frostAura: FrostBakeFx | null = null;
   /** Loot orbs and loot numbers (`ParticleLoot`, `ParticleText`). */
   private readonly lootFx: LootFx;
   /** The damage step each building was last seen at, for the smoke on a crossing. */
@@ -1057,6 +1083,30 @@ export class AttackBattleLayer {
       this.classic,
     );
     this.overlay.addChild(this.fx.root);
+    const frostHost: FrostBakeHost = {
+      air: () => this.airLayer(),
+      ground: () => this.debrisLayer(),
+      krampus: () => this.bakeKrampus(),
+      creep: (id) => {
+        const view = this.views.get(id);
+        return view ? { feet: { x: view.lastX, y: view.lastY }, top: view.top, lift: aimLift(view.snapshot ?? undefined) } : null;
+      },
+      tower: (id) => {
+        const base = this.host.centreOf(id);
+        const building = options.yard.buildings.find((each) => each.id === id);
+        if (!base || !building) return null;
+        return { base, top: { x: base.x, y: Math.min(building.worldY + BAR_OFFSET.y - 6, base.y - 50) } };
+      },
+      blinded: () => this.session.battle()?.blindedTowers?.() ?? [],
+      towerPoints: () => (this.session.battle()?.towerSights?.() ?? []).map((one) => ({ id: one.id, x: one.x, y: one.y })),
+      jolt: (tick, strength, life) => this.blastFx.jolt(tick, strength, life),
+      auraRadius: (level) => krampusAuraRadius(level),
+      classic: this.classic,
+      // "Reduce effects" draws fewer bits, as the towers' effects do.
+      low: this.effectsLow || this.juice === "reduced",
+    };
+    this.frostBake = new FrostBakeFx(KRAMPUS_ABILITY_SET, frostHost);
+    this.frostAura = new FrostBakeFx(KRAMPUS_AURA_SET, frostHost);
 
     // The building side (issues #64, #66, #67). The towers draw into the same
     // `fire` graphics the tracers used; the building bars go under the splats,
@@ -1180,6 +1230,9 @@ export class AttackBattleLayer {
       // its view when its death is read, to stay on screen until the bullet lands.
       const live = battle.creeps();
       const seen = this.syncCreeps(live, tick);
+      // A stand-in battle (tests) may not draw frost areas.
+      this.syncFrostAreas(battle.frostAreas?.() ?? [], tick);
+      if (import.meta.env.DEV && sightRingsAsked()) this.drawSightRings(battle.towerSights?.() ?? []);
       for (const event of battle.recentEvents(this.lastEventTick)) {
         this.sounds.onEvent(event);
         this.lootFx.onEvent(event);
@@ -1209,7 +1262,21 @@ export class AttackBattleLayer {
     this.siegeFx.update(siege, shown);
     this.lootFx.update(shown);
     this.showBombNumbers(shown);
-    this.towerStatus.sync(battle.weakenedTowers());
+    // Krampus's aura is a faint mist round him (frostAura below; owner, 28 Nov 2026:
+    // "similar to Fomor's 'mist'"), with no mark on the towers it blinds;
+    // a tower his blow froze wears the ice cube and an icy tint till it thaws.
+    const frozen = battle.frozenTowers?.() ?? [];
+    this.towerStatus.sync(battle.weakenedTowers(), battle.chilledTowers?.() ?? [], frozen);
+    this.syncFrozenTowers(frozen);
+    if (this.frostBake) {
+      for (const view of this.views.values()) {
+        if (view.monsterId === KRAMPUS_ID && view.quakeTick !== Number.NEGATIVE_INFINITY) {
+          this.frostBake.stompStart(tick, view.id, view.quakeTick + QUAKE_STRIKE_FRAME);
+        }
+      }
+      this.frostBake.update(shown);
+    }
+    this.frostAura?.update(shown);
 
     if (this.damageDirty) {
       this.damageDirty = false;
@@ -1471,6 +1538,10 @@ export class AttackBattleLayer {
     }
     this.splats.length = 0;
     this.ringFx.destroy();
+    this.frostAreas?.destroy();
+    this.sightRings?.destroy();
+    this.sightRings = null;
+    this.frostAreas = null;
     for (const sprite of this.gibPool) sprite.destroy();
     this.gibPool.length = 0;
 
@@ -1482,6 +1553,8 @@ export class AttackBattleLayer {
     for (const scorch of this.scorches) scorch.destroy();
     this.scorches.length = 0;
     this.blastFx.destroy();
+    this.frostBake?.destroy();
+    this.frostAura?.destroy();
     this.raiseFx.destroy();
     for (const filter of this.zombieFilters.values()) filter.destroy();
     this.zombieFilters.clear();
@@ -1536,7 +1609,8 @@ export class AttackBattleLayer {
     if (stamp === this.scriptSeen) return;
     this.scriptSeen = stamp;
     for (const id of this.session.scriptedMonsters()) {
-      const sheet = spriteFor(id, this.session.levels[id] ?? 1);
+      // A script brings on the attacking side (a raid's waves, a replay's flings).
+      const sheet = spriteFor(id, this.session.levels[id] ?? 1, creepSkin(this.session.skins, id, false));
       if (sheet) this.textures.preload(sheet, true);
       if (id === DAVE_ID) this.textures.preload(ROCKET_SHEET);
     }
@@ -1567,7 +1641,7 @@ export class AttackBattleLayer {
     if (!defence) return;
     for (const garrison of Object.values(defence.bunkers)) {
       for (const id of Object.keys(garrison)) {
-        const sheet = spriteFor(id, defence.defenderLevels[id] ?? 1);
+        const sheet = spriteFor(id, defence.defenderLevels[id] ?? 1, creepSkin(this.session.skins, id, true));
         if (sheet) this.textures.preload(sheet);
         if (id === DAVE_ID) this.textures.preload(ROCKET_SHEET);
       }
@@ -1579,6 +1653,54 @@ export class AttackBattleLayer {
   }
 
   /* ── Creeps ─────────────────────────────────────────────────────────── */
+
+  /** DEV only: a white ring at each tower's reach, and a cyan one at its sight when Krampus's aura cuts it. */
+  private drawSightRings(sights: readonly { x: number; y: number; range: number; sight: number }[]): void {
+    if (!this.sightRings) {
+      this.sightRings = new Graphics();
+      this.sightRings.eventMode = "none";
+      (this.host.groundShadowLayer?.() ?? this.effects).addChild(this.sightRings);
+    }
+    const rings = this.sightRings.clear();
+    for (const one of sights) {
+      const at = groundWorld(one.x, one.y, this.origin);
+      const reach = auraEllipse(one.range);
+      rings.ellipse(at.x, at.y, reach.rx, reach.ry).stroke({ width: 2, color: 0xffffff, alpha: 0.55 });
+      if (one.sight < one.range) {
+        const seen = auraEllipse(one.sight);
+        rings.ellipse(at.x, at.y, seen.rx, seen.ry).stroke({ width: 3, color: 0x7fe8ff, alpha: 0.95 });
+      }
+    }
+  }
+
+  /** The towers drawn frozen now, so a thaw puts exactly those back. */
+  private readonly frozenShown = new Set<number>();
+
+  /** Tints each tower Krampus froze icy blue, and puts back each that thawed or fell. */
+  private syncFrozenTowers(frozen: readonly number[]): void {
+    if (frozen.length === 0 && this.frozenShown.size === 0) return;
+    const now = new Set(frozen);
+    for (const id of this.frozenShown) {
+      if (now.has(id)) continue;
+      this.frozenShown.delete(id);
+      this.host.frostBuilding?.(id, false);
+    }
+    for (const id of now) {
+      if (this.frozenShown.has(id)) continue;
+      this.frozenShown.add(id);
+      this.host.frostBuilding?.(id, true);
+    }
+  }
+
+  /** Frost Eye-ras' frost areas on the ground, made the first time one bursts. */
+  private syncFrostAreas(areas: readonly FrostArea[], tick: number): void {
+    if (!this.frostAreas) {
+      if (areas.length === 0) return;
+      this.frostAreas = new FrostAreaFx((ix, iy) => groundWorld(ix, iy, this.origin));
+      (this.host.groundShadowLayer?.() ?? this.effects).addChild(this.frostAreas.root);
+    }
+    this.frostAreas.update(areas, tick);
+  }
 
   /** Places every creep the engine has; returns their ids. */
   private syncCreeps(creeps: readonly CreepSnapshot[], tick: number): Set<number> {
@@ -1791,7 +1913,7 @@ export class AttackBattleLayer {
     const view = this.pool.pop() ?? this.makeView();
     view.id = creep.id;
     view.monsterId = creep.monsterId;
-    view.sheet = spriteFor(creep.monsterId, creep.level) ?? null;
+    view.sheet = spriteFor(creep.monsterId, creep.level, creepSkin(this.session.skins, creep.monsterId, creep.friendly, creep.frost)) ?? null;
     view.lastX = ground.x;
     view.lastY = ground.y;
     view.lastTick = tick;
@@ -2041,8 +2163,9 @@ export class AttackBattleLayer {
         }
         // A Slimeattikus's Lab "Split" copy is drawn smaller, about its feet.
         const shrink = creep.splitCopy ? SPLIT_COPY_SCALE : 1;
-        const scaleX = squash.x * flat.x * shrink;
-        const scaleY = squash.y * flat.y * shrink;
+        const baked = this.frostBake?.bodyAt(view.id, tick);
+        const scaleX = squash.x * flat.x * shrink * (baked?.x ?? 1);
+        const scaleY = squash.y * flat.y * shrink * (baked?.y ?? 1);
         body.scale.set(scaleX, scaleY);
         view.baseTint = 0xffffff;
         // Whole pixels, as Flash drew them (`MonsterBase.as:613-616`): a cell
@@ -2137,6 +2260,17 @@ export class AttackBattleLayer {
 
   /* ── Creep hits and wounds (#63, #68) ───────────────────────────────── */
 
+  /** Every Krampus standing, for the krampus-fx bake-off ({@link FrostBakeFx}). */
+  private bakeKrampus(): { id: number; level: number; feet: Point; top: number; heading: number }[] {
+    const out: { id: number; level: number; feet: Point; top: number; heading: number }[] = [];
+    for (const view of this.views.values()) {
+      if (view.monsterId !== KRAMPUS_ID || view.felledTick !== Number.NEGATIVE_INFINITY || !view.snapshot) continue;
+      if (view.snapshot.hp <= 0) continue;
+      out.push({ id: view.id, level: view.snapshot.level, feet: { x: view.lastX, y: view.lastY }, top: view.top, heading: view.heading });
+    }
+    return out;
+  }
+
   /** Where a creep is drawn right now, for the numbers over it; null once gone. */
   private creepAnchor(id: number): { ground: Point; top: number } | null {
     const view = this.views.get(id);
@@ -2196,6 +2330,8 @@ export class AttackBattleLayer {
           (this.heldBuildingHp.get(event.buildingId) ?? 0) + event.amount,
         );
       }
+      // neon's Ice Shards, or the plain frostball should its atlas have failed to load.
+      const baked = this.frostBake !== null && !this.frostBake.failed && monsterId === KRAMPUS_ID;
       this.fx.projectile(
         event.tick,
         from,
@@ -2204,9 +2340,10 @@ export class AttackBattleLayer {
         champion,
         event.amount,
         PROJECTILE_TICKS,
-        projectileStyle(monsterId),
+        baked ? "none" : projectileStyle(monsterId, view?.snapshot?.frost === true),
         modsOf(event),
       );
+      if (baked) this.frostBake?.shard(event.tick, event.creepId, from, event.creepTargetId, target);
       return;
     }
     if (view) {
@@ -2324,7 +2461,9 @@ export class AttackBattleLayer {
 
   /** The strike's flash: the body drawn again over itself in added light, fading. */
   private paintGlint(view: CreepView, tick: number): void {
-    const flash = struckFlash(tick - view.struckTick);
+    const struck = struckFlash(tick - view.struckTick);
+    const baked = this.frostBake?.bodyAt(view.id, tick);
+    const flash = Math.max(struck, baked?.flash ?? 0);
     if (flash <= 0 || !view.body.visible || view.burrowed) {
       if (view.glint) view.glint.visible = false;
       return;
@@ -2344,6 +2483,7 @@ export class AttackBattleLayer {
     glint.position.copyFrom(body.position);
     glint.scale.copyFrom(body.scale);
     glint.zIndex = body.zIndex + 0.5;
+    glint.tint = baked && baked.flash > struck ? baked.colour : STRUCK_TINT;
     glint.alpha = flash * body.alpha;
     glint.visible = true;
   }
@@ -2629,7 +2769,13 @@ export class AttackBattleLayer {
       return;
     }
     if (event.kind === "quake") {
-      this.spawnQuake(event.tick, groundWorld(event.ix, event.iy, this.origin), event.radius);
+      const at = groundWorld(event.ix, event.iy, this.origin);
+      if (this.frostBake && !this.frostBake.failed && this.views.get(event.creepId)?.monsterId === KRAMPUS_ID) {
+        // Krampus's Blizzard Stomp (neon's) in place of Korath's rings (the rings should its atlas have failed).
+        this.frostBake.slam(event.tick, event.creepId, event.ix, event.iy, event.radius);
+        return;
+      }
+      this.spawnQuake(event.tick, at, event.radius);
       return;
     }
     if (event.kind === "charge") {

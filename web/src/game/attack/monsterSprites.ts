@@ -4,6 +4,8 @@ import { windUpFrame } from "./juice";
 import { SHEET_VERSIONS } from "./sheetVersions";
 import { monsterSheetLevel, sheetAtQuality, sheetCopies, sheetForDevice } from "@/game/quality";
 import { artUrl } from "../../artUrl";
+import { hasSkin, sheetSkin, skinFile, skinnedSheet, type MonsterSkin } from "./monsterSkins";
+import { KRAMPUS_LAYOUTS, KRAMPUS_SPRITES } from "./krampusSprites";
 
 /**
  * Picking a cell out of a monster sprite sheet.
@@ -145,6 +147,8 @@ export interface AnimatedSheet extends MonsterSheet {
  * repaint entry.
  */
 export const REPAINT_LAYOUTS: Readonly<Record<string, SheetLayoutOverride>> = {
+  // Krampus (G6, beta 10): its own table rows, with the blow's frame (`krampusSprites.ts`).
+  ...KRAMPUS_LAYOUTS,
   // Bandito: 41x40 cells (the old 29x28 cell plus 6 px each side and 12 px on
   // top), so the anchor moves by (6, 12) and the feet stay on the same ground
   // point. Rows: 0 idle, 1-6 walk, 7-11 attack (strike is the third frame).
@@ -680,7 +684,8 @@ let familyIndex: ReadonlyMap<string, readonly MonsterSheet[]> | null = null;
 const championSheets = (family: string): readonly MonsterSheet[] => {
   if (familyIndex === null) {
     const index = new Map<string, MonsterSheet[]>();
-    for (const sheet of Object.values(MONSTER_SPRITES)) {
+    // Krampus (G6) has no Flash sheet: its rows live in `krampusSprites.ts`.
+    for (const sheet of [...Object.values(MONSTER_SPRITES), ...Object.values(KRAMPUS_SPRITES)]) {
       if (sheet.family === sheet.key) continue;
       const list = index.get(sheet.family) ?? [];
       list.push(sheet);
@@ -712,9 +717,10 @@ export const krallenLook = (level: number): number => (level >= 5 ? 3 : level >=
  * and in battle alike (Flash used her power level, `Krallen.as:48`). A level
  * below 1 uses the first sheet. Undefined for an id the table does not know.
  */
-export function spriteFor(creatureId: string, level = 1): AnimatedSheet | undefined {
+export function spriteFor(creatureId: string, level = 1, skin?: MonsterSkin): AnimatedSheet | undefined {
   const direct = MONSTER_SPRITES[creatureId];
-  if (direct) return withLayout(direct);
+  // A skin (`monsterSkins.ts`) draws the same sheet from its own copy of the file.
+  if (direct) return withLayout(skin && hasSkin(creatureId, skin) ? skinnedSheet(direct, skin) : direct);
   const sheets = championSheets(creatureId);
   if (sheets.length === 0) return undefined;
   const look = creatureId === KRALLEN_SHEET_FAMILY ? krallenLook(level) : level;
@@ -1004,6 +1010,12 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/korath_4.png": "monsters/korath_4-repaint@3x.png", // Korath level 4 repaint at 3x (at 4x it was 9840 px tall), walk + attack, ground shadow
   "monsters/korath_5.png": "monsters/korath_5-repaint@2x.png", // Korath level 5 repaint at 2x, packed (REPAINT_LAYOUTS), walk + attack + stomp
   "monsters/korath_6.png": "monsters/korath_6-repaint@2x.png", // Korath level 6 repaint at 2x, packed (REPAINT_LAYOUTS), walk + attack + stomp
+  "monsters/krampus_1.png": "monsters/krampus_1-anim@2x.png", // Krampus (G6, frost tribe) level 1 at 2x (krampusSprites.ts), 8 headings, walk + attack + stomp, ground shadow
+  "monsters/krampus_2.png": "monsters/krampus_2-anim@2x.png", // Krampus (G6, frost tribe) level 2 at 2x (krampusSprites.ts), 8 headings, walk + attack + stomp, ground shadow
+  "monsters/krampus_3.png": "monsters/krampus_3-anim@2x.png", // Krampus (G6, frost tribe) level 3 at 2x (krampusSprites.ts), 8 headings, walk + attack + stomp, ground shadow
+  "monsters/krampus_4.png": "monsters/krampus_4-anim@2x.png", // Krampus (G6, frost tribe) level 4 at 2x (krampusSprites.ts), 8 headings, walk + attack + stomp, ground shadow
+  "monsters/krampus_5.png": "monsters/krampus_5-anim@2x.png", // Krampus (G6, frost tribe) level 5 at 2x (krampusSprites.ts), 8 headings, walk + attack + stomp, ground shadow
+  "monsters/krampus_6.png": "monsters/krampus_6-anim@2x.png", // Krampus (G6, frost tribe) level 6 at 2x (krampusSprites.ts), 8 headings, walk + attack + stomp, ground shadow
 };
 
 /** Whether a sheet URL names a high-resolution sheet (`name@4x.png`, `name@3x.png`, `name@1.5x.png?v=…`). */
@@ -1019,18 +1031,21 @@ export const isHighResolutionSheet = (url: string): boolean => /@\d+(\.\d+)?x\.\
  */
 export function sheetUrl(sheet: MonsterSheet | string): string {
   const file = typeof sheet === "string" ? sheet : sheet.file;
+  const skin = typeof sheet === "string" ? undefined : sheetSkin(sheet);
   const repaint = classicLook() ? undefined : REPAINTED_SHEETS[file];
-  if (!repaint) return `${ASSET_ROOT}${file}`;
+  if (!repaint) return `${ASSET_ROOT}${skin ? skinFile(file, skin) : file}`;
   // Never above Medium on a phone or tablet, by either way of asking.
   const level = monsterSheetLevel();
   const copy =
     typeof sheet === "string"
       ? sheetAtQuality(repaint, level)
       : sheetForDevice(repaint, applyLayout(sheet), undefined, level);
-  return versionedUrl(copy);
+  return versionedUrl(copy, skin);
 }
 
-const versionedUrl = (copy: string): string => {
+/** A copy's URL with its version; a skin's copy (`monsters/frost/...`) is its own file, unversioned until it changes. */
+const versionedUrl = (copy: string, skin?: MonsterSkin): string => {
+  if (skin) return `${ASSET_ROOT}${skinFile(copy, skin)}`;
   const version = SHEET_VERSIONS[copy];
   return `${ASSET_ROOT}${copy}${version ? `?v=${version}` : ""}`;
 };
@@ -1048,6 +1063,6 @@ export function sheetStandInUrl(sheet: MonsterSheet): string | null {
   if (!repaint) return null;
   const copies = sheetCopies(repaint);
   if (!copies) return null;
-  const standIn = versionedUrl(copies.low);
+  const standIn = versionedUrl(copies.low, sheetSkin(sheet));
   return standIn === sheetUrl(sheet) ? null : standIn;
 }

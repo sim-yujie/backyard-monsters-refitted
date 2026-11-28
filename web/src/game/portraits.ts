@@ -22,6 +22,7 @@
 
 import { classicLook } from "./classicLook";
 import { artUrl } from "../artUrl";
+import { hasSkin, type MonsterSkin } from "./attack/monsterSkins";
 
 /** The monsters with a painting: C1-C17, C19 and the Inferno ones IC1-IC8. */
 export const PAINTED_MONSTERS: ReadonlySet<string> = new Set([
@@ -40,6 +41,8 @@ export const PAINTED_CHAMPION_LEVELS: Readonly<Record<string, readonly number[] 
   G3: [1, 2, 3, 4, 5, 6],
   G4: [1, 2, 3, 4, 5, 6],
   G5: "all",
+  // Krampus, the frost tribe's champion (beta 10): an enemy this Christmas.
+  G6: [1, 2, 3, 4, 5, 6],
 };
 
 /** A picture to show, and the one to try if it does not load. */
@@ -57,8 +60,14 @@ const portrait = (paintedFile: string | null, original: string): Portrait =>
   paintedFile === null || classicLook() ? { src: original, fallback: null } : { src: painted(paintedFile), fallback: original };
 
 /** A monster's portrait; the originals are `-portrait.jpg` (180x120) and `-small.png` (45x40). */
-export const monsterPortrait = (id: string, size: PortraitSize): Portrait =>
-  portrait(
+export const monsterPortrait = (id: string, size: PortraitSize, skin?: MonsterSkin): Portrait =>
+  skin && hasSkin(id, skin)
+    ? // A skin's portraits (`monsterSkins.ts`): the painted frost card, then the frost Flash portrait.
+      portrait(
+        `${skin}/${size === "card" ? id : `${id}-icon`}`,
+        artUrl(`/assets/monsters/${skin}/${id}-${size === "card" ? "portrait.jpg" : "small.png"}`),
+      )
+    : portrait(
     PAINTED_MONSTERS.has(id) ? (size === "card" ? id : `${id}-icon`) : null,
     artUrl(`/assets/monsters/${id}-${size === "card" ? "portrait.jpg" : "small.png"}`),
   );

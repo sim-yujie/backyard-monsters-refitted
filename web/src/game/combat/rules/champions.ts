@@ -1,4 +1,4 @@
-import { CHAMPION_MAX_POWER_LEVEL, championStat } from "./stats.js";
+import { CHAMPION_MAX_POWER_LEVEL, TICKS_PER_SECOND, championStat } from "./stats.js";
 import { CHAMPION_PROPS } from "./combatStatsData.js";
 
 /**
@@ -115,11 +115,13 @@ export const hasFlame = (id: string, power: number): boolean =>
  * (`Korath.as:72`, `:99`, `:118`, `:131`); without it he cannot hit one.
  */
 export const hasFireball = (id: string, level: number, power: number): boolean =>
-  id === KORATH_ID && power >= KORATH_POWER_FIREBALL && level > 3;
+  (id === KORATH_ID && power >= KORATH_POWER_FIREBALL && level > 3) ||
+  (id === KRAMPUS_ID && level >= KRAMPUS_ICE_SHARDS_LEVEL);
 
 /** The quake, from power level 3 at level 5 and up (`Korath.as:184`). */
 export const hasQuake = (id: string, level: number, power: number): boolean =>
-  id === KORATH_ID && power >= KORATH_POWER_STOMP && level > 4;
+  (id === KORATH_ID && power >= KORATH_POWER_STOMP && level > 4) ||
+  (id === KRAMPUS_ID && level >= KRAMPUS_BLIZZARD_LEVEL);
 
 /** The fireball deals a quarter of his damage, as an `int` (`Korath.as:114`). */
 export const KORATH_FIREBALL_DIVISOR = 4;
@@ -292,3 +294,94 @@ export const lootAuraBonus = (level: number): number => {
 
 /** The aura looks around every 50 of her frames (`ProximityLootBuff.as:42`). */
 export const LOOT_AURA_FRAMES = 50;
+
+/* ── Krampus's frost aura (beta 10, frost tribe) ─────────────────────────── */
+
+/** Krampus, the frost tribe's champion: wild (`wildChampions.ts`), an enemy this Christmas. */
+export const KRAMPUS_ID = "G6";
+
+/**
+ * The frost aura looks around every 30 ticks, as Fomor's enrage does
+ * (`ENRAGE_INTERVAL`): everything of the other side inside its radius is
+ * chilled, and everything it chilled that is no longer inside is let go.
+ */
+export const KRAMPUS_AURA_INTERVAL = 30;
+
+/**
+ * Owner, 27 Nov 2026: "frost aura slows nearby towers AND monsters"; 28 Nov
+ * (desk frost-abil): "The aura should be invisible like fomor ... change aura
+ * to reduce 'visibility range' of tower". The slow at Krampus's level, as a
+ * share, now on the other side's MONSTERS only: a chilled monster moves and
+ * swings that much slower. Towers are no longer slowed by it; they see less
+ * far instead ({@link krampusSightCut}). Its `buffs` ladder
+ * (`wildChampions.ts`): PROPOSED 15% at level 1 up to 40% at level 6.
+ */
+export const krampusAuraSlow = (level: number): number => championStat(KRAMPUS_ID, "buffs", level);
+
+/** The aura's radius, in the engine's range space (`buffRadius`): PROPOSED 200 to 300. */
+export const krampusAuraRadius = (level: number): number =>
+  championStat(KRAMPUS_ID, "buffRadius", level);
+
+/**
+ * How much shorter a tower's sight is while its middle is inside Krampus's
+ * aura, whole percent of its range, by level (owner, 28 Nov 2026: "reduce
+ * 'visibility range' of tower? So they cant detect as far"). PROPOSED. Only
+ * what the tower finds and keeps in its sights shrinks; a Quake Tower's blast
+ * still reaches its full range once it fires.
+ */
+export const KRAMPUS_SIGHT_CUT = [10, 12, 14, 16, 18, 20] as const;
+
+/** A level's entry of a six-level ladder, the top one past it. */
+const krampusRung = (ladder: readonly number[], level: number): number =>
+  ladder[Math.max(0, Math.min(ladder.length - 1, Math.floor(level) - 1))] ?? 0;
+
+/** The sight cut at Krampus's level, whole percent. */
+export const krampusSightCut = (level: number): number => krampusRung(KRAMPUS_SIGHT_CUT, level);
+
+/*
+ * Krampus's three active abilities (owner, 27 Nov 2026: "3 'active' abilities
+ * similar to Korath"), beside his frost aura. He is the frost tribe's and
+ * never a player's, so no power level unlocks them (the raids bring him at
+ * power 0): his level does, as Korath's level gates his fireball and quake.
+ * PROPOSED for the owner's desk.
+ *
+ * 1. Frostbite (every level): each blow and ice shard leaves
+ *    frostbite on the monster or building it hit (`frost.ts`, the frost
+ *    Fang's): {@link KRAMPUS_FROSTBITE_SHARE} of his damage a second for
+ *    `FROSTBITE_SECONDS`, refreshed, never stacked. Korath's Burn. A blow on
+ *    a tower also has a {@link krampusFreezeChance} chance (owner, 28 Nov
+ *    2026: "Frostbite grants a chance to completely freeze buildings (prevent
+ *    firing)") to freeze it solid for {@link krampusFreezeTicks}: it does
+ *    nothing at all till it thaws (no shots, no reload).
+ * 2. Ice Shards (level {@link KRAMPUS_ICE_SHARDS_LEVEL} and up): he hits
+ *    flyers, a shard of a quarter of his damage, as Korath's fireball, that
+ *    chills the flyer {@link KRAMPUS_SHARD_SLOW}% for
+ *    {@link KRAMPUS_SHARD_SECONDS} s. Korath's Breath of Fire.
+ * 3. Blizzard Stomp (level {@link KRAMPUS_BLIZZARD_LEVEL} and up): after
+ *    three blows, Korath's quake (same reach and fall-off), and every tower
+ *    whose middle is inside it acts {@link KRAMPUS_BLIZZARD_SLOW}% slower for
+ *    {@link KRAMPUS_BLIZZARD_SECONDS} s (owner, 28 Nov 2026: "reduce to 30%").
+ *    Korath's Fists of Doom.
+ */
+export const KRAMPUS_FROSTBITE_SHARE = 0.15;
+export const KRAMPUS_ICE_SHARDS_LEVEL = 4;
+export const KRAMPUS_SHARD_SLOW = 30;
+export const KRAMPUS_SHARD_SECONDS = 2;
+export const KRAMPUS_BLIZZARD_LEVEL = 5;
+export const KRAMPUS_BLIZZARD_SLOW = 30;
+export const KRAMPUS_BLIZZARD_SECONDS = 3;
+
+/** The chance a blow freezes the tower it hit, whole percent, by level. PROPOSED. */
+export const KRAMPUS_FREEZE_CHANCE = [10, 12, 14, 16, 18, 20] as const;
+
+/** How long a frozen tower stays frozen, seconds, by level. PROPOSED. */
+export const KRAMPUS_FREEZE_SECONDS = [1.5, 1.5, 2, 2, 2.5, 2.5] as const;
+
+export const krampusFreezeChance = (level: number): number =>
+  krampusRung(KRAMPUS_FREEZE_CHANCE, level);
+export const krampusFreezeTicks = (level: number): number =>
+  Math.round(krampusRung(KRAMPUS_FREEZE_SECONDS, level) * TICKS_PER_SECOND);
+
+/** The slow in whole percent, 0-90, for the towers' tick count (integers: same everywhere). */
+export const krampusSlowPercent = (level: number): number =>
+  Math.max(0, Math.min(90, Math.round(krampusAuraSlow(level) * 100)));

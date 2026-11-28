@@ -1,0 +1,18 @@
+Generate an image using your image generation tool (one image only, do not make variations or extra files).
+
+This is a game sprite sheet for our champion "Krampus" in Backyard Monsters Revamped, which has two art looks: Modern (painted) and Classic (the original 2009 Flash game's look). We need the CLASSIC version of an existing Modern sheet.
+
+Attached:
+- modern-sheet.png: the MODERN walk sheet of Krampus (5 columns = 5 headings: facing the viewer, facing down-left, side view facing left, facing up-left away, facing away; 4 rows = 4 frames of the walk). This is the exact creature, pose, heading, size and position to keep in every cell.
+- flash-champion-battle.png: the ORIGINAL Flash game's champions (Korath, Gorgo, a small Korath) as they look in battle. Use it ONLY for the rendering style.
+
+Job: redraw modern-sheet.png cell by cell in the CLASSIC Flash rendering style, keeping everything else identical: the same 5 x 4 grid, the same creature in every cell with the same pose, heading, size, position in its cell and ground line, the same parts (horns, fur, face, chains, bells, armour, cuffs) and the same colours of each part. Only the rendering changes.
+
+CLASSIC STYLE (from the original Flash champions):
+1. A small PRE-RENDERED 3D MODEL (late-2000s CG, like a 3ds Max render), not a painting: smooth modelled forms, fur as a few large modelled clumps rather than many painted strands, slightly plastic/waxy surfaces, crisp small specular highlights on metal and horn.
+2. Lit by one soft key light from the upper left: the lit faces moderately bright, the right and lower sides falling into deep, near-black shadow; strong 3D form.
+3. Colours a little more saturated and deeper than the Modern sheet, overall darker, no painterly brush texture, no bloom or glow, no outline drawn round the creature.
+4. Simpler detail than the Modern painting: every part must still read when shrunk to about 60-90 pixels tall.
+
+Canvas 1536x1024 split into 5 columns x 4 rows of equal cells, the same as modern-sheet.png. A FLAT pure magenta #FF00FF background everywhere (no ground, no shadow, no gradient). Nothing may touch a cell edge or cross into another cell. No grid lines, numbers, text, labels or frame.
+Save the final PNG as sheet.png in the current working directory.
