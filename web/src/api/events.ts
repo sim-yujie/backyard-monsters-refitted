@@ -128,10 +128,11 @@ export interface EventsBody extends ApiEnvelope {
  * Regular kit; at most one of each a day (UTC midnight reset).
  */
 export interface Mr2WelcomeStatus {
-  /** Unix seconds. */
+  /** 00:00 UTC of day 1 (unix seconds); the days are daily resets from here (owner, 28 Nov 2026). */
   startsAt: number;
+  /** The reset after day 10 (a pass from before patch 9.1: one more day, its day 10 lasting two). */
   endsAt: number;
-  /** Whole days left, rounded up. */
+  /** Days left counting today. */
   daysLeft: number;
   /** How many of each reward the pass gives (7). */
   sets: number;

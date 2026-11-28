@@ -27,7 +27,7 @@ import { centreWindow, type CentreWindow } from "@/ui/centreWindow";
 import { Panel } from "@/ui/Panel";
 import { resourceIcon, RESOURCE_KEYS } from "@/ui/resourceIcon";
 import { eventsArt } from "./eventsArt";
-import { mr2WelcomeCard, paintWelcomeReward, paintWelcomeTimeline, welcomeDaysText } from "./mr2WelcomeCard";
+import { mr2WelcomeCard, paintWelcomeReward, paintWelcomeTimeline, welcomeDaysText, welcomeStartsText } from "./mr2WelcomeCard";
 import { tickCheckin, WEEKEND_ICON, weekendAmount, weekendCheckinBlock } from "./weekendUi";
 import "./events.css";
 import { el } from "@/ui/dom";
@@ -499,6 +499,9 @@ export class EventsPanel {
     tickCheckin(this.element, now);
     for (const line of this.element.querySelectorAll<HTMLElement>("[data-welcome-ends]")) {
       line.textContent = welcomeDaysText(Number(line.dataset["welcomeEnds"]), now);
+    }
+    for (const line of this.element.querySelectorAll<HTMLElement>("[data-welcome-starts]")) {
+      line.textContent = welcomeStartsText(Number(line.dataset["welcomeStarts"]), now);
     }
     for (const line of this.element.querySelectorAll<HTMLElement>("[data-welcome-start]")) paintWelcomeTimeline(line, now);
     // A Frontier Pass reward used today is back at the daily reset.

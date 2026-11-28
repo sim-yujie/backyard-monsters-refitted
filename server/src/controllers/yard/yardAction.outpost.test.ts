@@ -1087,7 +1087,7 @@ describe("free Regular kit (New to Map Room 2)", () => {
   });
 
   test("after the 10 days the Regular kit is charged", async () => {
-    welcome.rows.set(USERID, newWelcome(now() - MR2_WELCOME_SECONDS - 1));
+    welcome.rows.set(USERID, newWelcome(now() - MR2_WELCOME_SECONDS - 86_400));
     const answer = await onOutpost(yardStarterKitAction, { kit: 1, pay: "shiny" });
     expect(answer.status).toBe(200);
     expect(mainSave().credits).toBe(1000 - 420);
@@ -1098,7 +1098,7 @@ describe("free Regular kit (New to Map Room 2)", () => {
     welcome.launch = launch;
     const answer = await onOutpost(yardStarterKitAction, { kit: 1, pay: "resources", free: true });
     expect(answer.status).toBe(200);
-    expect(welcome.rows.get(USERID)).toMatchObject({ start: launch, kitUses: [expect.any(Number)] });
+    expect(welcome.rows.get(USERID)).toMatchObject({ start: Math.floor(launch / 86_400) * 86_400, kitUses: [expect.any(Number)] });
   });
 });
 
