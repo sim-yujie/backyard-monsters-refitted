@@ -1,0 +1,12 @@
+Generate an image using your image generation tool (one image only). Then save the final PNG as sheet.png in the current working directory.
+
+I need three EMPTY cut gemstones for a premium game's skill icons. A colourful ability painting will be placed INSIDE each gem later and seen THROUGH its glass, so every gem is painted as COLOURLESS clear crystal in grey values only (white, silver, greys, near-black), no colour at all. Its flat central TABLE facet is left as a flat solid PURE GREEN (#00FF00) area, perfectly flat, no shading. Everything outside the gems is flat solid PURE MAGENTA (#FF00FF). No text, no sparkles, no star twinkles.
+
+Reference 1 shows the icons that will sit inside (dark subjects, cold silver rim light, rich colour fields, painterly premium finish): match that quality and its light from the upper left. Reference 2 is the game's crystal currency: same world of cut crystal, but do NOT copy its tilted shard shape.
+
+Each gem is seen exactly from ABOVE, perfectly symmetric, centred in its cell, filling about 92% of the cell. Around the green table: a ring of crown facets about 15% of the gem's width deep, each facet a flat plane of a different grey value (bright on the upper left, dark on the lower right), with crisp thin bright edges between facets, like a real cut jewel catching light. A thin crisp near-black girdle outline around the whole gem so it reads on cream and on dark slate. Big clean planes only, at most 8 to 12 facets around: it is shown as small as 30 x 30 pixels.
+
+Layout: 1536 x 1024, three equal square cells side by side in one row, each about 460 x 460, centred vertically, magenta between them.
+(1) ROUND BRILLIANT: circular outline, octagonal green table about 66% of the width.
+(2) CUSHION CUT: a square with strongly rounded corners, square-ish green table with cut corners about 68% of the width.
+(3) FLAT-TOP HEXAGON STEP CUT: a regular hexagon with flat top and bottom edges, hexagonal green table about 66% of the width, the crown made of two stepped rows of long flat facets parallel to each side.

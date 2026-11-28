@@ -1,0 +1,38 @@
+Generate an image using your image generation tool (one image only). Then save the final PNG as sheet.png in the current working directory.
+
+Paint ONE square game ability icon, exactly following the art brief below, written by the game's visual designer. Do not add ideas of your own. Reference 1 is the champion Drull (the brief refers to it as drull.png). The icon is "Obsidian Hide", Drull's ability: each bite grows another layer of obsidian over his hide, up to five layers. The game owner's words: "Not just cool but premium btw" and no white sticker borders. Image size 1024 x 1024. The full-bleed tile fills the image; outside its rounded corners use flat pure black. No text.
+
+Concept 1: Fivefold Obsidian Laminate
+
+**Reasoning:** Turns the 5-stack hardening mechanic directly into a luxury full-bleed RPG skill tile—five monumental, razor-faceted volcanic-glass armor plates stepping across Drull's crimson hide—delivering maximum material richness and instant diagonal legibility at 30 px.
+
+### Art Brief
+
+- **Canvas & Orientation:** `1024×1024` square, full-bleed with rounded outer corners (`56 px` radius so it scales to ~2 px at 30 px and ~3 px at 52 px).
+- **Composition:** Tight macro close-up angled at **42°** from bottom-left to top-right. Five overlapping, heavy chevron/shield-cut **obsidian scale-plates** step upward across the frame like armored dragon lamellae:
+  - **Bottom-left corner (0%–24% along the diagonal):** Raw, dark-crimson pebbled dragon hide (matching drull.png) emerging from shadow, establishing that the glass is *growing out of* Drull's flesh.
+  - **Core diagonal sweep (22%–92%):** **Five distinct, thick, overlapping obsidian armor plates** arranged in a clean, staggered 1–2–2 or 5-tier stepped cascade sweeping toward the upper-right corner. Each plate has two broad, flat-to-slightly-concave conchoidal glass faces meeting at a sharp central bevel ridge, with a clean stepped drop-shadow casting onto the plate beneath it.
+  - **Scale hierarchy:** Make the middle three plates the largest and boldest (each ~260–320 px wide at 1024) so they never turn into "tiny noisy scales"; keep micro-chips confined to subtle secondary edge notches along the beveled lips.
+  - **Subtle seam glow:** Only inside the deepest recessed overlap seam where the crimson hide meets the first glass plate, allow a razor-thin internal mahogany-garnet refraction glow—**not** bright orange lava cracks.
+- **Silhouette:** Crisp full-bleed beveled square (`1024×1024` with `56 px` corner radius). Internal silhouette is defined by the bold, rhythmic zig-zag/chevron steps of the 5 overlapping glass ridges running bottom-left to top-right.
+- **Palette (Hex Values):**
+  - **Deep Obsidian Shadow Planes:** `#09070D` (abyssal violet-black)
+  - **Primary Obsidian Glass Midtone:** `#1A1624` (dark smoked indigo-black) and `#2D263B` (cool slate-violet tilted facets)
+  - **Mahogany-Obsidian Translucent Edge / Subsurface Sheen:** `#5E0F1B` (deep oxblood) → `#9E1C2D` (garnet glass lip)
+  - **Drull Crimson Hide (lower-left origin):** `#3D0B14` (shadow) → `#781A27` (midtone) → `#A62C38` (highlight bump)
+  - **Cold Glass Specular Ridges (Critical for 30 px & greyscale):** `#8F8AA8` (broad satin sheen) → `#DCE6F0` (razor bevel catchlight) → `#FFFFFF` (pinpoint 1% glint on the hero central ridge corner)
+  - **Drull Crest Warm Bounce (subtle secondary rim, top-left only):** `#C97A1E` → `#F5BD4F` (grazing reflection on the upper-left chamfer, ~5% of canvas area)
+- **Lighting:**
+  - **Key Light:** Hard, cool-white studio/moonlight key from **upper-left (10:30 position, 45° elevation)** to carve razor-sharp, high-contrast silver-ice specular lines along the upper-left beveled ridges of all 5 obsidian plates.
+  - **Internal / Subsurface Light:** Deep crimson-mahogany translucency concentrated strictly at the thin chipped leading edges of the glass plates, giving obsidian its signature volcanic-blood richness without glowing like molten magma.
+  - **Rim Bounce:** Faint warm amber-gold directional bounce from **top-right (1:30)** hinting at Drull's golden crest off-frame, brushing only the topmost glass bevel.
+  - **Ambient Occlusion:** Deep `#060408` contact shadows tucked tightly beneath every overlapping plate lip to separate the 5 layers decisively.
+- **Edge Treatment / Frame:** **Precision chamfered dark-metal & obsidian micro-bezel**, `28 px` total width at 1024 (~1 px at 30 px, ~1.5 px at 52 px):
+  - Outer `10 px` crisp matte-black containment rim (`#0A080C`) so the icon separates cleanly from Classic parchment (`#F3E7C6`) with zero white halo.
+  - Inner `12 px` beveled dark-gunmetal & tarnished-brass trim (`#3B3340` shadow bottom-right, `#9E7B42` brushed antique-gold sheen top-left) so the icon catches crisp light against Modern dark slate (`#36434D`).
+  - Inner `6 px` recessed shadow groove (`#07050A`) framing the artwork like a set jewel.
+- **Background:** None visible outside the rounded square; inside the tile, the bottom-left deep crimson hide (`#2B070E`) and upper-right deep obsidian shadow (`#0B0810`) act as a rich dark vignette bed.
+- **What Must Read at 30 px (and Locked Greyscale):**
+  - **3 to 5 bold, crisp diagonal black-and-silver chevrons** sweeping bottom-left to top-right, anchored by a rich dark-red tone at the bottom-left.
+  - The bright `#DCE6F0` bevel ridges must be painted thick enough (`18–26 px` wide soft-to-hard gradient bands at 1024, tapering to razor edges) that they survive downsampling to 1–1.5 px bright diagonal slashes at 30 px—keeping the layered armor unmistakable even when desaturated in the locked state.
+- **Do NOT Include:** White sticker outline, black comic linework, bright orange/yellow lava cracks, tiny scattered scales, flames, or text.

@@ -1,0 +1,36 @@
+Generate an image using your image generation tool (one image only). Then save the final PNG as sheet.png in the current working directory.
+
+Paint ONE square game ability icon, exactly following the art brief below, written by the game's visual designer. Do not add ideas of your own. Reference 1 is the champion Drull (the brief refers to it as drull.png). The icon is "Obsidian Hide", Drull's ability: each bite grows another layer of obsidian over his hide, up to five layers. The game owner's words: "Not just cool but premium btw" and no white sticker borders. Image size 1024 x 1024. Paint it on a flat pure magenta (#FF00FF) background outside the emblem (it will be keyed out to transparency); keep magenta and pink out of the emblem itself. No text.
+
+Concept 3: Vitrified Dorsal Mantle (Borderless Sculpted Emblem)
+
+**Reasoning:** Preserves the unboxed, free-form integration of the existing Champion tab slots and inline description bar—without using a cheap white sticker border—by crafting a curved, gothic-draconic shoulder carapace of five swept obsidian blades sealed by a dark-glass contour and razor internal rim light.
+
+### Art Brief
+
+- **Canvas & Orientation:** `1024×1024` square, **transparent background** (`alpha = 0` outside the emblem). Subject fills **86% of the canvas** (`~880×880` active bounding box, centered with ~72 px breathing margin so it never clips at 30 px or 20 px inline).
+- **Composition:** A bold, predatory **C-curved armored dragon ridge / pauldron** sweeping in a strong crescent arc from **bottom-left (`x: 150, y: 840`) up through top-center (`x: 500, y: 140`) and curving downward toward right-center (`x: 860, y: 580`)**—evoking the heavy armored dorsal crest of Drull's neck/shoulder flexing forward to absorb a blow:
+  - **Five Swept Obsidian Blades/Lamellae:** The outer convex spine of the crescent is formed by **five overlapping, backward-swept razor-edged obsidian scale-plates**, shingled tightly like gothic dragon-scale plate armor or overlapping volcanic-glass fins. Each plate tapers to a crisp, hooked blade-tip pointing along the curve, clearly counting 1–2–3–4–5 from base to apex.
+  - **Under-Carapace Crimson Hide & Gold Spine Seam:** Nestled inside the inner concave curve of the crescent (`lower-center to right-bottom`, ~28% of the emblem's mass) is a sculpted band of **Drull's dark crimson ribbed hide**, separated from the overlapping black-glass plates by a tight, recessed **burnished-gold & crimson-ember seam** (referencing Drull's golden crest and flanks—painted like inlaid dark metal/amber refraction, *never* bright cartoon fire).
+  - **Self-Contained Anchor Shape:** Keep the overall outer silhouette compact and cohesive (no spindly protruding claws or tiny disconnected shards) so the emblem reads as one solid, iconic piece of luxury dark-fantasy armor.
+- **Silhouette:** Unmistakable sweeping, serrated **armored crescent / dragon-pauldron silhouette**—five bold, rhythmic overlapping blade-steps along the outer upper-left arc, smooth muscular dark-crimson curve along the inner lower-right hollow. **Zero thin spikes, zero detached particles.**
+- **Palette (Hex Values):**
+  - **Outer Containment Edge (replaces white sticker border):** `#0A070D` (razor-crisp `10–14 px` dark obsidian-ink perimeter that stays clean on Classic `#F3E7C6` parchment)
+  - **Internal Specular Rim-Light (inset `14 px` inside perimeter):** `#B8C7D9` → `#EEF4FA` (cool glass Fresnel rim along the entire upper-left convex arc so the dark silhouette pops vividly off Modern `#36434D` dark slate!)
+  - **Obsidian Lamellae Core:** `#120E1A` (deep shadow glass) → `#261F33` (mid facet) → `#4B4261` (broad glassy polish)
+  - **Mahogany-Obsidian Edge Glaze (inner beveled lips of each of the 5 blades):** `#6B101E` → `#B32032`
+  - **Drull Crimson Under-Hide:** `#330810` (deep crease) → `#7D1827` (rich crimson midtone) → `#B82D3B` (lit muscular ridge)
+  - **Burnished Crest-Gold Accent Seam:** `#8C5312` (shadow) → `#E59B27` (mid) → `#FFE082` (razor glint at the apex junction)
+- **Lighting:**
+  - **High-Contrast Edge-First Lighting (Dual-Theme Engineered):**
+    - Strong cool-white **rim/key light from top-left (10:30)** creates a bright, continuous silver-ice glass highlight (`#DCE6F2`) hugging the outer swept bevels of all 5 obsidian blades—this guarantees crisp edge separation against the dark `#36434D` Modern UI slot without needing any white outer stroke.
+    - Every blade overlaps the next with a sharp, deep `#08060B` cast shadow and a subtle translucent crimson lip (`#9E1B2C`), creating rich jewel-like depth.
+    - A warm amber-gold **kicker light from lower-right (4:30)** grazes the recessed crimson under-hide and catches the single burnished-gold spine seam, tying the emblem visually to Drull's palette.
+- **Edge Treatment / Frame:** **No square frame and no white sticker border.** Instead, use a **painterly razor-sharp dark-obsidian perimeter (`#0A070D`, antialiased, zero outer glow)** paired with a high-luminance **internal Fresnel glass rim** just inside the upper-left edges.
+  - On **Classic light parchment (`#F3E7C6`)**, the deep `#0A070D` obsidian edge reads like an ultra-clean sculpted enamel/metal emblem.
+  - On **Modern dark slate (`#36434D`)**, the bright `#DCE6F2` internal glass bevel and warm crimson-gold inner curve lift the silhouette cleanly off the background.
+- **Background:** Fully transparent (`100% alpha = 0`), with no drop shadow baked into the PNG outside the silhouette (so it renders cleanly inside both the 30 px Champion tab slot, the 52 px unlock pop-up, and the ~22 px inline description bar).
+- **What Must Read at 30 px (and Locked Greyscale):**
+  - A **bold, sweeping curved armor crest** with **5 bright silver-edged black glass blades** fanning along the top-left arc over a **deep crimson core** and a single **pinpoint gold-white spine gleam**.
+  - At 20–30 px and in locked greyscale, the sweeping armored crescent silhouette + 5 high-contrast bright blade edges remain instantly distinguishable from Drull's neighbor icons (*Bloodthirst*'s drop and *Twin Bite*'s jaws).
+- **Do NOT Include:** White sticker outline, black comic outlines, square box background, detached flying sparks/rocks, cartoon faces/eyes/claws, or molten-lava cracks.

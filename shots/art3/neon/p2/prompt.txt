@@ -1,0 +1,37 @@
+Generate an image using your image generation tool (one image only). Then save the final PNG as sheet.png in the current working directory.
+
+Paint ONE square game ability icon, exactly following the art brief below, written by the game's visual designer. Do not add ideas of your own. Reference 1 is the champion Drull (the brief refers to it as drull.png). The icon is "Obsidian Hide", Drull's ability: each bite grows another layer of obsidian over his hide, up to five layers. The game owner's words: "Not just cool but premium btw" and no white sticker borders. Image size 1024 x 1024. The full-bleed tile fills the image; outside its rounded corners use flat pure black. No text.
+
+Concept 2: The Terraced Obsidian Scale-Relic
+
+**Reasoning:** Replaces the cliché medieval heater shield (already used by Gorgo's *Stone Skin*) with a predatory, museum-grade single dragon scale sculpted from five concentric terraced obsidian tiers—reading instantly as an impenetrable, high-craft defensive relic.
+
+### Art Brief
+
+- **Canvas & Orientation:** `1024×1024` square, full-bleed dark-vignette RPG icon tile (`56 px` corner radius).
+- **Composition:** Centered, symmetrical **hero emblem** occupying **78% of the tile height** (`y: 110–914`) and **70% of the width** (`x: 154–870`), pointing cleanly **downward** like a lethal dragon dorsal scale / volcanic arrowhead:
+  - **Outer Form:** A sleek, predatory **kite-teardrop dragon scale**—broad, notched armored shoulders at the top (`y: 140–320`) curving smoothly inward to a razor-sharp spear-point tip at the bottom (`y: 914`). **Never** a flat-topped medieval heraldic shield.
+  - **Five Concentric Terraced Layers:** The scale is visibly built from **five stepped, nested obsidian strata** stepping inward and upward in relief from the perimeter toward the center, like precision-knapped volcanic glass or topographic armor tiers. Each tier steps up by a crisp, beveled cliff edge (`24–32 px` face width at 1024).
+  - **Central Vertical Keel:** Running cleanly down the vertical centerline (`x: 512`, `y: 130–900`) is a razor-sharp raised **obsidian spine ridge** dividing the scale into a left light-catching plane and a right deep-shadow plane—creating an instant high-contrast light/dark split.
+  - **Deflection Glint (Hero Storytelling Accent):** On the upper-left shoulder facet (`x: 360, y: 270`), paint a subtle, surgical **4-point star-glint / glancing strike sheen** (a tight `#FFF4D6` core with two razor-thin `#DCE8F5` refraction streaks following the glass facet) suggesting an incoming blow ricocheting harmlessly off glass-hard armor.
+- **Silhouette:** Clean, unmistakable downward-pointing predatory dragon-scale silhouette framed cleanly inside a dark square vignette. The subtle top shoulder notches echo Drull's horned/crested anatomy without looking cartoony.
+- **Palette (Hex Values):**
+  - **Background Vignette Field:** `#0A0810` (outer edge) → `#1B111C` (mid radial) → `#4D0F1C` (tight crimson-oxblood aura directly behind the scale shoulders)
+  - **Obsidian Scale Shadow Half (Right Plane):** `#08070C` (deep facet) → `#1B1626` (reflected indigo-obsidian)
+  - **Obsidian Scale Lit Half (Left Plane):** `#231D30` (base glass) → `#463E5C` (faceted mid-sheen) → `#9DA8BD` (broad specular plane)
+  - **Mahogany-Crimson Subsurface Rim (Outer 2 Thin Glass Tiers):** `#6E1120` → `#B82233` (deep ruby-oxblood translucent glass glowing only along the outer terraced bevels)
+  - **Central Keel & Terraced Ridge Speculars:** `#E6EFF7` (crisp ridge highlight) → `#FFFFFF` (apex glint along top-center keel)
+  - **Glancing Strike / Crest Gold Accent:** `#E09626` (warm gold rim reflection along top-right notch) and `#FFF2CC` (pinpoint upper-left glint)
+- **Lighting:**
+  - **Dramatic Chiaroscuro Split:** Primary hard cool-white key light from **upper-left (9:30–10:00)** illuminates the entire left half of the scale and flashes cleanly down the central vertical keel, while throwing the right half into glossy, mirror-black shadow—guaranteeing dramatic 3D volume at 30 px.
+  - **Crimson Backlight:** A restrained, moody oxblood-crimson backlight (`#6B1222`) sits directly behind the scale's silhouette, bleeding softly through the thin outer obsidian edges to separate the dark glass from the dark tile background.
+  - **Secondary Rim Light:** Thin warm-gold metallic rim light tracing the right-side terraced ridges so the shadow half still shows crisp stepped layers.
+- **Edge Treatment / Frame:** **Sleek recessed dark-obsidian & smoked-iron square frame**, `24 px` total width at 1024:
+  - Outer `8 px` deep `#09070B` containment border (crisp anchor against Classic `#F3E7C6` parchment).
+  - Middle `10 px` brushed dark-steel chamfer (`#5C566B` top-left highlight tapering smoothly to `#1E1A26` bottom-right shadow) with subtle mitered corners (crisp lift against Modern `#36434D` dark slate).
+  - Inner `6 px` soft vignette falloff into the dark canvas.
+- **Background:** Controlled radial dark-fantasy vignette (`#0A0810` corners warming subtly to `#3D0D18` behind the center scale) with faint, barely-there floating volcanic glass dust motes (`<2%` visual weight, vanishing cleanly at 30 px).
+- **What Must Read at 30 px (and Locked Greyscale):**
+  - A **razor-sharp, symmetrical downward-pointing armored scale** split cleanly into a **bright silver-slate left half** and a **glossy jet-black right half** by a gleaming vertical keel, ringed by a dark crimson halo inside a crisp dark square.
+  - In locked greyscale, the half-lit / half-shadow vertical split + bright central ridge reads with 100% clarity (zero muddiness).
+- **Do NOT Include:** Medieval shield shape or rivets, thick white border, glowing magma veins, cartoon eye, or busy particle explosions.

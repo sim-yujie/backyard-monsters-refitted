@@ -1,0 +1,27 @@
+You are the UI/UX and visual designer for the browser game "Backyard Monsters Revamped". I need your design advice on framing the champion ability icons as gems/crystals.
+
+Context. Each of the four champions (Gorgo, Drull, Fomor, Korath) has three abilities. A player unlocks one ability with one Monster Madness crystal (mm-crystal.png: a faceted violet/magenta crystal with a fiery orange core; it is shown beside "1 crystal unlocks 1 ability" and on the Unlock button). The 12 ability icons were just repainted in one premium style (ability-icons.png, "new" rows): a dark subject with a cold silver rim light on a single glowing colour field (violet, amber, teal, plum, gold, crimson, emerald, navy, purple, red, night blue, charcoal), inside a thin bronze square frame. The owner accepted that set.
+
+Where they appear (real screenshots in this folder):
+- abilities-modern.png and abilities-classic.png: the Abilities view (desktop, 2x crop). Each slot is a button about 170 x 60 px with the icon drawn at 30 x 30 px above the ability's name. Slot states: unlocked (gold border, tick), next (pink "Next" badge, dashed or glowing border), locked (lock glyph, icon today at 35% opacity and grey). The line at the bottom (inspector) shows the icon at 28 px.
+- phone-modern.png / phone-classic.png: the same on a phone 390 x 844 (icon 26 px).
+- unlocked-modern.png / unlocked-classic.png: the "Ability unlocked" pop-up, icon 52 px on the corner of the champion's portrait.
+- The game has two looks: Modern (dark steel windows) and Classic (cream Flash-style windows). The icons must work on both.
+
+The owner's new ask, word for word: "Rather than square icons, can you 'embed' them into crystal/gems to make it feel more immersive?" Owner rules: cool, premium, menacing; no white sticker borders, nothing goofy or cartoony; painted art, not line icons. It must still read at 26-30 px.
+
+Ideas on the table (improve or replace them):
+(a) each icon inside its own faceted gem cut whose colour matches the icon's colour field;
+(b) one shared crystal shape for all 12 with the picture glowing inside it;
+(c) a gem socket/bezel set into the slot (the ability picture is the stone).
+Also: how should a LOCKED ability look in gem form (dull, uncut, dark, clouded crystal?) instead of today's 35% grey ghost? And "next" (ready to unlock)?
+
+Please give:
+1. Your top 2-3 gem directions, each: name, one-line why, the exact silhouette (e.g. hexagon / shield-cut / kite / round cabochon / elongated like the MM crystal), how the existing square painting is placed inside it (mask, inset, depth, glass highlight, facets over it), rim/bezel material and colour per look (Modern and Classic), and the locked and next states.
+2. What must stay true at 26-30 px (how much of the picture survives the mask, max facet lines, highlight size).
+3. Which direction you would ship and why, and which is weakest.
+4. Any risk: e.g. too close to the MM crystal currency so players confuse an ability with a crystal, contrast on cream, shape changes the slot layout.
+
+Answer in Markdown. Keep it concrete and short (under ~900 words).
+
+Note: in this run you cannot run commands or save files (read-only). Answer from the pictures.

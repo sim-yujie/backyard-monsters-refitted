@@ -1,0 +1,14 @@
+Generate an image using your image generation tool (one image only). Then save the final PNG as sheet.png in the current working directory.
+
+Reference 1 is the APPROVED style (the bottom-left tile of the set is the owner's chosen icon; the other tiles were painted to match it): the owner's chosen premium skill icon "Obsidian Hide" for the champion Drull. Every new icon must look like it belongs to the same set as Reference 1: same painterly high-end finish, same lighting (one dark main mass, a crisp cold silver-white rim light tracing its edges, glossy faceted detail), same full-bleed square painting with the same thin dark bronze bevelled frame, same smooth glowing single-colour background field behind the subject. Reference 2 shows the four champions of the game "Backyard Monsters": 1 Gorgo (huge blue gorilla-like brute with purple horns), 2 Drull (dark red two-headed dragon, yellow-orange crests), 3 Fomor (purple winged spiky beast), 4 Korath (black rock golem with cracks of molten lava).
+
+The owner's words about the old icons: "goofy, like stickers"; and "not just cool but premium". So: NO white outline, NO sticker border, NO cartoon gloss, NO cute look. Menacing, rich materials, careful lighting, refined finish, like a high-end paid game's skill icons.
+
+THE KEY RULE: each icon is shown at only 30 x 30 pixels, so each must be ONE large simple shape built from only two or three value blocks: a dark main mass, a bright cold silver-white rim light tracing its edge, and one colour field. Fine detail lives inside the big shapes and must not break them up. No busy backgrounds, no small particles, no tiny sparks.
+
+Layout: 1536 x 1024, three equal squares side by side in one row, each about 460 x 460, centred vertically, separated by flat pure black (#000000) gaps of at least 40 px. Each square is a full-bleed painting with the thin dark bronze bevelled frame of Reference 1.
+All three are BLOODTHIRST (Drull heals from the damage he deals). The earlier try was too dark to read at 30 px: the bright blood must be a LARGE shape (at least a third of the square), not a small drop. Do not reuse Obsidian Hide's crimson background; each uses a dark plum / wine background.
+(1) One huge glossy glowing bright-red blood drop filling the middle of the square, with a black obsidian dragon fang curving down over its top edge and a crisp silver rim light on the fang, against a smooth dark plum-purple glow background.
+(2) Drull's black dragon jaw in side profile facing right, pale fangs biting, with a big bright red stream of glowing blood flowing up from the bite into his mouth, against a smooth dark wine-red to purple glow background.
+(3) A black obsidian dragon fang and a large bright red blood drop shaped like a heart-shaped life crystal glowing beside it, strong red glow, against a smooth dark plum background.
+No text, letters or numbers.

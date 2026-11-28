@@ -1,0 +1,53 @@
+[
+ {
+  "title": "TAKE A - neon's design (Antigravity); Codex painted neon's exact briefs",
+  "icons": [
+   [
+    "A1",
+    "final/A1.png"
+   ],
+   [
+    "A2",
+    "final/A2.png"
+   ],
+   [
+    "A3",
+    "final/A3.png"
+   ]
+  ]
+ },
+ {
+  "title": "TAKE B - astra's design, painted by astra (Codex gpt-6-astra)",
+  "icons": [
+   [
+    "B1",
+    "final/B1.png"
+   ],
+   [
+    "B2",
+    "final/B2.png"
+   ],
+   [
+    "B3",
+    "final/B3.png"
+   ]
+  ]
+ },
+ {
+  "title": "TAKE C - helper's own round 3 (no sticker border, premium)",
+  "icons": [
+   [
+    "C1",
+    "final/C1.png"
+   ],
+   [
+    "C2",
+    "final/C2.png"
+   ],
+   [
+    "C3",
+    "final/C3.png"
+   ]
+  ]
+ }
+]

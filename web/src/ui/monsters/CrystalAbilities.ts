@@ -35,23 +35,30 @@ import "@/ui/styles/crystals.css";
 const BASE = import.meta.env.BASE_URL;
 const url = (path: string): string => `${BASE}${path.replace(/^\//, "")}`;
 
-/** Each ability's painted icon: the fight's stickers where one fits, else its own. */
+/**
+ * Each ability's icon: its painting (the Obsidian Hide style, owner's pick C1, 28 Nov 2026) seen through a
+ * cushion-cut gem's facets (owner's pick C of three gem framings, 28 Nov 2026), baked at 192 px by
+ * `shots/art5/bake.py`. A locked slot shows the same gem as dull dark stone (`<name>.locked.webp`).
+ * The fight's status stickers (`/status-icons/`) stay as they are; the abilities do not borrow them.
+ */
 const ABILITY_ICON: Readonly<Record<AbilityInfo["id"], string>> = {
-  stoneSkin: "/status-icons/stone.webp",
-  chestPound: "/ui/abilities/chest-pound.webp",
-  groundSlam: "/ui/abilities/ground-slam.webp",
-  bloodthirst: "/ui/abilities/bloodthirst.webp",
-  twinBite: "/ui/abilities/twin-bite.webp",
-  obsidianHide: "/ui/abilities/obsidian-hide.webp",
-  healingMist: "/ui/abilities/healing-mist.webp",
-  bubble: "/status-icons/shielded.webp",
-  acidSpit: "/status-icons/marked.webp",
-  burn: "/ui/abilities/burn.webp",
-  breathOfFire: "/ui/abilities/breath-of-fire.webp",
-  fistsOfDoom: "/ui/abilities/fists-of-doom.webp",
+  stoneSkin: "stone-skin",
+  chestPound: "chest-pound",
+  groundSlam: "ground-slam",
+  bloodthirst: "bloodthirst",
+  twinBite: "twin-bite",
+  obsidianHide: "obsidian-hide",
+  healingMist: "healing-mist",
+  bubble: "bubble",
+  acidSpit: "acid-spit",
+  burn: "burn",
+  breathOfFire: "breath-of-fire",
+  fistsOfDoom: "fists-of-doom",
 };
 
-export const abilityIconUrl = (ability: AbilityInfo): string => url(ABILITY_ICON[ability.id]);
+/** The ability's gem; its dull stone when `locked`. */
+export const abilityIconUrl = (ability: AbilityInfo, locked = false): string =>
+  url(`/ui/abilities/gem-c/${ABILITY_ICON[ability.id]}${locked ? ".locked" : ""}.webp`);
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string) => {
   const element = document.createElement(tag);
@@ -67,6 +74,10 @@ const image = (src: string, className: string, alt = ""): HTMLImageElement => {
   picture.decoding = "async";
   return picture;
 };
+
+/** The ability's gem as an image (its dull stone when `locked`). */
+const abilityIcon = (ability: AbilityInfo, className: string, locked = false): HTMLImageElement =>
+  image(abilityIconUrl(ability, locked), className);
 
 export const crystalIcon = (className = "crystal-icon"): HTMLImageElement => image(url(CRYSTAL_ICON), className);
 
@@ -165,7 +176,7 @@ export class CrystalAbilities {
       const state = index < count ? "unlocked" : index === count ? "next" : "locked";
       const slot = el("button", `crystal-slot crystal-slot--${state}`);
       slot.type = "button";
-      slot.append(image(abilityIconUrl(ability), "crystal-slot__icon"), el("span", "crystal-slot__name", ability.name));
+      slot.append(abilityIcon(ability, "crystal-slot__icon", state === "locked"), el("span", "crystal-slot__name", ability.name));
       if (state === "next" && crystals > 0) slot.classList.add("crystal-slot--ready");
       if (ability.fromLevel > 1) {
         const gate = el("span", "crystal-slot__gate", `Lv ${ability.fromLevel}+`);
@@ -212,7 +223,7 @@ export class CrystalAbilities {
     }
     const note = unlockNote(picked.t, ability, ownedChampion(save.champion, picked.t));
     this.inspector.replaceChildren(
-      image(abilityIconUrl(ability), "crystal-abilities__inspector-icon"),
+      abilityIcon(ability, "crystal-abilities__inspector-icon"),
       el("strong", "", `${ability.name}: `),
       document.createTextNode(ability.line),
       ...(note ? [el("span", "crystal-abilities__note", ` ${note}`)] : []),
@@ -255,7 +266,7 @@ const hero = (t: number, ability: AbilityInfo, level: number): HTMLElement => {
   const portrait = el("img", "crystal-hero__portrait");
   portrait.alt = CRYSTAL_CHAMPION_NAMES[t] ?? "";
   showPortrait(portrait, championPortrait(championIdOf(t), level, "card"));
-  wrap.append(portrait, image(abilityIconUrl(ability), "crystal-hero__icon"));
+  wrap.append(portrait, abilityIcon(ability, "crystal-hero__icon"));
   return wrap;
 };
 

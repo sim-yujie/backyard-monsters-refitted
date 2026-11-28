@@ -1,0 +1,11 @@
+Generate an image using your image generation tool (one image only). Then save the final PNG as sheet.png in the current working directory.
+
+Reference 1 is the champion Drull from the game "Backyard Monsters": a dark red two-headed dragon with yellow-orange crests, cream belly plates, gold spots and pale fangs. Reference 2 shows icons the game owner REJECTED as "goofy, like stickers": do NOT copy that look (no white sticker outline, no cartoon gloss, no bubbly shapes).
+
+Paint THREE ability icons for Drull's ability OBSIDIAN HIDE (every bite he lands grows another layer of black volcanic-glass armour over his hide, so attacks break against him). Style: premium dark-fantasy RPG skill icons, the kind seen in a serious action RPG skill bar. Painterly, realistic rendering, dark and menacing, dramatic low-key lighting with strong rim light and deep shadows, sharp glassy edges, real material feel (black obsidian with faint crimson reflections, molten red-orange glow only in thin cracks). Each icon is a FULL-BLEED SQUARE painting filling its square edge to edge, with a thin dark bronze bevelled frame and a dark vignette inside the frame. One clear focal shape per icon with high contrast, so it still reads at 30 px.
+
+Layout: 1536 x 1024 image, three equal squares side by side in one row, each about 480 x 480, centred vertically, separated and surrounded by flat pure black (#000000).
+(1) Drull's head in side profile facing right, close crop, a single head, jaw slightly open with pale fangs, his dark red scales hardening into jagged black obsidian plates along the neck and brow, one eye glowing orange, red rim light, smoky dark background.
+(2) A steel spear tip shattering into fragments against a wall of overlapping black obsidian dragon scales, sparks and shards flying, thin red-hot cracks between the scales, dark crimson background.
+(3) Drull's full two-headed silhouette crouched and roaring, his hide crystallising into black obsidian spikes along his back, backlit by a volcanic orange glow behind him, near-black foreground, ember particles.
+No text, letters or numbers. No white outlines.

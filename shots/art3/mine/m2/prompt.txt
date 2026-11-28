@@ -1,0 +1,13 @@
+Generate an image using your image generation tool (one image only). Then save the final PNG as sheet.png in the current working directory.
+
+Reference 1 is the champion Drull from the game "Backyard Monsters": a dark red two-headed dragon with yellow-orange crests and pale fangs. Reference 2 shows icons the owner REJECTED as "goofy, like stickers": do NOT copy that look (no white outline, no cartoon gloss).
+
+The owner's words: "Not just cool but premium btw". Paint THREE premium skill icons for Drull's ability OBSIDIAN HIDE (each bite grows another layer of black volcanic-glass armour over his hide), like a high-end paid game's skill icons: rich materials, careful lighting and rim light, crisp detail, refined finish, nothing cheap or cartoony.
+
+THE KEY RULE: each icon is shown at only 30 x 30 pixels, so each must be ONE large simple shape built from only two or three value blocks: a near-black obsidian mass, a bright cold silver-white rim light tracing its edge, and one warm colour field (deep crimson or molten orange). Fine detail lives inside the big shapes and must not break them up. No busy backgrounds, no small particles.
+
+Layout: 1536 x 1024, three equal squares side by side in one row, each about 480 x 480, centred vertically, on flat pure black (#000000). Each square is a full-bleed painting with a thin dark bronze bevelled frame.
+(1) Drull's single head in side profile facing right, filling the square, the whole head turned to glossy black obsidian with sharp faceted plates, one thin bright silver rim light along the top of the skull and jaw, one glowing orange eye, pale fangs, against a smooth deep crimson glow background.
+(2) One huge black obsidian dragon scale filling the square, pointed downward, faceted like knapped glass, a crisp silver-white specular edge down one side, a single bright molten-orange fracture line where a bite struck it, smooth dark crimson background.
+(3) Drull's two-headed silhouette in solid black obsidian, roaring, with jagged glass spikes along both necks and his back, backlit by a smooth bright molten-orange glow behind him, thin cold rim light on the silhouette edges, nothing else in the frame.
+No text, letters or numbers.
