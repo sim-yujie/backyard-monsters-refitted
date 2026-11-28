@@ -10,6 +10,8 @@ effect changed (sum of |R|+|G|+|B| difference over 3, i.e. the round-2 'L' of th
 - round-2 metric (T = 40): share of changed grass pixels whose NEW colour reads green/mint (hue 72-170 deg) vs blue
   (170-270) vs white (saturation < 0.18, value > 0.6). The 18% (neon, Classic) was this number.
 - the same at T = 12 (a faint mist hardly reaches 40);
+- Pixels whose ground already differs between the two takes before the fight (frame 0, no Krampus yet; the Classic
+  ground's dry patches are not always laid the same way) are left out.
 - Lab shift (CIE L*a*b*, D65) of the changed grass pixels, new minus old: dL (lighter +), da (greener -), db (bluer -).
   A mint haze is lighter with a small db; an ice-blue one has a large negative db.
 """
@@ -41,6 +43,11 @@ def lab(r, g, b):
     return 116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)
 
 
+same = None
+if fixed is None and os.path.exists(f"{base_dir}/f00000.jpg") and os.path.exists(f"{fx_dir}/f00000.jpg"):
+    g0 = ImageChops.difference(Image.open(f"{base_dir}/f00000.jpg").convert("RGB").resize(SIZE),
+                               Image.open(f"{fx_dir}/f00000.jpg").convert("RGB").resize(SIZE)).convert("L")
+    same = [v < 8 for v in g0.getdata()]
 stats = {T: {"n": 0, "green": 0, "blue": 0, "white": 0, "dl": 0.0, "da": 0.0, "db": 0.0} for T in (40, 12)}
 grass_total = 0
 for name in names:
@@ -50,7 +57,9 @@ for name in names:
     a = Image.open(f"{fx_dir}/{name}").convert("RGB").resize(SIZE)
     b = Image.open(f"{base_dir}/{bname}").convert("RGB").resize(SIZE)
     diff = ImageChops.difference(a, b).convert("L")
-    for (r, g, bb), (r0, g0, b0), dv in zip(a.getdata(), b.getdata(), diff.getdata()):
+    for i, ((r, g, bb), (r0, g0, b0), dv) in enumerate(zip(a.getdata(), b.getdata(), diff.getdata())):
+        if same is not None and not same[i]:
+            continue
         h0, s0, v0 = colorsys.rgb_to_hsv(r0 / 255, g0 / 255, b0 / 255)
         if not (60 / 360 <= h0 <= 120 / 360 and s0 > 0.25):
             continue
@@ -71,7 +80,8 @@ for name in names:
             s["dl"] += L1 - L0
             s["da"] += A1 - A0
             s["db"] += B1 - B0
-print(f"{os.path.basename(fx_dir)} vs {os.path.basename(base_dir)}: {len(names)} frames, grass px {grass_total}")
+kept = "" if same is None else f", ground alike before the fight {sum(same) / len(same):.0%}"
+print(f"{os.path.basename(fx_dir)} vs {os.path.basename(base_dir)}: {len(names)} frames, grass px {grass_total}{kept}")
 for T, s in stats.items():
     n = max(1, s["n"])
     print(f"  T={T:2d}: changed grass {s['n']:6d} ({s['n'] / max(1, grass_total):5.1%})  green/mint {s['green'] / n:4.0%}  "
