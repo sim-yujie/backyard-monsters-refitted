@@ -212,6 +212,84 @@
     linear-gradient(135deg, #3b1f4f, #160d1f);
 }
 
+/*
+ * Christmas: a snowy night behind the painted props, in a shorter band than the
+ * other banners (6:1, the picture's own shape) so the calendar stays above the
+ * fold (neon, round 1). On a phone on its side the band crops to the snow line.
+ */
+.events-card__banner--christmas {
+  aspect-ratio: 6 / 1;
+  background: linear-gradient(180deg, #101c3a, #344e78);
+}
+
+.events-card__banner--christmas .events-card__banner-image {
+  object-position: center bottom;
+}
+
+/* Christmas: the present beside "Presents found", so the count reads as presents. */
+.events-card--christmas .events-ladder .events-section__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.events-card--christmas .events-ladder .events-section__title::before {
+  content: "";
+  flex: none;
+  width: 22px;
+  height: 22px;
+  background: url("/events/christmas-2026-present.png") center / contain no-repeat;
+  filter: drop-shadow(0 0 1px rgb(255 255 255 / 55%));
+}
+
+/*
+ * Christmas: a decoration's name ("Christmas Tree") may take two lines inside
+ * its day tile rather than run past the tile's edges on a narrow grid (neon,
+ * round 2: iPad upright).
+ */
+.events-card--christmas .events-day .events-reward--decoration {
+  max-width: 100%;
+}
+
+.events-card--christmas .events-day .events-reward--decoration .events-reward__figure,
+.events-card--christmas .events-tier .events-reward--decoration .events-reward__figure {
+  /* Between words, or with a hyphen inside a long one ("Pine-cone"), never cut off (neon, round 3). */
+  white-space: normal;
+  -webkit-hyphens: auto;
+  hyphens: auto;
+  text-align: center;
+  line-height: 1.1;
+}
+
+/* A ladder prize's name wraps too, so the Shiny beside it stays on its row on a phone (neon, round 3). */
+.events-card--christmas .events-tier .events-reward--decoration {
+  max-width: 6.5em;
+}
+
+:root[data-skin="flash"] .events-card--christmas .events-day[data-day="7"],
+:root[data-skin="flash"] .events-card--christmas .events-day[data-day="14"] {
+  background-image: linear-gradient(180deg, #d99a1e 0 5px, #8a5a10 5px 6px, transparent 6px);
+}
+
+/* Christmas: the hint (where presents come from) just above the ladder it fills, not under it (neon, round 1). */
+.events-card--christmas > .events-card__extra {
+  order: 1;
+}
+
+.events-card--christmas > .events-ladder {
+  order: 2;
+}
+
+/*
+ * Christmas: days 7 and 14 hold the winter decorations; a gold band along their top marks them.
+ * Tied to the day numbers: move these if the calendar's decoration days move
+ * (server `game-data/events/events.ts`, CHRISTMAS_2026_CALENDAR).
+ */
+.events-card--christmas .events-day[data-day="7"],
+.events-card--christmas .events-day[data-day="14"] {
+  background-image: linear-gradient(180deg, #f2c14e 0 4px, #a8741a 4px 5px, transparent 5px);
+}
+
 .events-card__banner-image {
   display: block;
   width: 100%;
@@ -277,6 +355,7 @@
   flex: none;
   width: 25px;
   height: 22px;
+  object-fit: contain;
 }
 
 /* ── The login calendar ───────────────────────────────────────────────── */
@@ -677,6 +756,541 @@
 
 .events-tier--claimed .events-tier__mark {
   color: var(--colour-success);
+}
+
+/* ── A prize track (Christmas's presents; owner 28 Nov 2026, neon direction A) ──
+   One bar with the goals evenly spaced along it, each goal's main prize over
+   it and its number under it, then one dock for the chosen goal: its need,
+   all its prizes, and Claim (or how many are left). As the Wild Monster
+   Invasion card's totem track and Start row. */
+
+/* Set apart from the calendar above it, as its own block (neon round 1). */
+.events-ladder--track {
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--colour-border-subtle);
+}
+
+/* The hint sits between the title and the bar here (moved in by `activeCard`). */
+.events-ladder--track > .events-card__extra {
+  margin: 0;
+}
+
+/* The hint quieter than the title above it, so the title leads (neon round 2). */
+.events-ladder--track > .events-card__extra .events-hint {
+  font-size: var(--text-xs);
+  font-weight: 400;
+  color: var(--colour-text-muted);
+  opacity: 0.85;
+  /* Two even lines rather than one long and a lone word (phone on its side). */
+  text-wrap: balance;
+}
+
+.events-track {
+  position: relative;
+  height: 74px;
+  /* The last goal stands at the bar's end: room for its 48 px button. */
+  margin: 2px 26px 0 14px;
+}
+
+.events-track__bar {
+  position: absolute;
+  top: 46px;
+  left: 0;
+  right: 0;
+  height: 10px;
+  border-radius: var(--radius-pill, 999px);
+  background: rgb(0 0 0 / 35%);
+  box-shadow: inset 0 1px 3px rgb(0 0 0 / 50%);
+}
+
+.events-track__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #f0a13a, #ffd34d);
+}
+
+.events-track__fill:not([style*="width: 0%"]) {
+  min-width: 10px;
+}
+
+/* Each goal a 48 x 74 button centred on its place: the prize on its tile (40 px), the pip on the bar, the number. */
+.events-track__node {
+  position: absolute;
+  top: 0;
+  display: block;
+  width: 48px;
+  height: 74px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transform: translateX(-50%);
+}
+
+.events-track__node:focus-visible {
+  outline: 2px solid #ffd34d;
+  outline-offset: 1px;
+}
+
+/* A framed tile behind each prize, so a thin one (the lamp post) keeps its shape and the goal reads as a button. */
+.events-track__prize {
+  position: absolute;
+  top: 0;
+  left: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  box-sizing: border-box;
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgb(120 140 160 / 38%), rgb(60 75 92 / 45%));
+  box-shadow: 0 1px 2px rgb(0 0 0 / 40%);
+}
+
+.events-track__node:hover .events-track__prize {
+  border-color: rgb(255 255 255 / 45%);
+}
+
+/* Its state on the tile's corner: "!" ready, a lock until reached. */
+.events-track__badge {
+  position: absolute;
+  top: -5px;
+  right: -6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.events-track__badge--ready {
+  border: 1.5px solid #fff3c4;
+  background: #e2561f;
+  color: #fff;
+}
+
+.events-track__badge--locked {
+  border: 1px solid rgb(255 255 255 / 35%);
+  background: #2c3540;
+  color: #c9d4e0;
+}
+
+/* Only the picture over the bar: the dock below says the amounts. */
+.events-track__prize .events-reward__figure {
+  display: none;
+}
+
+.events-track__prize .events-reward__image {
+  width: 30px;
+  height: 34px;
+}
+
+.events-track__prize .events-reward__image--tall {
+  height: 36px;
+}
+
+.events-track__prize .res-icon {
+  width: 26px;
+  height: 26px;
+}
+
+.events-track__node--locked .events-track__prize .events-reward {
+  filter: grayscale(0.8) brightness(1.15);
+  opacity: 0.6;
+}
+
+/* Ready to claim: a gold tile with a warm halo that breathes, whatever the prize's own shape. */
+.events-track__node--ready .events-track__prize {
+  border: 2px solid #ffcf4a;
+  background: linear-gradient(180deg, rgb(255 214 90 / 35%), rgb(226 120 30 / 30%));
+  box-shadow: 0 0 8px rgb(255 190 60 / 85%), 0 1px 2px rgb(0 0 0 / 40%);
+  animation: events-track-ready 1.6s ease-in-out infinite;
+}
+
+.events-track__node--claimed .events-track__prize {
+  border-color: rgb(72 199 89 / 70%);
+}
+
+/* The goal the dock shows, lifted a little over the other ready ones (neon round 2). */
+.events-track__node--focus .events-track__prize {
+  /* Grown upward from its foot and raised 2 px, so it stays clear of the dot on the bar (neon round 3). */
+  transform: translateY(-2px) scale(1.08);
+  transform-origin: 50% 100%;
+}
+
+@keyframes events-track-ready {
+  50% {
+    translate: 0 -2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .events-track__node--ready .events-track__prize {
+    animation: none;
+  }
+}
+
+.events-track__pip {
+  position: absolute;
+  top: 44px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+  margin-left: -7px;
+  border: 2px solid rgb(255 255 255 / 70%);
+  border-radius: 50%;
+  background: #4a5563;
+}
+
+.events-track__node--ready .events-track__pip {
+  border-color: #fff3c4;
+  background: #ff9f1c;
+}
+
+.events-track__node--claimed .events-track__pip {
+  width: 18px;
+  height: 18px;
+  top: 42px;
+  margin-left: -9px;
+  border-color: #fff;
+  background: var(--colour-success, #48c759);
+}
+
+.events-track__tick {
+  width: 12px;
+  height: 12px;
+}
+
+.events-track__need {
+  position: absolute;
+  top: 59px;
+  left: 0;
+  right: 0;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 14px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--colour-text-muted);
+}
+
+.events-track__node--ready .events-track__need,
+.events-track__node--claimed .events-track__need {
+  color: var(--colour-text);
+}
+
+/* The goal shown in the dock: its number in a gold pill, as the dock's own number. */
+.events-track__node--focus .events-track__need {
+  left: 6px;
+  right: 6px;
+  border-radius: 4px;
+  background: linear-gradient(#ffe27a, #d9a21c);
+  color: #2c1a04;
+}
+
+.events-track__dock {
+  --at: 0.25;
+  --track-left: 14px;
+  --track-right: 26px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 52px;
+  box-sizing: border-box;
+  margin-top: 6px;
+  padding: 4px 6px 4px 10px;
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+/* A pointer on the dock's top edge, under the goal it shows (neon round 1): border colour, then fill. */
+.events-track__dock::before,
+.events-track__dock::after {
+  content: "";
+  position: absolute;
+  left: calc(var(--track-left) + (100% - var(--track-left) - var(--track-right)) * var(--at));
+  width: 0;
+  height: 0;
+  border: solid transparent;
+  pointer-events: none;
+}
+
+.events-track__dock::before {
+  top: -9px;
+  margin-left: -9px;
+  border-width: 0 9px 9px;
+  border-bottom-color: var(--colour-border-subtle);
+}
+
+.events-track__dock::after {
+  top: -7px;
+  margin-left: -8px;
+  border-width: 0 8px 8px;
+  border-bottom-color: var(--colour-surface-sunken);
+}
+
+.events-track__dock--ready {
+  border-color: #ffb347;
+}
+
+.events-track__dock--ready::before {
+  border-bottom-color: #ffb347;
+}
+
+.events-track__goal {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 40px;
+}
+
+/* The goal's present count: the present beside the number, so it reads as presents found, not a price. */
+.events-track__goal-need {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px 1px 5px;
+  border-radius: 4px;
+  background: linear-gradient(#ffe27a, #d9a21c);
+  color: #2c1a04;
+  font-size: var(--text-sm);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+/* The same present inside the Claim button: "Claim [present] 50" (neon round 3). */
+.events-track__claim-need {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.events-ladder--christmas .events-track__claim-need::before,
+.events-ladder--christmas .events-track__goal-need::before {
+  content: "";
+  flex: none;
+  width: 16px;
+  height: 16px;
+  background: url("/events/christmas-2026-present.png") center / contain no-repeat;
+}
+
+.events-track__more {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgb(255 179 71 / 18%);
+  color: #ffc46b;
+  font-size: var(--text-xs);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.events-track__chips {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* Prizes side by side: picture and number in one line, as the wave card's chips. */
+.events-track__chips > .events-reward {
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+.events-track__chips .events-reward__image {
+  width: 28px;
+  height: 30px;
+}
+
+.events-track__chips .events-reward__image--tall {
+  height: 36px;
+}
+
+/* A decoration's name beside its picture, on two lines at most (neon round 1); dropped on a phone, below. */
+.events-track__chips .events-reward--decoration .events-reward__figure {
+  max-width: 8.5em;
+  white-space: normal;
+  line-height: 1.1;
+  text-align: left;
+}
+
+.events-track__chips .events-reward__figure {
+  font-size: var(--text-sm);
+}
+
+.events-track__end {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-inline-start: auto;
+}
+
+.events-track__state {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--colour-text-muted);
+  white-space: nowrap;
+}
+
+.events-track__dock--claimed .events-track__state {
+  color: var(--colour-success);
+}
+
+.events-track__claim {
+  min-width: 96px;
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+/* Modern: a light glow behind a dark decoration (the lamp post), so it parts from the dark tile (neon round 3). */
+:root:not([data-skin="flash"]) .events-track__prize .events-reward--decoration .events-reward__image,
+:root:not([data-skin="flash"]) .events-track__chips .events-reward--decoration .events-reward__image {
+  filter: drop-shadow(0 0 2px rgb(255 255 255 / 60%)) drop-shadow(0 0 1px rgb(255 255 255 / 50%));
+}
+
+.events-track__refusal:empty {
+  display: none;
+}
+
+/* Classic: the bar sunk into the parchment, the numbers in the window's brown. */
+:root[data-skin="flash"] .events-track__bar {
+  background: rgb(74 45 20 / 25%);
+  box-shadow: inset 0 1px 2px rgb(60 30 5 / 45%);
+}
+
+:root[data-skin="flash"] .events-track__pip {
+  border-color: #fff3d6;
+  background: #8b6a45;
+}
+
+:root[data-skin="flash"] .events-track__node--ready .events-track__pip {
+  background: #ff9f1c;
+}
+
+:root[data-skin="flash"] .events-track__node--claimed .events-track__pip {
+  background: var(--colour-success, #3c9a2a);
+}
+
+:root[data-skin="flash"] .events-track__more {
+  background: rgb(120 60 10 / 14%);
+  color: #5a2e06;
+}
+
+:root[data-skin="flash"] .events-track__prize {
+  border-color: rgb(110 70 30 / 35%);
+  background: linear-gradient(180deg, rgb(255 248 230 / 85%), rgb(232 210 170 / 85%));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 60%), 0 1px 2px rgb(60 30 5 / 30%);
+}
+
+:root[data-skin="flash"] .events-track__node--ready .events-track__prize {
+  border-color: #e0a020;
+  background: linear-gradient(180deg, #fff2bf, #f5cf6a);
+}
+
+:root[data-skin="flash"] .events-track__node--claimed .events-track__prize {
+  border: 2px solid #2f7a1f;
+  /* Claimed recedes: a soft sage fill and a dimmer prize, under the ready ones (neon round 3). */
+  background: linear-gradient(180deg, rgb(226 232 205 / 85%), rgb(200 208 172 / 85%));
+}
+
+:root[data-skin="flash"] .events-track__node--claimed .events-track__prize .events-reward {
+  opacity: 0.75;
+}
+
+/* Classic: the dock's edge and its pointer a shade darker, so the pointer shows on parchment. */
+:root[data-skin="flash"] .events-track__dock {
+  border-color: #b48c5a;
+}
+
+:root[data-skin="flash"] .events-track__dock::before {
+  border-bottom-color: #b48c5a;
+}
+
+:root[data-skin="flash"] .events-track__dock--ready {
+  border-color: #e0a020;
+}
+
+:root[data-skin="flash"] .events-track__dock--ready::before {
+  border-bottom-color: #e0a020;
+}
+
+:root[data-skin="flash"] .events-track__badge--locked {
+  border-color: #fff3d6;
+  background: #8b6a45;
+  color: #fff3d6;
+}
+
+/* A dark rim, so the dots part from the gold bar and the parchment (neon round 1). */
+:root[data-skin="flash"] .events-track__pip {
+  box-shadow: 0 0 0 1.5px #3b220d;
+}
+
+@media (max-width: 620px) {
+  .events-track {
+    margin-inline: 12px 24px;
+  }
+
+  .events-track__dock {
+    --track-left: 12px;
+    --track-right: 24px;
+    padding-top: 6px;
+  }
+
+  /* No room for a decoration's name on a phone: its picture, and the full words in the button's label. */
+  .events-track__chips .events-reward--decoration .events-reward__figure {
+    display: none;
+  }
+
+  /* "2 ready" over the button rather than beside it. */
+  .events-track__end {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+  }
+
+  .events-track__dock {
+    gap: var(--space-2);
+    padding-inline: 8px 4px;
+  }
+
+  .events-track__chips {
+    gap: var(--space-2);
+  }
+
+  .events-track__chips .events-reward__figure {
+    font-size: var(--text-xs);
+  }
+
+  .events-track__claim {
+    min-width: 76px;
+  }
 }
 
 /* ── The Krallen Hunt: the prize, the bar toward the goal, the claim ──── */
@@ -1100,6 +1714,16 @@
 
   .events-card__banner {
     aspect-ratio: 7 / 1;
+  }
+
+  /* On a phone on its side the calendar needs the height more than the picture (neon, round 2). */
+  .events-card__banner--christmas {
+    display: none;
+  }
+
+  /* Seven narrow tiles a row: the decoration's name a size smaller. */
+  .events-card--christmas .events-day .events-reward--decoration .events-reward__figure {
+    font-size: 0.65rem;
   }
 }
 

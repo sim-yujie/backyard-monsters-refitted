@@ -29,7 +29,11 @@ import { onGroundChange } from "./groundChoice";
 import { classicLook } from "@/game/classicLook";
 import { thanksgivingSkin } from "./thanksgivingSkin";
 import { YardTurkeys } from "./YardTurkeys";
-import { YardDressUp } from "./YardDressUp";
+import { thanksgivingDressUp, YardDressUp } from "./YardDressUp";
+import { winterDressUp } from "./winterSkin";
+import { flakeCount, YardSnowfall } from "./YardSnowfall";
+import { PresentGlows } from "./presentGlow";
+import { onQualityChange, quality } from "@/game/quality";
 import { UpgradePreview } from "./UpgradePreview";
 import { upgradeLook } from "./upgradeLook";
 import { BlueprintLayer } from "./planner/BlueprintLayer";
@@ -58,6 +62,7 @@ import {
   rangeHoverFrame,
 } from "./towerRangeHover";
 import { artUrl } from "../../artUrl";
+import { PRESENT_SCALE, presentArtUrl, presentPicture } from "./presentArt";
 
 /**
  * The yard's scene graph: ground, mushrooms, buildings and the selection
@@ -103,8 +108,18 @@ export class YardRenderer {
   private readonly buildings = new YardBuildings();
   /** Thanksgiving: turkeys roam in place of the mushrooms (`YardTurkeys.ts`). */
   private readonly turkeys = new YardTurkeys(this.buildings);
-  /** Thanksgiving: the props round the plot (`YardDressUp.ts`). */
+  /** Thanksgiving and Christmas: the props round the plot (`YardDressUp.ts`). */
   private readonly dressUp = new YardDressUp(this.buildings);
+  /** Christmas: the falling snow (`YardSnowfall.ts`), sized for the screen and the Quality. */
+  private readonly snowfall = new YardSnowfall();
+  /** Christmas: the gold glow on the ground under each hunt present (`presentGlow.ts`). */
+  private readonly presentGlows = new PresentGlows();
+  /** The screen size the snow was counted for. */
+  private snowScreen = "";
+  /** A new Quality pick counts the snow again (Low stops it, Medium halves it) without waiting for a resize. */
+  private readonly unwatchSnowQuality = onQualityChange(() => {
+    this.snowScreen = "";
+  });
   /** The ghost of a building's next look while its window offers the upgrade (beta 8); see `setUpgradePreview`. */
   private readonly upgradePreview = new UpgradePreview();
   /** Holds the ghost, so the blueprint view can hide it while the ghost keeps its own visibility. */
@@ -215,6 +230,10 @@ export class YardRenderer {
   private pumpkin: Texture | null = null;
   /** Whether the pumpkin is being asked for, so a second Halloween does not ask twice. */
   private pumpkinLoading = false;
+  /** The Christmas present that stands in for a mushroom (`presentArt.ts`), once it has loaded. */
+  private present: Texture | null = null;
+  /** Whether the present is being asked for. */
+  private presentLoading = false;
   /**
    * The painted mushrooms of this page's look, one per art variant
    * (`mushroomArt.ts`), once they have loaded; a missing one is null and its
@@ -270,8 +289,10 @@ export class YardRenderer {
       this.rangeOval,
       this.helpMarks.ground,
       this.buildings.shadows,
+      this.presentGlows.root,
       this.buildings.tops,
       this.giblets.root,
+      this.snowfall.root,
       this.collect.root,
       this.blueprint.root,
       this.chrome,
@@ -299,7 +320,10 @@ export class YardRenderer {
       this.unwatchSeason = onSeasonChange((season) => this.setSeason(season));
     }
     // And the ground the player picks, at once (owner, 12 Nov 2026).
-    this.unwatchGround ??= onGroundChange((ground) => this.ground.setGround(ground));
+    this.unwatchGround ??= onGroundChange((ground) => {
+      this.ground.setGround(ground);
+      this.refreshSnowContact();
+    });
   }
 
   /**
@@ -329,6 +353,22 @@ export class YardRenderer {
           this.pumpkinLoading = false;
         });
     }
+    if (season === "christmas" && !this.present && !this.presentLoading) {
+      this.presentLoading = true;
+      void loadWithRetries(presentArtUrl(), () => this.destroyed)
+        .then(
+          (texture) => {
+            if (this.destroyed) return;
+            this.present = texture;
+            this.redrawMushrooms();
+          },
+          (caught: unknown) =>
+            console.warn(`The Christmas present did not load in ${LOAD_TRIES} tries; mushrooms stay.`, caught),
+        )
+        .finally(() => {
+          this.presentLoading = false;
+        });
+    }
     if (season === "thanksgiving") {
       // The mushrooms stay until the turkeys arrive, and for good if they never do.
       // Behind the buildings' pictures, like the monsters (beta 9).
@@ -341,6 +381,23 @@ export class YardRenderer {
     }
     this.dressYard();
     this.redrawMushrooms();
+    this.refreshSnowContact();
+  }
+
+  /**
+   * The snow's contact patches (`snowContact.ts`) are laid when buildings are
+   * shown: when the snow comes or goes under a yard already on screen (the
+   * season, or the player's ground), the yard is shown again, once, keeping
+   * what the planner stored and what the scene conceals (an enemy's traps).
+   */
+  private refreshSnowContact(): void {
+    const yard = this.yard;
+    if (!yard || this.buildings.snowContact === this.ground.seasonSnow) return;
+    const stored = [...this.stored];
+    const concealed = [...this.concealed];
+    this.show(yard);
+    for (const id of stored) this.setBuildingStored(id, true);
+    for (const id of concealed) this.setConcealed(id, true);
   }
 
   /**
@@ -369,11 +426,43 @@ export class YardRenderer {
     this.placeFinds(yard, []);
   }
 
-  /** Lays (or takes away) the Thanksgiving props round the plot, for the yard on screen. */
+  /**
+   * The Christmas snowfall, one frame: counted again when the screen's size
+   * changes (`flakeCount`), then moved. Off outside Christmas, on Low, in an
+   * Inferno yard, with reduced motion asked for, and with `?snow=0` on the
+   * page's address (for frame-time checks).
+   */
+  private fallSnow(visible: Rect, deltaSeconds: number): void {
+    const screen = this.pixi?.screen;
+    if (!screen) return;
+    const on =
+      this.season === "christmas" &&
+      this.yard !== null &&
+      this.yard.kind !== "inferno" &&
+      !prefersReducedMotion() &&
+      !snowSwitchedOff();
+    const key = on ? `${screen.width}x${screen.height}` : "";
+    if (key !== this.snowScreen) {
+      this.snowScreen = key;
+      this.snowfall.setFlakes(on ? flakeCount(screen.width, screen.height, quality()) : 0, screen.width < 600);
+    }
+    if (this.snowfall.count === 0) return;
+    this.snowfall.root.visible = true;
+    this.snowfall.update(visible, screen.width, screen.height, deltaSeconds);
+  }
+
+  /** Lays (or takes away) the season's props round the plot (Thanksgiving, Christmas), for the yard on screen. */
   private dressYard(): void {
     const yard = this.yard;
-    const on = this.season === "thanksgiving" && yard !== null && yard.kind !== "inferno";
-    void this.dressUp.layout(on ? yard.bounds : null, yard?.savedAt || 1, on ? thanksgivingSkin() : null, classicLook());
+    const surface = yard !== null && yard.kind !== "inferno";
+    const set =
+      !surface ? null
+      : this.season === "thanksgiving" ? thanksgivingDressUp(thanksgivingSkin())
+      : this.season === "christmas" ? winterDressUp()
+      : null;
+    const keepClear =
+      set && yard ? yard.buildings.map((one) => yardToWorld(yard.bounds, one.x + one.footprint[0] / 2, one.y + one.footprint[1] / 2)) : [];
+    void this.dressUp.layout(set ? yard!.bounds : null, yard?.savedAt || 1, set, classicLook(), keepClear);
   }
 
   /** Buildings still waiting on, or missing, their picture. */
@@ -423,6 +512,8 @@ export class YardRenderer {
     // The creatures outlive a redraw: out of the containers the yard is about
     // to empty, and back in once it has refilled them.
     this.life.detach();
+    // Christmas: a dark patch on the snow under each building (`snowContact.ts`, neon 28 Nov 2026).
+    this.buildings.snowContact = this.ground.seasonSnow;
     this.buildings.show(yard, atlas, this.work ? readWork(this.work.save()) : undefined);
     this.mountLife();
     this.jobBars.show(yard);
@@ -437,7 +528,8 @@ export class YardRenderer {
 
   /**
    * Stands the yard's finds: a turkey per mushroom at Thanksgiving (once the
-   * turkeys are in), else a sprite per mushroom (a pumpkin at Halloween).
+   * turkeys are in), else a sprite per mushroom (a pumpkin at Halloween, a
+   * present at Christmas).
    * `fresh` keys pop up out of the ground (#263).
    */
   private placeFinds(yard: Yard, fresh: readonly string[]): void {
@@ -459,6 +551,8 @@ export class YardRenderer {
       sprite.zIndex = mushroomZIndex(mushroom);
       this.buildings.addGuest(sprite);
       this.mushroomSprites.set(key, sprite);
+      // A hunt present glows gold on the snow, so it reads at full-yard zoom (neon, 28 Nov 2026).
+      if (this.season === "christmas") this.presentGlows.add(key, mushroom.worldX, mushroom.worldY);
       keys.add(key);
     }
     for (const key of this.popping.keys()) if (!keys.has(key)) this.popping.delete(key);
@@ -495,7 +589,11 @@ export class YardRenderer {
       this.buildings.setHelpLit(this.helpMarks.active ? this.helpMarks.lit : NO_HELP_LIT);
       this.shakeMushrooms();
       this.popMushrooms(deltaSeconds);
+      if (this.presentGlows.count > 0) this.presentGlows.update(deltaSeconds, prefersReducedMotion());
       if (this.turkeysOn) this.turkeys.update(deltaSeconds);
+      this.fallSnow(visible, deltaSeconds);
+    } else if (this.snowfall.count > 0) {
+      this.snowfall.root.visible = false;
     }
 
     if (this.chromeDirty) {
@@ -1427,6 +1525,9 @@ export class YardRenderer {
     this.popping.clear();
     this.turkeys.destroy();
     this.dressUp.destroy();
+    this.unwatchSnowQuality();
+    this.snowfall.destroy();
+    this.presentGlows.destroy();
     this.planner.destroy();
     this.jobBars.destroy();
     this.hatchMarks.destroy();
@@ -1521,15 +1622,19 @@ export class YardRenderer {
 
   /**
    * Gives a mushroom's sprite its picture, standing on its spot: the Halloween
-   * pumpkin in season, else its painted mushroom (`mushroomArt.ts`), else,
+   * pumpkin or the Christmas present in season, else its painted mushroom (`mushroomArt.ts`), else,
    * until that arrives or if it never does, the drawn glyph.
    */
   private dressMushroom(sprite: Sprite, variant: number, atlas: YardArtAtlas): void {
     const pumpkin = this.season === "halloween" ? this.pumpkin : null;
+    const present = this.season === "christmas" ? this.present : null;
     const painted = this.mushroomArt?.[mushroomArtIndex(variant)] ?? null;
     if (pumpkin) {
       sprite.texture = pumpkin;
       sprite.anchor.set(0.5, PUMPKIN_BASE);
+    } else if (present) {
+      sprite.texture = present;
+      sprite.anchor.set(0.5, presentPicture().base);
     } else if (painted) {
       sprite.texture = painted;
       const anchor = mushroomAnchor(mushroomPictureFor(variant), painted.width, painted.height);
@@ -1544,6 +1649,7 @@ export class YardRenderer {
 
   /** How big a mushroom sprite stands at rest: the Halloween pumpkin a bit bigger. */
   private mushroomSize(): number {
+    if (this.season === "christmas" && this.present) return PRESENT_SCALE;
     return this.season === "halloween" && this.pumpkin ? PUMPKIN_SCALE : 1;
   }
 
@@ -1553,6 +1659,7 @@ export class YardRenderer {
       sprite.destroy();
     }
     this.mushroomSprites.clear();
+    this.presentGlows.clear();
   }
 
   /** Moves every pop on by `deltaSeconds` and scales its mushroom (`mushroomPop.ts`). */
@@ -1560,6 +1667,7 @@ export class YardRenderer {
     for (const [key, elapsed] of this.popping) {
       const now = elapsed + deltaSeconds;
       this.mushroomSprites.get(key)?.scale.set(mushroomPopScale(now) * this.mushroomSize());
+      this.presentGlows.scale(key, mushroomPopScale(now));
       if (now >= MUSHROOM_POP_SECONDS) this.popping.delete(key);
       else this.popping.set(key, now);
     }
@@ -1692,3 +1800,13 @@ const JOB_BAR_CLEARANCE = BAR_HEIGHT + 22;
 
 /** Corners as the flat point list `Graphics.poly` wants. */
 const flatten = (corners: Corners): number[] => corners.flatMap(([x, y]) => [x, y]);
+
+/** `?snow=0` (or `off`) on the page's address: no falling snow, to time frames with and without it. Read once. */
+let snowOff: boolean | null = null;
+const snowSwitchedOff = (): boolean => {
+  if (snowOff === null) {
+    const asked = typeof location === "undefined" ? null : new URLSearchParams(location.search).get("snow");
+    snowOff = asked === "0" || asked === "off";
+  }
+  return snowOff;
+};

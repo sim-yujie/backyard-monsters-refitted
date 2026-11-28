@@ -45,6 +45,7 @@ import {
 import { openWeekendPopup } from "@/ui/events/weekendUi";
 import { modalLayer, openWhatsNew } from "@/ui/events/WhatsNewDialog";
 import "@/ui/events/pumpkinHuntHint";
+import "@/ui/events/presentHuntHint";
 import "@/ui/waves/waveEventCard";
 import { dockButton } from "@/ui/yard/YardDock";
 import { YARD_PLUGINS, type YardMounts, type YardPlugin } from "../yardPlugins";

@@ -8,7 +8,15 @@ import {
   type MushroomYardSave,
 } from "./mushrooms.js";
 import { EVENTS } from "../../game-data/events/events.js";
-import { activeEventKinds, PUMPKIN_HUNT_EVENT, pumpkinHuntOn, TURKEY_HUNT_EVENT, yardHuntAt, yardHuntOn } from "./season.js";
+import {
+  activeEventKinds,
+  PRESENT_HUNT_EVENT,
+  PUMPKIN_HUNT_EVENT,
+  pumpkinHuntOn,
+  TURKEY_HUNT_EVENT,
+  yardHuntAt,
+  yardHuntOn,
+} from "./season.js";
 
 /**
  * The Halloween season (`season.ts`): on from 2026-10-28 to 2026-11-11 UTC,
@@ -149,6 +157,47 @@ describe("Thanksgiving turkey hunt", () => {
     catchUpMushrooms(save, inside + 2 * 3_600, Math.random);
     expect(readMushrooms(save.mushrooms).l.length).toBe(2);
     expect(EVENTS.find((event) => event.id === TURKEY_HUNT_EVENT)?.ladder?.label).toBe("Turkeys caught");
+  });
+});
+
+describe("Christmas present hunt", () => {
+  test("on from 25 December 2026 up to, not including, 8 January 2027", () => {
+    expect(yardHuntAt(at("2026-12-24T23:59:59Z"), EVENTS, NONE)).toBeNull();
+    expect(yardHuntAt(at("2026-12-25T00:00:00Z"), EVENTS, NONE)).toEqual({ event: PRESENT_HUNT_EVENT, field: "presents" });
+    expect(yardHuntAt(at("2027-01-07T23:59:59Z"), EVENTS, NONE)?.event).toBe(PRESENT_HUNT_EVENT);
+    expect(yardHuntOn(at("2027-01-08T00:00:00Z"), EVENTS, NONE)).toBe(false);
+  });
+
+  test("never during Thanksgiving: no turkeys and presents at once", () => {
+    const thanksgiving = EVENTS.find((event) => event.id === TURKEY_HUNT_EVENT)!;
+    const christmas = EVENTS.find((event) => event.id === PRESENT_HUNT_EVENT)!;
+    expect(Date.parse(thanksgiving.endsAt)).toBeLessThanOrEqual(Date.parse(christmas.startsAt));
+  });
+
+  test("the base load says christmas while on (beside the Krallen Hunt)", () => {
+    const kinds = activeEventKinds(at("2026-12-28T12:00:00Z"), EVENTS, NONE);
+    expect(kinds).toContain("christmas");
+    expect(kinds).toContain("krallen");
+    expect(kinds).not.toContain("thanksgiving");
+  });
+
+  test("forced on (EVENTS_FORCE_ON=christmas-2026), presents grow from today", () => {
+    const today = at("2026-11-27T15:00:00Z");
+    const forced = new Set([PRESENT_HUNT_EVENT]);
+    expect(yardHuntAt(today, EVENTS, forced)?.field).toBe("presents");
+    expect(activeEventKinds(today, EVENTS, forced)[0]).toBe("christmas");
+  });
+
+  test("presents grow hourly like pumpkins, and count toward 'Presents found'", () => {
+    const inside = at("2026-12-28T09:00:00Z");
+    const save: MushroomYardSave = {
+      buildingdata: { "0": { id: 0, t: 14, x: 0, y: 0, X: 0, Y: 0, l: 3 } },
+      storedata: {},
+      mushrooms: { l: [], s: inside },
+    };
+    catchUpMushrooms(save, inside + 2 * 3_600, Math.random);
+    expect(readMushrooms(save.mushrooms).l.length).toBe(2);
+    expect(EVENTS.find((event) => event.id === PRESENT_HUNT_EVENT)?.ladder?.label).toBe("Presents found");
   });
 });
 

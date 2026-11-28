@@ -39,6 +39,7 @@ import type { TribeAvatars } from "./tribeAvatars";
 import type { ZoneStore } from "./ZoneStore";
 import { cellLift, isFlatGround, paintOrder } from "./ground";
 import { tagStyle, type TagStyle } from "./painted/markerStyle";
+import { winterMap } from "./painted/winterLook";
 import { GROUND_ANCHOR_X, groundAnchorY, type GroundArt } from "./groundArt";
 import type { MapPicture } from "./mapPicture";
 import type { MapShields } from "./mapAlliances";
@@ -173,6 +174,8 @@ const BADGE_SIZE = 38;
 const STAR_RADIUS = CELL_HEIGHT * 0.19;
 const STAR_TEXT_SIZE = CELL_HEIGHT * 0.2;
 const STAR_COLOUR = 0xf2c230;
+/** Christmas: the dark disc behind a player's level star, as a share of the star's radius (`winterLook.ts`). */
+const WINTER_STAR_BACKING = 0.92;
 
 /** Opacity of other players' labels. */
 const PLATE_ALPHA = 0.92;
@@ -767,6 +770,14 @@ export class MapChunk {
     const starRadius = STAR_RADIUS * STAR_SCALE * style.starScale;
     const starX = footX - BUILDING_HEIGHT * 0.3;
     const starY = footY - BUILDING_HEIGHT * 0.82;
+    if (winterMap()) {
+      // On the Christmas snow the gold star and its white number lose their edge (neon, 28 Nov 2026):
+      // a dark disc behind it, as the camps' level badges have.
+      const backing = disc(this.atlas.disc, starX, starY + starRadius * 0.06, starRadius * WINTER_STAR_BACKING, MARKER_FILL_COLOUR);
+      backing.alpha = alpha * 0.92;
+      this.badgeDiscs.addChild(backing);
+      this.pins.add(foot, backing);
+    }
     const star = icon(this.atlas.star, starX, starY, starRadius, STAR_COLOUR);
     star.alpha = alpha;
     this.badgeDiscs.addChild(star);

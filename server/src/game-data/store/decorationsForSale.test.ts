@@ -31,7 +31,15 @@ describe("DECORATIONS_FOR_SALE", () => {
       [205, 60],
       [206, 75],
     ]);
+    // The Christmas 2026 prizes (233-236, `events.ts` CHRISTMAS_DECOR) are won, never sold.
+    const prizes = [233, 234, 235, 236];
     for (const { type, price } of REVAMP_DECORATIONS) {
+      if (prizes.includes(type)) {
+        expect(DECORATIONS_FOR_SALE).not.toContain(type);
+        expect(decorationPrice(type)).toBeUndefined();
+        expect(footprintOf(type).decoration).toBe(true);
+        continue;
+      }
       expect(DECORATIONS_FOR_SALE).toContain(type);
       expect(decorationPrice(type)).toBe(price);
       expect(footprintOf(type).decoration).toBe(true);

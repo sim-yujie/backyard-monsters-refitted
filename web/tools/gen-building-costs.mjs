@@ -454,6 +454,11 @@ const REVAMP_DECORATIONS = [
   [230, "bdg_bougainvillea"],
   [231, "bdg_trimmedhedge"],
   [232, "bdg_rosebush"],
+  // Christmas 2026's winter decorations (owner, 27 Nov 2026): event prizes, not for sale.
+  [233, "bdg_snowman"],
+  [234, "bdg_presentpile"],
+  [235, "bdg_lamppostlights"],
+  [236, "bdg_christmastree"],
 ];
 for (const [id, name] of REVAMP_DECORATIONS) {
   if (entries.some((one) => one.id === id)) throw new Error(`YARD_PROPS.as already has a type ${id}`);
