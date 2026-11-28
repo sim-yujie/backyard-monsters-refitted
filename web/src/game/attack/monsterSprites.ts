@@ -5,7 +5,7 @@ import { SHEET_VERSIONS } from "./sheetVersions";
 import { monsterSheetLevel, sheetAtQuality, sheetCopies, sheetForDevice } from "@/game/quality";
 import { artUrl } from "../../artUrl";
 import { hasSkin, sheetSkin, skinFile, skinnedSheet, type MonsterSkin } from "./monsterSkins";
-import { KRAMPUS_SPRITES } from "./krampusSprites";
+import { KRAMPUS_LAYOUTS, KRAMPUS_SPRITES } from "./krampusSprites";
 
 /**
  * Picking a cell out of a monster sprite sheet.
@@ -147,6 +147,8 @@ export interface AnimatedSheet extends MonsterSheet {
  * repaint entry.
  */
 export const REPAINT_LAYOUTS: Readonly<Record<string, SheetLayoutOverride>> = {
+  // Krampus (G6, beta 10): its own table rows, with the blow's frame (`krampusSprites.ts`).
+  ...KRAMPUS_LAYOUTS,
   // Bandito: 41x40 cells (the old 29x28 cell plus 6 px each side and 12 px on
   // top), so the anchor moves by (6, 12) and the feet stay on the same ground
   // point. Rows: 0 idle, 1-6 walk, 7-11 attack (strike is the third frame).
@@ -1008,12 +1010,12 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/korath_4.png": "monsters/korath_4-repaint@3x.png", // Korath level 4 repaint at 3x (at 4x it was 9840 px tall), walk + attack, ground shadow
   "monsters/korath_5.png": "monsters/korath_5-repaint@2x.png", // Korath level 5 repaint at 2x, packed (REPAINT_LAYOUTS), walk + attack + stomp
   "monsters/korath_6.png": "monsters/korath_6-repaint@2x.png", // Korath level 6 repaint at 2x, packed (REPAINT_LAYOUTS), walk + attack + stomp
-  "monsters/krampus_1.png": "monsters/krampus_1-anim@2x.png", // Krampus (G6, frost tribe) level 1 at 2x (krampusSprites.ts), 8 headings, walk + attack, ground shadow
-  "monsters/krampus_2.png": "monsters/krampus_2-anim@2x.png", // Krampus (G6, frost tribe) level 2 at 2x (krampusSprites.ts), 8 headings, walk + attack, ground shadow
-  "monsters/krampus_3.png": "monsters/krampus_3-anim@2x.png", // Krampus (G6, frost tribe) level 3 at 2x (krampusSprites.ts), 8 headings, walk + attack, ground shadow
-  "monsters/krampus_4.png": "monsters/krampus_4-anim@2x.png", // Krampus (G6, frost tribe) level 4 at 2x (krampusSprites.ts), 8 headings, walk + attack, ground shadow
-  "monsters/krampus_5.png": "monsters/krampus_5-anim@2x.png", // Krampus (G6, frost tribe) level 5 at 2x (krampusSprites.ts), 8 headings, walk + attack, ground shadow
-  "monsters/krampus_6.png": "monsters/krampus_6-anim@2x.png", // Krampus (G6, frost tribe) level 6 at 2x (krampusSprites.ts), 8 headings, walk + attack, ground shadow
+  "monsters/krampus_1.png": "monsters/krampus_1-anim@2x.png", // Krampus (G6, frost tribe) level 1 at 2x (krampusSprites.ts), 8 headings, walk + attack + stomp, ground shadow
+  "monsters/krampus_2.png": "monsters/krampus_2-anim@2x.png", // Krampus (G6, frost tribe) level 2 at 2x (krampusSprites.ts), 8 headings, walk + attack + stomp, ground shadow
+  "monsters/krampus_3.png": "monsters/krampus_3-anim@2x.png", // Krampus (G6, frost tribe) level 3 at 2x (krampusSprites.ts), 8 headings, walk + attack + stomp, ground shadow
+  "monsters/krampus_4.png": "monsters/krampus_4-anim@2x.png", // Krampus (G6, frost tribe) level 4 at 2x (krampusSprites.ts), 8 headings, walk + attack + stomp, ground shadow
+  "monsters/krampus_5.png": "monsters/krampus_5-anim@2x.png", // Krampus (G6, frost tribe) level 5 at 2x (krampusSprites.ts), 8 headings, walk + attack + stomp, ground shadow
+  "monsters/krampus_6.png": "monsters/krampus_6-anim@2x.png", // Krampus (G6, frost tribe) level 6 at 2x (krampusSprites.ts), 8 headings, walk + attack + stomp, ground shadow
 };
 
 /** Whether a sheet URL names a high-resolution sheet (`name@4x.png`, `name@3x.png`, `name@1.5x.png?v=…`). */

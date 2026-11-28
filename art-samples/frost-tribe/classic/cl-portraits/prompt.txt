@@ -1,0 +1,16 @@
+Generate an image using your image generation tool (one image only, do not make variations or extra files).
+
+Our game Backyard Monsters Revamped has two art looks: Modern (painted) and Classic (the original 2009 Flash game's look). We need the CLASSIC version of our champion Krampus's level portraits.
+
+Attached:
+- modern-levels.png: the MODERN portraits of Krampus at levels 1-6 (row 1: levels 1, 2, 3; row 2: levels 4, 5, 6), 3 x 2 cells on flat magenta, all at one scale so the creature grows. Keep exactly this: the same creature at each level, the same pose, camera, size, position in its cell and ground line, the same parts (horns, fur, face, armour, chains, bells, cuffs) and the same colours of each part.
+- flash-champion-portraits.png: the ORIGINAL Flash game's champion portraits (Gorgo, Drull, Korath at levels 1, 3 and 6). Use it ONLY for the rendering style.
+
+Job: redraw each of the six cells of modern-levels.png in the CLASSIC Flash rendering style. Only the rendering changes:
+1. A PRE-RENDERED 3D MODEL (late-2000s CG, like a 3ds Max render), as the Flash champions are: smooth modelled forms, fur as larger modelled clumps rather than many fine painted strands, slightly plastic/waxy skin, crisp small specular highlights on metal, horn and eyes.
+2. One soft key light from the upper left: lit faces moderately bright, the right and lower sides falling into deep, near-black shadow; strong 3D form.
+3. Colours a little more saturated and deeper than the Modern painting, overall darker, no painterly brush texture, no bloom, no outline drawn round the creature.
+4. Somewhat simpler detail than the Modern painting, like the Flash portraits.
+
+Canvas 1536x1024 split into 3 columns x 2 rows of equal 512 px cells, the same as modern-levels.png. A FLAT pure magenta #FF00FF background everywhere (no ground, no shadow, no gradient). Nothing may touch a cell edge. No grid lines, numbers, text, labels or frame.
+Save the final PNG as krampus-levels.png in the current working directory.

@@ -6,8 +6,10 @@ Run from the worktree root (numpy, scipy, Pillow):  python web/tools/frost-kit/k
 Writes, as the other champions' (`web/src/game/portraits.ts`):
   web/public/portraits/G6-L<n>.webp        176 px, the whole frame (the creature grows with its level), Modern
   web/public/portraits/G6-L<n>-icon.webp    72 px trimmed to the creature, Modern
-  server/public/assets/monsters/G6_L<n>-150.png   150 px whole frame, Classic (Flash tone: softer, a touch darker)
+  server/public/assets/monsters/G6_L<n>-150.png   150 px whole frame, Classic
   server/public/assets/monsters/G6_L<n>-small.png  50 px trimmed, Classic
+The Classic ones come from art-samples/frost-tribe/classic/cl-portraits/krampus-levels.png: the same six cells
+redrawn by Codex in the Flash champions' rendered look (owner, 28 Nov 2026: "create a variant for classic").
 """
 import sys
 from pathlib import Path
@@ -21,6 +23,7 @@ sys.path.insert(0, "/home/yujiesim/Coding/backyard-monsters-refitted/.claude/ski
 from artlib import key  # noqa: E402
 
 SRC = REPO / "art-samples" / "frost-tribe" / "k1" / "krampus-levels.png"
+CLASSIC_SRC = REPO / "art-samples" / "frost-tribe" / "classic" / "cl-portraits" / "krampus-levels.png"
 PORTRAITS = REPO / "web" / "public" / "portraits"
 MON = REPO / "server" / "public" / "assets" / "monsters"
 
@@ -74,8 +77,8 @@ def flash_tone(im):
     return out
 
 
-def levels():
-    sheet = Image.open(SRC).convert("RGB").resize((1536, 1024), Image.LANCZOS)
+def levels(src=SRC):
+    sheet = Image.open(src).convert("RGB").resize((1536, 1024), Image.LANCZOS)
     for n in range(6):
         cell = sheet.crop(((n % 3) * 512, (n // 3) * 512, (n % 3) * 512 + 512, (n // 3) * 512 + 512))
         cell = unlilac(key(cell))
@@ -90,6 +93,8 @@ def main():
         whole = with_shadow(cell)
         whole.resize((176, 176), Image.LANCZOS).save(PORTRAITS / f"G6-L{level}.webp", quality=90, method=6)
         trim_square(cell, 72).save(PORTRAITS / f"G6-L{level}-icon.webp", quality=90, method=6)
+    for level, cell in levels(CLASSIC_SRC):
+        whole = with_shadow(cell)
         flash_tone(whole.resize((150, 150), Image.LANCZOS)).save(MON / f"G6_L{level}-150.png", optimize=True)
         flash_tone(trim_square(whole, 50)).save(MON / f"G6_L{level}-small.png", optimize=True)
         print("G6 level", level)
