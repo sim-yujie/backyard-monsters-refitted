@@ -67,6 +67,9 @@ await page.route(/\/base\/load|\/bm\/(yard\/)?events/, async (route) => {
   try {
     const json = JSON.parse(body);
     unseason(json);
+    // The yard's grass is seeded from its save time, which every login moves: pin it so each take lays the
+    // same ground (Classic's dry patches differed between takes).
+    if (typeof json.savetime === "number") json.savetime = spec.savetime ?? 1795000000;
     body = JSON.stringify(json);
   } catch {}
   await route.fulfill({ response, body });

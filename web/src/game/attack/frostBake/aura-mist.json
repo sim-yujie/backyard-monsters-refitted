@@ -35,7 +35,7 @@
      "squash": 0.55,
      "fade_in_ms": 1500,
      "hold": 0.55,
-     "peak": 0.34,
+     "peak": 0.5,
      "tint": [
       "#9cbcff",
       "#7aa4ff"
@@ -67,7 +67,7 @@
      "squash": 0.55,
      "fade_in_ms": 1300,
      "hold": 0.5,
-     "peak": 0.28,
+     "peak": 0.42,
      "tint": [
       "#9cbcff",
       "#7aa4ff"
@@ -99,7 +99,7 @@
      "squash": 0.55,
      "fade_in_ms": 1100,
      "hold": 0.45,
-     "peak": 0.22,
+     "peak": 0.34,
      "tint": [
       "#9cbcff",
       "#7aa4ff"

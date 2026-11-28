@@ -70,7 +70,7 @@ describe("Krampus's frost ability sets", () => {
     for (const piece of held) {
       expect(piece.blend).toBe("normal");
       expect(piece.layer).toBe("ground");
-      expect(piece.peak ?? 1).toBeLessThanOrEqual(0.35);
+      expect(piece.peak ?? 1).toBeLessThanOrEqual(0.5);
     }
   });
 
