@@ -907,7 +907,7 @@
 
 /* The sprint: one vanguard races the full width to the camp's crest. */
 .repeat-look--c .rl-sprint {
-  --goal-w: 44px;
+  --goal-w: 54px;
   --van: 36px;
 
   position: relative;
@@ -1110,12 +1110,13 @@
 
 /* A phone upright: the banner sits under the top bar's icon row, over the map. */
 @media (max-width: 620px) {
-  .attack-end__backdrop.auto-attack__backdrop--banner {
+  .attack-end__backdrop.auto-attack__backdrop--bar.auto-attack__backdrop--banner,
+  :root[data-skin] .attack-end__backdrop.auto-attack__backdrop--bar.auto-attack__backdrop--banner {
     place-items: start stretch;
     padding-top: max(124px, env(safe-area-inset-top));
   }
 
-  .attack-end.auto-attack--look-c {
+  .attack-end.auto-attack--bar.auto-attack--look-c {
     align-self: start;
     width: auto;
     height: auto;
@@ -1154,7 +1155,7 @@
     padding-block: 4px;
   }
 
-  .attack-end__backdrop.auto-attack__backdrop--banner {
+  .attack-end__backdrop.auto-attack__backdrop--bar.auto-attack__backdrop--banner {
     padding-top: calc(52px + env(safe-area-inset-top));
   }
 }
