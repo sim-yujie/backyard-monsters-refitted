@@ -207,9 +207,10 @@ describe("golden replays", () => {
   // An attack started under older rules is replayed with `flashKrallen` off
   // and plays as it was fought: these are both Krallen fixtures' digests
   // under 8.6's rules before that change, on beta 10's monster numbers and
-  // main-yard Spurtz reload (neither is versioned, so they moved with them).
+  // main-yard Spurtz reload (neither is versioned, so they moved with them;
+  // mixed-waves moved again with beta 10's ground-circle pebble blast).
   it.each([
-    ["mixed-waves", "7ecf7d8f88930415"],
+    ["mixed-waves", "3c256da58b09d4cf"],
     ["korath-and-krallen", "03a885dffeaf4835"],
   ])("%s replays to its old digest under older rules (flashKrallen off)", (name, digest) => {
     const fixture = read<Fixture>(`${FIXTURE_DIR}${name}.json`);
@@ -241,7 +242,7 @@ describe("golden replays", () => {
     ["lab-abilities", "72ee79e3305014dd"],
     ["lab-split", "8c3715d727214039"],
     ["maze", "9b2c7d49adb568e3"],
-    ["mixed-waves", "31eac71f80cc9cd5"],
+    ["mixed-waves", "88a8a8fce67ea9d2"],
     ["outpost-core", "8e506eda7be82a60"],
     ["pokey-rush", "4900580db38c0777"],
     ["raid-east", "7219ada75dae3b11"],

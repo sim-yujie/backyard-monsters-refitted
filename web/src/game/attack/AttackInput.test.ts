@@ -5,6 +5,7 @@ import {
   BOMBS,
   bombBlast,
   bombReaches,
+  bombReach,
   bucketCost,
   buildEngineYard,
   cellOf,
@@ -247,7 +248,8 @@ describe("overlap rule", () => {
       const ring = dropZoneOf({ kind: "bomb", bomb }, 100).ring;
       // The same object the engine's hit test reads, in the same pixels.
       expect(ring).toEqual(bombBlast(bomb));
-      expect(ring).toEqual({ rx: bomb.radius / 2, ry: (bomb.radius * 0.8) / 2 });
+      // A ground circle (owner, option C, 28 Nov 2026): twice as wide as tall.
+      expect(ring.rx).toBeCloseTo(2 * ring.ry, 9);
       // A sizeless building on the ring's edge is just outside; inside is hit.
       expect(bombReaches(bomb, ring.rx - 0.5, 0, 0)).toBe(true);
       expect(bombReaches(bomb, ring.rx + 0.5, 0, 0)).toBe(false);
@@ -293,6 +295,60 @@ describe("overlap rule", () => {
     // A yard point 250 units along X lands on the ellipse's edge.
     const edge = toIso(250, 0);
     expect((edge.x / ring.rx) ** 2 + (edge.y / ring.ry) ** 2).toBeCloseTo(1, 6);
+  });
+
+  it("lets a damage bomb land exactly where its ring reaches a building", () => {
+    // A sizeless Laser Tower alone: the drop is allowed just inside the ring,
+    // across and up, and refused just outside, as the engine's hit test reads
+    // it, so the ring is never green over nothing nor red over a hit.
+    const load = fixtureLoad();
+    const laser = { id: 1, t: 23, l: 1, X: 0, Y: 0 };
+    const obstacles = obstaclesOf(readYard({ ...load, buildingdata: { "1": laser } } as BaseLoadResponse));
+    const middle = obstacles[0]!.middle;
+    for (const bomb of BOMBS.filter((one) => one.damage > 0)) {
+      const zone = dropZoneOf({ kind: "bomb", bomb }, 100);
+      const ring = zone.ring;
+      const probes: Array<[number, number, boolean]> = [
+        [2 * Math.floor((ring.rx - 1) / 2), 0, true],
+        [2 * Math.ceil((ring.rx + 1) / 2), 0, false],
+        [0, Math.floor(ring.ry - 1), true],
+        [0, Math.ceil(ring.ry + 1), false],
+      ];
+      for (const [dx, dy, legal] of probes) {
+        // The building's middle sits (dx, dy) from the drop on screen: x = sy + sx / 2.
+        const sx = -dx;
+        const sy = middle - dy;
+        const point = { x: sy + sx / 2, y: sy - sx / 2 };
+        expect({ bomb: bomb.id, dx, dy, legal: judgeDrop(zone, point, obstacles, []).legal }).toEqual({
+          bomb: bomb.id,
+          dx,
+          dy,
+          legal,
+        });
+        expect(bombReaches(bomb, dx, dy, 0)).toBe(legal);
+      }
+    }
+  });
+
+  it("gives the fling, putty and damage bomb rings one shape: a ground circle, 2:1 on screen", () => {
+    const rings = [
+      dropZoneOf({ kind: "fling" }, 100).ring,
+      ...BOMBS.map((bomb) => dropZoneOf({ kind: "bomb", bomb }, 100).ring),
+    ];
+    for (const ring of rings) expect(ring.rx / ring.ry).toBeCloseTo(2, 9);
+    // A twig or pebble ring is the screen image of a circle of `bombReach`
+    // yard units: every point of that circle lands on the ring's edge.
+    for (const bomb of BOMBS.filter((one) => one.damage > 0)) {
+      const ring = dropZoneOf({ kind: "bomb", bomb }, 100).ring;
+      const reach = bombReach(bomb);
+      for (let k = 0; k < 12; k++) {
+        const angle = (k / 12) * 2 * Math.PI;
+        // `GRID.ToISO` without its rounding: (x - y, (x + y) / 2).
+        const [x, y] = [reach * Math.cos(angle), reach * Math.sin(angle)];
+        const edge = { x: x - y, y: (x + y) / 2 };
+        expect((edge.x / ring.rx) ** 2 + (edge.y / ring.ry) ** 2).toBeCloseTo(1, 6);
+      }
+    }
   });
 
   it("lets a putty bomb go only onto a live monster within its reach (#147)", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Container, Texture, type Sprite } from "pixi.js";
-import { BOMBS, TICKS_PER_SECOND, type BombStats } from "@/game/combat/rules";
+import { BOMBS, bombBlast, TICKS_PER_SECOND, type BombStats } from "@/game/combat/rules";
 import {
   ANIM_TICKS_PER_FRAME,
   BombFx,
@@ -49,8 +49,10 @@ describe("planBombRain", () => {
     const plans = planBombRain(spec, { x: 1000, y: 500 }, seeded());
     expect(plans).toHaveLength(200);
     for (const plan of plans) {
-      const dx = (plan.x - 1000) / (spec.radius / 2);
-      const dy = (plan.y - 500) / (spec.radius / 4);
+      // Inside the blast's ring, the 2:1 ground circle the engine hits.
+      const ring = bombBlast(spec);
+      const dx = (plan.x - 1000) / ring.rx;
+      const dy = (plan.y - 500) / ring.ry;
       expect(dx * dx + dy * dy).toBeLessThanOrEqual(1 + 1e-9);
       expect(plan.delay).toBeGreaterThanOrEqual(1 * TICKS_PER_SECOND);
       expect(plan.delay).toBeLessThanOrEqual(5 * TICKS_PER_SECOND);
