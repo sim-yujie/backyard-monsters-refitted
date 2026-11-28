@@ -44,11 +44,14 @@ const FLAG = 207;
 /** The new ones that move: the flag's cloth, the fire pit's flames, the windmill's wheel. */
 const MOVING = [207, 208, 213];
 
+/** The Christmas 2026 prizes (calendar days 7 and 14, present hunt 150 and 200): placeable, never sold. */
+const PRIZES = [233, 234, 235, 236];
+
 describe("this project's own decorations (owner, 10 Nov 2026: the six autumn ones)", () => {
   const types = REVAMP_DECORATION_ROWS.map((row) => row[0]);
 
-  it("are types 201 to 232 with their shop names", () => {
-    expect(types).toEqual(Array.from({ length: 32 }, (_, i) => 201 + i));
+  it("are types 201 to 236 with their shop names", () => {
+    expect(types).toEqual(Array.from({ length: 36 }, (_, i) => 201 + i));
     expect(types.map((type) => buildingName(type))).toEqual([
       "Leaf Pile and Rake",
       "Apple Barrel",
@@ -82,6 +85,10 @@ describe("this project's own decorations (owner, 10 Nov 2026: the six autumn one
       "Bougainvillea",
       "Trimmed Hedge",
       "Rose Bush",
+      "Snowman",
+      "Present Pile",
+      "Lamp Post with Lights",
+      "Christmas Tree",
     ]);
   });
 
@@ -94,7 +101,7 @@ describe("this project's own decorations (owner, 10 Nov 2026: the six autumn one
       expect(rowOf(type)?.[3], `${type} in the Decorations tab`).toBe(4);
       expect(size === 20 ? type === FLAG : size in BOTTOM || size === 70, `${type} footprint ${size}`).toBe(true);
       expect(footprintOf(type)).toEqual([size, size]);
-      expect(sold.has(type), `${type} sold`).toBe(true);
+      expect(sold.has(type), `${type} sold`).toBe(!PRIZES.includes(type));
     }
     expect(isRevampDecoration(69)).toBe(false);
   });

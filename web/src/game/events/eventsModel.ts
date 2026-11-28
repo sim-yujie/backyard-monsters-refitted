@@ -272,16 +272,30 @@ export const grantedKorathText = (granted: readonly GrantedReward[]): string | n
 };
 
 /**
+ * The Christmas card while Christmas is on (owner, 28 Nov 2026: "First, while
+ * Christmas is on"): it leads the page, above the weekend event and a wave
+ * event too. "On" is the server's own `active` (from its start up to its end);
+ * over with presents still to claim, or coming up, it sits where any event
+ * would.
+ */
+export const leadsPage = (event: EventView): boolean => event.status === "active" && event.kind === "christmas";
+
+/**
+ * 0 for Christmas while it is on, 1 for an event the dashboard started (a wave
+ * event, or a Brukkarg yard event), which the page puts next among the events on.
+ */
+const pageRank = (event: EventView): number =>
+  leadsPage(event) ? 0 : event.kind === "wave" || event.kind === "yards" ? 1 : 2;
+
+/**
  * The events to list: the ones on now first, then the ones over with a reward
  * still to claim, then what is coming up soonest first.
  */
-/** 0 for an event the dashboard started (a wave event, or a Brukkarg yard event), which the page puts first among the events on. */
-const waveFirst = (event: EventView): number => (event.kind === "wave" || event.kind === "yards" ? 0 : 1);
-
 export const sortEvents = (events: readonly EventView[]): { active: EventView[]; upcoming: EventView[] } => ({
   active: [
-    // A wave event first (owner, 27 Nov 2026: its waves start from its card, so it leads the page).
-    ...events.filter((event) => event.status === "active").sort((a, b) => waveFirst(a) - waveFirst(b) || a.endsAt - b.endsAt),
+    // Christmas first while it is on (owner, 28 Nov 2026), then a wave event (owner, 27 Nov 2026: its
+    // waves start from its card), then by end.
+    ...events.filter((event) => event.status === "active").sort((a, b) => pageRank(a) - pageRank(b) || a.endsAt - b.endsAt),
     ...events.filter((event) => event.status === "ended").sort((a, b) => a.endsAt - b.endsAt),
   ],
   upcoming: events.filter((event) => event.status === "upcoming").sort((a, b) => a.startsAt - b.startsAt),

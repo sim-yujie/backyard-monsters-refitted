@@ -27,7 +27,7 @@ describe("Flash's Decorations sub-tabs", () => {
     const flash = flashDecorations();
     const all = DECOR_KINDS.flatMap((kind) => kind.types);
     expect(new Set(all).size).toBe(all.length);
-    expect(all).toHaveLength(84 + 32);
+    expect(all).toHaveLength(84 + 36);
     expect(flash.size).toBe(84);
     // This project's six autumn ones (owner, 10 Nov 2026): Plants and Good.
     expect(DECOR_KINDS[1]?.types.slice(0, 3)).toEqual([201, 205, 206]);

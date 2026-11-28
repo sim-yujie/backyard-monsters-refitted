@@ -21,6 +21,7 @@ import {
   serverClock,
   shortAmount,
   shortDate,
+  leadsPage,
   sortEvents,
 } from "./eventsModel";
 
@@ -152,6 +153,24 @@ describe("sortEvents", () => {
     const a = event({ id: "a", endsAt: 5 });
     const yards = event({ id: "brukwar-1", kind: "yards", endsAt: 9 });
     expect(sortEvents([a, yards]).active.map((one) => one.id)).toEqual(["brukwar-1", "a"]);
+  });
+
+  it("puts Christmas first while it is on, even above a wave event (owner, 28 Nov 2026)", () => {
+    const a = event({ id: "a", endsAt: 5 });
+    const wave = event({ id: "w", kind: "wave", endsAt: 6 });
+    const christmas = event({ id: "x", kind: "christmas", endsAt: 9 });
+    expect(sortEvents([a, wave, christmas]).active.map((one) => one.id)).toEqual(["x", "w", "a"]);
+    expect(leadsPage(christmas)).toBe(true);
+  });
+
+  it("leaves Christmas where any event sits once it is over or still to come", () => {
+    const a = event({ id: "a", endsAt: 5 });
+    const over = event({ id: "x", kind: "christmas", status: "ended", endsAt: 4 });
+    expect(sortEvents([over, a]).active.map((one) => one.id)).toEqual(["a", "x"]);
+    expect(leadsPage(over)).toBe(false);
+    const soon = event({ id: "x", kind: "christmas", status: "upcoming", startsAt: 20 });
+    expect(sortEvents([soon, a]).upcoming.map((one) => one.id)).toEqual(["x"]);
+    expect(leadsPage(soon)).toBe(false);
   });
 });
 

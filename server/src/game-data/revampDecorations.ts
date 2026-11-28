@@ -66,6 +66,13 @@ export const REVAMP_DECORATIONS: readonly RevampDecoration[] = [
   { type: 230, name: "Bougainvillea", size: 40, price: 50 },
   { type: 231, name: "Trimmed Hedge", size: 40, price: 40 },
   { type: 232, name: "Rose Bush", size: 30, price: 25 },
+  // Christmas 2026's winter decorations (owner, 27 Nov 2026: "all 4 as painted"): prizes of the Christmas
+  // calendar (days 7 and 14) and present hunt (150 and 200), `CHRISTMAS_DECOR` in `events/events.ts`. Not in
+  // either shop list, so not for sale; the price only satisfies the shape (owner to say if they ever go on sale).
+  { type: 233, name: "Snowman", size: 40, price: 50 },
+  { type: 234, name: "Present Pile", size: 30, price: 50 },
+  { type: 235, name: "Lamp Post with Lights", size: 30, price: 60 },
+  { type: 236, name: "Christmas Tree", size: 40, price: 75 },
 ];
 
 const BY_TYPE: ReadonlyMap<number, RevampDecoration> = new Map(REVAMP_DECORATIONS.map((one) => [one.type, one]));

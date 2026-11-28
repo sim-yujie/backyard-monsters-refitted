@@ -6,18 +6,25 @@
  * one is a glowing jack-o'-lantern. During Thanksgiving (`thanksgiving-2026`)
  * the yard is dressed for autumn (`yard/thanksgivingSkin.ts`) and the
  * mushrooms grow as turkeys that roam near where they grew
- * (`yard/YardTurkeys.ts`); the golden one is a golden turkey. Outside an event the season is `normal`
- * and everything looks as it always has.
+ * (`yard/YardTurkeys.ts`); the golden one is a golden turkey. During
+ * Christmas (`christmas-2026`) the mushrooms grow as wrapped presents and the
+ * golden one is a golden present; the ground stays as it is (a snow look is
+ * not built yet). Outside an event the season is `normal` and everything
+ * looks as it always has.
  *
  * The server decides when an event is on (its clock, and `EVENTS_FORCE_ON`
  * in development); the client only follows what it is told, through
  * {@link setSeason}. Until it is told, the season is `normal`.
  */
 
-export type Season = "normal" | "halloween" | "thanksgiving";
+export type Season = "normal" | "halloween" | "thanksgiving" | "christmas";
 
 /** The season an active event kind brings, or null if it brings none. */
-const SEASON_BY_KIND: Readonly<Record<string, Season>> = { halloween: "halloween", thanksgiving: "thanksgiving" };
+const SEASON_BY_KIND: Readonly<Record<string, Season>> = {
+  halloween: "halloween",
+  thanksgiving: "thanksgiving",
+  christmas: "christmas",
+};
 
 /** The season the active events dress the yard in: the first that has one, else `normal`. */
 export const seasonFor = (activeKinds: readonly string[]): Season => {
@@ -50,12 +57,13 @@ export const onSeasonChange = (listener: Listener): (() => void) => {
 };
 
 /**
- * One mushroom (pumpkin, turkey) grows per this many seconds: once an hour in
- * the Halloween pumpkin hunt and the Thanksgiving turkey hunt, else the usual 17,280 s. Mirrors
+ * One mushroom (pumpkin, turkey, present) grows per this many seconds: once an
+ * hour in each yard hunt, else the usual 17,280 s. Mirrors
  * `server/src/services/yard/mushrooms.ts` `mushroomRespawnSeconds`.
  */
 export const MUSHROOM_RESPAWN_SECONDS_BY_SEASON: Readonly<Record<Season, number>> = {
   normal: 17_280,
   halloween: 3_600,
   thanksgiving: 3_600,
+  christmas: 3_600,
 };

@@ -1,5 +1,5 @@
 import { flingCost, dropRadius, type FlingDrop } from "./engine.js";
-import { ELLIPSE_SQUASH, isTower, propsSizeOf } from "./stats.js";
+import { blastReaches, ELLIPSE_SQUASH, isTower, propsSizeOf, type Ellipse } from "./stats.js";
 import type {
   CombatBuildingDataMap,
   CombatTargetKind,
@@ -98,6 +98,26 @@ export const overlappingBuildings = <T extends DropObstacle>(
     if (apart < zoneEdge + buildingEdge) hits.push(obstacle);
   }
   return hits;
+};
+
+/**
+ * Every standing building a damage bomb's blast landing at `point` reaches, in
+ * the obstacles' order: the engine's own hit test ({@link blastReaches}), so a
+ * bomb may land wherever its ring would hit a building and nowhere else.
+ * Flash checked a bomb's drop with the overlap rule above, the old blast's
+ * shape; the blast is now a ground circle (owner, option C, 28 Nov 2026).
+ */
+export const blastTouching = <T extends DropObstacle>(
+  point: Cart,
+  blast: Ellipse,
+  obstacles: readonly T[],
+): T[] => {
+  const at = screenOf(point.x, point.y);
+  return obstacles.filter((obstacle) => {
+    if (!blocksDrop(obstacle)) return false;
+    const iso = screenOf(obstacle.x, obstacle.y);
+    return blastReaches(blast, iso.x - at.x, iso.y + obstacle.middle - at.y, obstacle.size);
+  });
 };
 
 const numberOf = (value: unknown): number => {

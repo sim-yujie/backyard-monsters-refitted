@@ -115,6 +115,8 @@ export interface ReplayInput {
   readonly wholeHealth?: boolean;
   /** Another main-yard Spurtz rule (`BattleOptions.spurtzHatch`), for tests and balance runs. */
   readonly spurtzHatch?: SpurtzHatchRule;
+  /** Another main-yard Spurtz reload (`BattleOptions.spurtzReload`), for tests and balance runs. */
+  readonly spurtzReload?: number;
 }
 
 /**
@@ -266,6 +268,7 @@ export const replayAttack = (input: ReplayInput): ReplayOutcome => {
     ...(input.flashKrallen === false ? { flashKrallen: false } : {}),
     ...(input.wholeHealth === false ? { wholeHealth: false } : {}),
     ...(input.spurtzHatch ? { spurtzHatch: input.spurtzHatch } : {}),
+    ...(input.spurtzReload !== undefined ? { spurtzReload: input.spurtzReload } : {}),
   };
 
   const battle = createBattle(yard, options);

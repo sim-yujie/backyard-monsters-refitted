@@ -19,6 +19,8 @@ import { cellCentre, paintedCellShape, textureAspect, type CellShape } from "./c
 import { SPRITE_ROWS, SPRITE_SHEET_ROWS } from "./canopy";
 import { GroundData } from "./GroundData";
 import { GroundTexture, SHADER_TEXTURES } from "./groundKinds";
+import { frostCanvas, WINTER_LINE_COLOUR, WINTER_STAND_INS, winterMap } from "./winterLook";
+import { onSeasonChange } from "@/game/season";
 import { GROUND_SAMPLERS, GROUND_VERTEX, groundFragment } from "./groundShader";
 import { PLACEMENT_GRIDS, PlacementLayer, placementProgram } from "./PlacementLayer";
 import { RiverLayer } from "./RiverLayer";
@@ -174,6 +176,8 @@ export class PaintedGround {
   /** The rivers' distance picture (look plan step 7), painted by the shader with the sea's water. */
   private readonly rivers = new RiverLayer();
   private readonly stopQuality: () => void;
+  /** Stops following the season (the winter look's lines and frost, `winterLook.ts`). */
+  private readonly stopSeason: () => void;
   private destroyed = false;
   /** Whether this open's "full look" timing mark is set (`openMarks.ts`). */
   private fullLookMarked = false;
@@ -190,7 +194,10 @@ export class PaintedGround {
     private readonly warmer: ProgramWarmer | null = null,
   ) {
     this.data = new GroundData();
-    this.standIns = STAND_INS.map(solidSource);
+    const winterStandIns = winterMap();
+    this.standIns = STAND_INS.map((colour, index) =>
+      solidSource((winterStandIns ? WINTER_STAND_INS[SHADER_TEXTURES[index]!] : undefined) ?? colour),
+    );
     this.spriteStandIn = solidSource("rgba(0,0,0,0)");
     const span = shape.cellWidth * TEXTURE_CELLS;
     const resources: Record<string, unknown> = {
@@ -200,7 +207,8 @@ export class PaintedGround {
         uTexScale: { value: new Float32Array([span, span * textureAspect(shape)]), type: "vec2<f32>" },
         uWorldCells: { value: new Float32Array([WORLD_WIDTH, WORLD_HEIGHT]), type: "vec2<f32>" },
         uQuality: { value: QUALITY_LEVEL[quality()], type: "f32" },
-        uLine: { value: new Float32Array(LINE_COLOUR), type: "vec4<f32>" },
+        // Dark slate on the Christmas snow, where the cream lines vanish (`winterLook.ts`).
+        uLine: { value: new Float32Array(winterMap() ? WINTER_LINE_COLOUR : LINE_COLOUR), type: "vec4<f32>" },
         uFog: { value: new Float32Array(rgb(FOG_COLOUR)), type: "vec3<f32>" },
         uUnloaded: { value: new Float32Array(rgb(LOADING_COLOUR)), type: "vec3<f32>" },
         uSpritesReady: { value: 0, type: "f32" },
@@ -249,6 +257,13 @@ export class PaintedGround {
       this.uniforms.uQuality = QUALITY_LEVEL[level];
       this.placements.invalidate();
       void this.load(level);
+    });
+    // A season that arrives after the map opened (the map loaded before the yard): the lines now,
+    // the frost with the textures cut again.
+    this.stopSeason = onSeasonChange(() => {
+      const uniforms = this.shader.resources.groundUniforms as { uniforms: { uLine: Float32Array } };
+      uniforms.uniforms.uLine.set(winterMap() ? WINTER_LINE_COLOUR : LINE_COLOUR);
+      void this.load();
     });
   }
 
@@ -451,7 +466,9 @@ export class PaintedGround {
   /** Fetches the ground atlas at this Quality and cuts it into repeating textures. */
   private async loadGround(level: Quality): Promise<boolean> {
     const url = sheetAtQuality(ATLAS_URL, level);
-    if (url === this.loadedUrl) return true;
+    // The winter look's frost is cut into the textures, so a change of season cuts them again.
+    const key = `${url}|${winterMap() ? "winter" : "summer"}`;
+    if (key === this.loadedUrl) return true;
     let image: CanvasImageSource;
     try {
       const texture = await timeArt(url, () => Assets.load(url));
@@ -464,6 +481,7 @@ export class PaintedGround {
     const size = Math.round(square / (1 + 2 * GROUND_GUTTER));
     const gutter = (square - size) / 2;
     // Cutting the atlas runs on the main thread (timed for the open, `openMarks.ts`).
+    const winter = winterMap();
     const cut: TextureSource[] = timeCut("ground", () => {
       const canvases = SHADER_TEXTURES.map((slot) => {
         const canvas = document.createElement("canvas");
@@ -479,6 +497,8 @@ export class PaintedGround {
           size,
           size,
         );
+        // Christmas: the snow toned off pure white, the forest frosted, the beaches grey (`winterLook.ts`).
+        if (winter) frostCanvas(canvas, slot);
         return canvas;
       });
       const style = {
@@ -506,7 +526,7 @@ export class PaintedGround {
     const old = this.textures;
     for (const index of GROUND_SAMPLERS) this.shader.resources[`uGround${index}`] = cut[index]!;
     this.textures = cut;
-    this.loadedUrl = url;
+    this.loadedUrl = `${url}|${winter ? "winter" : "summer"}`;
     for (const source of old) source.destroy();
     return true;
   }
@@ -528,6 +548,7 @@ export class PaintedGround {
   destroy(): void {
     this.destroyed = true;
     this.stopQuality();
+    this.stopSeason();
     this.mesh.destroy();
     this.shader.destroy();
     this.data.destroy();

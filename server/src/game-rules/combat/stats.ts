@@ -1013,7 +1013,14 @@ export interface SpurtzHatchRule {
   readonly strength: number;
 }
 
-/** Flash's hatching (`SpurtzCannon.as:226-235`): every yard but a player's main yard. */
+/**
+ * Flash's hatching (`SpurtzCannon.as:226-235`), on every yard: one landing in
+ * two hatches a full-strength Spurtz, with no limit. Beta 10 first capped a
+ * player's main yard at 2 a cannon (desk b10-numbers, 27 Nov 2026); the owner
+ * dropped the cap for a slower reload instead (desk spurtz6, pick B, 28 Nov
+ * 2026, {@link MAIN_YARD_SPURTZ_RELOAD}). A battle may still hatch by another
+ * rule on a main yard with `BattleOptions.spurtzHatch` (tests and balance runs).
+ */
 export const FLASH_SPURTZ_HATCH: SpurtzHatchRule = {
   chance: SPURTZ_HATCH_CHANCE,
   most: Infinity,
@@ -1021,23 +1028,31 @@ export const FLASH_SPURTZ_HATCH: SpurtzHatchRule = {
 };
 
 /**
- * Hatching on a player's main yard (beta 10, owner's pick B for the Brukkarg
- * War prize cannons, desk b10-numbers, 27 Nov 2026): each cannon keeps at
- * most 2 hatched Spurtz on the field at once. Two Black Diamond Spurtz
- * Cannons made a main yard all but unbeatable for a ground army
- * (`agent-handoffs/reports/beta10-numbers.md` §6). The cap frees a D.A.V.E.
- * army (27% -> 86% on a camp yard, 20 seeds), but an Ichi, Crabatron or
- * Project X army stays near 10%: the shells alone hold those at 12-21%, so
- * for them the shells, not the brood, are the wall. Raids on a main yard
- * hatch by it too. This is the one place the owner's pick lives; a battle may
- * override it with `BattleOptions.spurtzHatch`. Tribe, event, Inferno and
- * outpost yards keep {@link FLASH_SPURTZ_HATCH}.
+ * How many times Flash's reload a Spurtz Cannon (136, and 137 the Black
+ * Diamond) takes on a player's main yard (beta 10, owner's pick B, desk
+ * spurtz6, 28 Nov 2026: "keep the original spurtz tower ... just increase the
+ * reload time so it cant continuously fire"). Its `rate` counts this many
+ * times over, for its first load and every reload after, as in the test the
+ * owner chose from (`archive/spurtz-test/reload`, r2). The burst itself is
+ * unchanged, so a level 5 Black Diamond's cycle goes from 340 to 680 fast
+ * ticks and its pause after the 55-shot burst from about 0.8 s to about 5 s.
+ * Its damage and hatching stay Flash's. Raids on a main yard reload by it too.
+ * This is the one place the owner's pick lives; a battle may override it with
+ * `BattleOptions.spurtzReload`. Tribe, event, Inferno and outpost yards keep
+ * Flash's reload.
  */
-export const MAIN_YARD_SPURTZ_HATCH: SpurtzHatchRule = {
-  chance: SPURTZ_HATCH_CHANCE,
-  most: 2,
-  strength: 1,
-};
+export const MAIN_YARD_SPURTZ_RELOAD = 2;
+
+/**
+ * How many times over a tower of `type` counts its `rate` on a yard of
+ * `kind`: `mainYardSpurtzReload` for a Spurtz Cannon on a player's main yard
+ * ({@link MAIN_YARD_SPURTZ_RELOAD}), 1 for every other tower and yard.
+ */
+export const towerRateScale = (
+  type: number,
+  kind: CombatTargetKind,
+  mainYardSpurtzReload: number = MAIN_YARD_SPURTZ_RELOAD,
+): number => (kind === "main" && isSpurtzCannon(type) ? mainYardSpurtzReload : 1);
 export const SPURTZ_ID = "IC1";
 /** How far a hatched Spurtz looks for an attacker (`CreepBase.as:663`). */
 export const SPURTZ_LOOK = 200;
@@ -1363,8 +1378,9 @@ export interface BombStats {
   /** Putty only: how long the boost lasts, in seconds (`speedlength`). */
   readonly speedlength?: number;
   /**
-   * `_size` of the blast, in isometric pixels. Despite the name it is a full
-   * width, not a radius: see {@link bombBlast}.
+   * `_size` of the blast. Flash read it as the blast's full width in
+   * isometric pixels, not a radius; the blast is now the ground circle of the
+   * same area: see {@link bombReach}.
    */
   readonly radius: number;
   /**
@@ -1493,16 +1509,48 @@ export const squashedEllipse = (width: number): Ellipse => ({
 });
 
 /**
- * The area a damage bomb hits, centred where it lands.
+ * A circle of `reach` yard units on the ground, as the screen shows it.
  *
- * `ResourceBomb` hands `EllipseEdgeDistanceSqrd` the bomb's `radius` as the
- * ellipse's full width (`com/monsters/effects/ResourceBomb.as`, the
- * constructor), so the blast reaches `radius / 2` either side and
- * `radius * 0.4` above and below: the "radius" is a diameter. This is the one
- * figure the engine's hit test and the attack screen's drop ring both read, so
- * the ring the player aims with is the blast they get.
+ * `GRID.ToISO` turns a yard point `(x, y)` into `(x - y, (x + y) / 2)`, so a
+ * ground circle is `reach * sqrt 2` either side and half that above and below:
+ * an ellipse twice as wide as it is tall. The fling ring (Flash's
+ * `DROPZONE_CLIP`, `_size * 1.2` wide and half as tall), the putty bomb's ring
+ * and a damage bomb's blast all have this shape, so every ring on the attack
+ * screen sits on the tilted yard the same way. The mapping keeps areas
+ * (its determinant is 1), so the ellipse covers exactly the circle's area.
  */
-export const bombBlast = (bomb: BombStats): Ellipse => squashedEllipse(bomb.radius);
+export const groundRing = (reach: number): Ellipse => {
+  const across = reach * Math.SQRT2;
+  return { rx: across, ry: across / 2 };
+};
+
+/**
+ * How far a damage bomb reaches on the ground for each unit of its `radius`:
+ * `sqrt(ELLIPSE_SQUASH / 4)`, about 0.447.
+ *
+ * Flash's blast was `radius` wide and `radius * ELLIPSE_SQUASH` tall on screen
+ * (`ResourceBomb.as`, the constructor, through `EllipseEdgeDistanceSqrd`), an
+ * area of `pi * 0.2 * radius²` that looked nearly round on the tilted yard.
+ * The owner chose to make it a true ground circle like the putty and fling
+ * rings (option C, 28 Nov 2026) while keeping that area, so a bomb hits about
+ * as many buildings as before: the ground circle whose area is
+ * `pi * 0.2 * radius²` has a radius of `radius * sqrt 0.2`. On screen that is
+ * about 1.26 times Flash's width and 0.79 times its height.
+ */
+export const BOMB_GROUND_REACH = Math.sqrt(ELLIPSE_SQUASH / 4);
+
+/** How far a damage bomb reaches, in yard units on the ground: see {@link BOMB_GROUND_REACH}. */
+export const bombReach = (bomb: BombStats): number => bomb.radius * BOMB_GROUND_REACH;
+
+/**
+ * The area a damage bomb hits, centred where it lands: the ground circle of
+ * {@link bombReach}, on screen an ellipse twice as wide as it is tall.
+ *
+ * This is the one figure the engine's hit test ({@link bombReaches}) and the
+ * attack screen's drop ring both read, so the ring the player aims with is the
+ * blast they get.
+ */
+export const bombBlast = (bomb: BombStats): Ellipse => groundRing(bombReach(bomb));
 
 /**
  * How far a putty bomb reaches, in yard units: a circle of half its `radius`
@@ -1540,17 +1588,31 @@ export const ellipseEdgeSquared = (ellipse: Ellipse, dx: number, dy: number): nu
  * the squared distance against the sum of the two squared edge distances,
  * which is what `d⁴ < (e₁ + e₂)²` comes to (`ResourceBomb.as`). A building is
  * therefore hit a little outside the blast ellipse, by less than its own
- * half-size.
+ * half-size. The blast is {@link bombBlast}'s ground circle (since 28 Nov
+ * 2026); the building keeps Flash's squashed stand-in.
  */
 export const bombReaches = (
   bomb: BombStats,
   dx: number,
   dy: number,
   buildingSize: number,
+): boolean => blastReaches(bombBlast(bomb), dx, dy, buildingSize);
+
+/**
+ * {@link bombReaches} for a blast already in hand: the attack screen's drop
+ * zone carries the blast as its ring, and the test of whether a bomb may land
+ * (it must reach a building) reads it through here, so a drop is allowed
+ * exactly where the ring would hit something.
+ */
+export const blastReaches = (
+  blast: Ellipse,
+  dx: number,
+  dy: number,
+  buildingSize: number,
 ): boolean => {
   const apart = dx * dx + dy * dy;
   const reach =
-    ellipseEdgeSquared(bombBlast(bomb), dx, dy) +
+    ellipseEdgeSquared(blast, dx, dy) +
     ellipseEdgeSquared(squashedEllipse(buildingSize * 0.5), dx, dy);
   return apart < reach;
 };

@@ -1,4 +1,5 @@
 import { isFogCell, type MapCell } from "@/api/types";
+import { currentSeason } from "@/game/season";
 
 /**
  * Which painted ground a Map Room 2 cell wears (plan step 2), and how a cell is packed into the
@@ -116,6 +117,14 @@ export const groundOf = (cell: MapCell | undefined): Ground => {
  */
 export const OCCUPIED_FLAG = 16;
 
+/**
+ * While it is Christmas (`game/season.ts`; owner, 27 Nov 2026: "a winter ground on the Map Room 2 map")
+ * every land ground is the painted ground's own snow, the one its high mountains wear: the shader is
+ * unchanged, the water stays water and the forests, rocks and marsh features still stand on it.
+ */
+export const winterGround = (ground: Ground): Ground =>
+  ground < Ground.SHALLOWS && currentSeason() === "christmas" ? Ground.SNOW : ground;
+
 /** Whether a cell shows a picture in its middle (a wild camp, a yard or an outpost). */
 export const isOccupied = (cell: MapCell | undefined): boolean =>
   cell !== undefined && !isFogCell(cell) && (cell as { b?: unknown }).b !== undefined;
@@ -125,7 +134,7 @@ export const isOccupied = (cell: MapCell | undefined): boolean =>
  * step 7, 0 for now), A the ground (low 4 bits) plus {@link OCCUPIED_FLAG}.
  */
 export const encodeCell = (cell: MapCell | undefined, out: Uint8Array, offset: number): void => {
-  const ground = groundOf(cell);
+  const ground = winterGround(groundOf(cell));
   const known = cell !== undefined && !isFogCell(cell);
   out[offset] = known ? Math.max(0, Math.min(255, Math.round(cell.i))) : 0;
   out[offset + 1] = known ? ((cell as { lf?: number }).lf ?? 0) : 0;

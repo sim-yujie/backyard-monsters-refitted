@@ -285,6 +285,26 @@ describe("Events: the New to Map Room 2 card", () => {
     expect(content.querySelector(".events-panel")).toBeNull();
     expect(mounts.scene.openMap).toHaveBeenCalledOnce();
   });
+
+  it("read before its first reset (owner, 28 Nov): read again once it starts", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"] });
+    try {
+      vi.setSystemTime(0);
+      // The door's clock reads 3,600; the pass starts 5 s later.
+      const ahead = { ...welcome, startsAt: 3_605, endsAt: 3_605 + 10 * 86_400, takeover: false, kit: false };
+      const { door, content } = await setup([], ahead);
+      door.toggle();
+      expect(content.querySelector(".events-welcome__days-text")?.textContent).toBe("Starts in 5s");
+      const list = vi.mocked((door as unknown as { api: EventsApi }).api.list);
+      // Opening the page reads it too; let that settle, then pass the start.
+      await vi.advanceTimersByTimeAsync(1_000);
+      const before = list.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(list.mock.calls.length).toBeGreaterThan(before);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("Events: the weekend event (owner, 13 Nov: in Events, not a banner on the yard)", () => {

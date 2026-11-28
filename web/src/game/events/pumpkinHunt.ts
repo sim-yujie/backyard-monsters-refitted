@@ -2,11 +2,11 @@ import type { EventView } from "@/api/events";
 
 /**
  * The yard hunts' counts between reads of the events list: Halloween's
- * pumpkins and Thanksgiving's turkeys.
+ * pumpkins, Thanksgiving's turkeys and Christmas's presents.
  *
  * Every find picked during a hunt raises the player's count on the server
  * (`server/src/controllers/yard/mushrooms.ts`), and the pick's answer says
- * the new count (`report.pumpkins` or `report.turkeys`). The pick passes it
+ * the new count (`report.pumpkins`, `report.turkeys` or `report.presents`). The pick passes it
  * on here, so the Events button's badge and the page's ladder
  * (`game/yard/plugins/events.ts`) can move at once rather than at the next read.
  */
@@ -16,6 +16,9 @@ export const PUMPKIN_HUNT_KIND = "halloween";
 
 /** The event kind whose ladder counts turkeys. */
 export const TURKEY_HUNT_KIND = "thanksgiving";
+
+/** The event kind whose ladder counts presents. */
+export const PRESENT_HUNT_KIND = "christmas";
 
 type Listener = (count: number, kind: string) => void;
 const listeners = new Set<Listener>();

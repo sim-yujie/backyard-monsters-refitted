@@ -4,6 +4,7 @@ import { Assets, Texture, type Graphics } from "pixi.js";
 import type { BaseLoadResponse } from "@/api/types";
 import { readYard } from "./yardModel";
 import { YardGround } from "./YardGround";
+import { setClassicLook } from "@/game/classicLook";
 
 /**
  * One cohesive ground (#197): grass is laid over the whole world and a margin
@@ -15,8 +16,8 @@ const bounds = readYard({ error: 0, buildingdata: {}, storedata: {} } as unknown
 
 /** The ground's layers, in the order the constructor adds them. */
 const layers = (ground: YardGround) => {
-  const [surround, plot, clip, boundary] = ground.root.children as Graphics[];
-  return { surround: surround!, plot: plot!, clip: clip!, boundary: boundary! };
+  const [surround, plot, clip, outside, boundary] = ground.root.children as Graphics[];
+  return { surround: surround!, plot: plot!, clip: clip!, outside: outside!, boundary: boundary! };
 };
 
 describe("YardGround", () => {
@@ -36,6 +37,21 @@ describe("YardGround", () => {
     expect(edge.width).toBeGreaterThan(0);
     expect(edge.width).toBeLessThan(bounds.width + 10);
     ground.destroy();
+  });
+
+  it("at Christmas darkens the snow outside the own plot only (neon, 28 Nov 2026)", () => {
+    const load = vi.spyOn(Assets, "load").mockRejectedValue(new Error("offline"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const ground = new YardGround("original");
+    ground.layout(bounds, 1, "plot");
+    expect(layers(ground).outside.getLocalBounds().width).toBe(0);
+    ground.setSeason("christmas");
+    expect(layers(ground).outside.getLocalBounds().width).toBeGreaterThan(bounds.width);
+    ground.layout(bounds, 1, "open");
+    expect(layers(ground).outside.getLocalBounds().width).toBe(0);
+    ground.destroy();
+    load.mockRestore();
+    warn.mockRestore();
   });
 
   it("draws no edge on a foreign yard's open ground", () => {
@@ -135,5 +151,36 @@ describe("YardGround", () => {
       ground.destroy();
     }
     snow.destroy();
+  });
+
+  it("snows at Christmas on the grass grounds, each look its own snow; a picked ground and lava stay", async () => {
+    try {
+      setClassicLook(false);
+      for (const id of ["meadow", "original"] as const) {
+        const modern = new YardGround(id);
+        modern.setSeason("christmas");
+        expect(await fetched(modern)).toEqual([1, 2, 3, 4].map((n) => `/assets/yardbg/snow/layer${n}@2x.webp`));
+      }
+      const desert = new YardGround("desert");
+      desert.setSeason("christmas");
+      expect((await fetched(desert))[0]).toBe("/assets/yardbg/desert/layer1@2x.webp");
+
+      setClassicLook(true);
+      const classic = new YardGround("original");
+      classic.setSeason("christmas");
+      expect(await fetched(classic)).toEqual([1, 2, 3, 4].map((n) => `/assets/yardbg/snow-classic/layer${n}.webp`));
+      expect(classic.rangeInk()).not.toBeNull();
+      const rock = new YardGround("rock");
+      rock.setSeason("christmas");
+      expect((await fetched(rock))[0]).toBe("/assets/yardbg/rock/2180_isorock1_isorock1.png");
+
+      // Off again after the event: the grass comes back.
+      const after = new YardGround("original");
+      after.setSeason("christmas");
+      after.setSeason("normal");
+      expect((await fetched(after))[0]).toBe("/assets/yardbg/grass/2174_isograss1_isograss1.png");
+    } finally {
+      setClassicLook(false);
+    }
   });
 });

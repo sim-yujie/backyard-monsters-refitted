@@ -1692,7 +1692,7 @@ export interface MushroomPickReport {
   /** Where it stood, yard units. */
   x: number;
   y: number;
-  /** Golden: one in four (one in ten for a turkey in the turkey hunt), rolled by the server at pick time. */
+  /** Golden: one in four (one in ten for a turkey or a present in their hunts), rolled by the server at pick time. */
   golden: boolean;
   /** Shiny it gave: 0, 3 or 8. */
   shiny: number;
@@ -1700,6 +1700,8 @@ export interface MushroomPickReport {
   pumpkins?: number;
   /** The same during the Thanksgiving turkey hunt: the player's turkey count. */
   turkeys?: number;
+  /** The same during the Christmas present hunt: the player's present count. */
+  presents?: number;
 }
 
 /** `POST /bm/yard/shop/buy`. */
