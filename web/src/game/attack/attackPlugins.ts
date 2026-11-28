@@ -48,6 +48,8 @@ export interface AttackMounts {
   readonly dockTabs: DockTabs;
   /** A spare slot on the HUD strip, between the readouts and Retreat. */
   readonly hudSlot: HTMLElement;
+  /** The overlay layer the strip sits in, for pieces that float under it (a wave's status pill). */
+  readonly hudLayer?: HTMLElement;
   /** The overlay's modal layer, for the end-of-attack panel. */
   readonly modal: HTMLElement;
   /** The overlay's guide layer, for Bob (the tutorial's practice attack, issue #227). */

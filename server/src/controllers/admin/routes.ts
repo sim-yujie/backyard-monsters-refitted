@@ -26,6 +26,7 @@ import { errorTotals, listErrors } from "../../services/errors/errorStore.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { adminHealthReport } from "../../services/health/adminHealth.js";
 import { mountAdminMonsterMadnessRoutes } from "./monsterMadness.js";
+import { mountAdminWaveEventRoutes } from "./waveEvents.js";
 import { mountAdminWeekendRoutes } from "./weekend.js";
 import { mountAdminMaintenanceRoutes } from "./maintenance.js";
 import { mountAdminStarFigureRoutes } from "./starFigures.js";
@@ -221,6 +222,8 @@ export const mountAdminRoutes = (router: Router): void => {
   mountAdminStarFigureRoutes(router, admin, adminOnly, () => postgres.em.fork());
   // Monster Madness: on no calendar, started and stopped here (`monsterMadness.ts`).
   mountAdminMonsterMadnessRoutes(router, admin, adminOnly, () => postgres.em.fork());
+  // Wave events (Wild Monster Invasion and later ones): started and stopped here (`waveEvents.ts`).
+  mountAdminWaveEventRoutes(router, admin, adminOnly, () => postgres.em.fork());
 
   router.get(`${admin}/stats/overview`, apiVersion, adminOnly, async (ctx) => {
     const days = Math.min(MAX_DAYS, Math.max(1, intOf(ctx.query.days) ?? 30));

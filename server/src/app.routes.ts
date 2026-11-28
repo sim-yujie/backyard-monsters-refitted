@@ -90,6 +90,7 @@ import { yardRoute } from "./controllers/yard/yardRoute.js";
 import { getNeighbours } from "./controllers/maproom/getNeighbours.js";
 import { getMapRoom1 } from "./controllers/maproom/getMapRoom1.js";
 import { presence, stayProtected } from "./controllers/maproom/presence.js";
+import { waveNextController, waveStatusController, waveSurrenderController } from "./controllers/events/waveEvents.js";
 import { raidDevDue, raidDevTrojan, raidEngage, raidFinish, raidFrequency, raidPrepare, raidStart, raidTrojan } from "./controllers/raid/raid.js";
 import { botCheck, botCheckAnswer, botCheckForce, devCheckEnabled } from "./controllers/maproom/botCheck.js";
 
@@ -157,7 +158,6 @@ import { getLeaderboards } from "./controllers/leaderboards/getLeaderboards.js";
 import { getEmpireBoard } from "./controllers/leaderboards/getEmpireBoard.js";
 import { getAttackLogs } from "./controllers/attacklogs/getAttackLogs.js";
 
-import { wildMonsterInvasion } from "./controllers/events/wildMonsterInvasion.js";
 
 import { createAlliance } from "./controllers/alliance/createAlliance.js";
 import { editAlliance } from "./controllers/alliance/editAlliance.js";
@@ -274,6 +274,10 @@ router.post("/api/:apiVersion/bm/raid/start", apiVersion, verifyUserAuth, logReq
 // The Trojan Horse's spring (#306 WP3): no warning, opens the fight at once; its own fight lands through `finish` above.
 router.post("/api/:apiVersion/bm/raid/trojan", apiVersion, verifyUserAuth, logRequest, raidTrojan);
 router.post("/api/:apiVersion/bm/raid/finish", apiVersion, verifyUserAuth, logRequest, raidFinish);
+// Wave events (beta 10, Wild Monster Invasion): the event on now, and "Next wave"; a wave lands through `finish` above.
+router.get("/api/:apiVersion/bm/events/wave", apiVersion, verifyUserAuth, logRequest, waveStatusController);
+router.post("/api/:apiVersion/bm/events/wave/next", apiVersion, verifyUserAuth, logRequest, waveNextController);
+router.post("/api/:apiVersion/bm/events/wave/surrender", apiVersion, verifyUserAuth, logRequest, waveSurrenderController);
 router.post("/api/:apiVersion/bm/raid/frequency", apiVersion, verifyUserAuth, logRequest, raidFrequency);
 // DEV only, never mounted in production: the next raid is due now.
 if (devCheckEnabled()) {
@@ -454,7 +458,6 @@ router.get("/alliance/news", verifyUserAuth, logRequest, allianceNewsController)
 /**  ────────────────────────────────────────────────
 * 📦 Events
 * ──────────────────────────────────────────────── */
-router.get("/api/:apiVersion/events/wmi", apiVersion, logRequest, wildMonsterInvasion);
 // The Events page and "What's new" (`controllers/events/routes.ts`); the claims are yard actions.
 mountEventsRoutes(router);
 // The rare "Support the game" reminder's record (`controllers/support/routes.ts`).

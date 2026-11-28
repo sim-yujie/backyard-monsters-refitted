@@ -7,7 +7,7 @@ import { BaseType } from "../../enums/Base.js";
 import { WorldMapCell } from "./worldmapcell.model.js";
 import { BigIntType, type Opt, PrimaryKeyProp, UniqueConstraintViolationException } from "@mikro-orm/core";
 import type { AttackDetails } from "../../controllers/base/load/modes/baseModeAttack.js";
-import type { Stats } from "../../services/events/wmi/invasionUtils.js";
+import type { Stats } from "../../types/Stats.js";
 import type { ChampionData } from "../../schemas/ChampionSchema.js";
 import type { JsonObject } from "../../types/JsonObject.js";
 import type { BuildingDataMap, BuildingHealthData, FiredTrap } from "../../types/BuildingData.js";
