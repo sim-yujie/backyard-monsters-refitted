@@ -42,8 +42,7 @@ const ABILITY_ICON: Readonly<Record<AbilityInfo["id"], string>> = {
   groundSlam: "/ui/abilities/ground-slam.webp",
   bloodthirst: "/ui/abilities/bloodthirst.webp",
   twinBite: "/ui/abilities/twin-bite.webp",
-  // Stand-in until Obsidian Hide has its own painted icon.
-  obsidianHide: "/status-icons/stone.webp",
+  obsidianHide: "/ui/abilities/obsidian-hide.webp",
   healingMist: "/ui/abilities/healing-mist.webp",
   bubble: "/status-icons/shielded.webp",
   acidSpit: "/status-icons/marked.webp",
