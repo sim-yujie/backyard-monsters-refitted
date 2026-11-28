@@ -851,6 +851,20 @@ describe("EventsPanel: the weekend event (owner, 13 Nov: in Events, not a banner
     panel.close();
   });
 
+  it("Christmas, while it is on, sits above it (owner, 28 Nov 2026: \"First, while Christmas is on\")", () => {
+    const { panel } = mounted();
+    const christmas = event({ id: "christmas-2026", kind: "christmas", endsAt: 14 * 86_400 });
+    const turkey = event({ id: "thanksgiving-2026", kind: "thanksgiving", endsAt: 5 * 86_400 });
+    panel.render(list([turkey, christmas], { weekend: { on: builders, next: null } }));
+    const cards = [...panel.element.querySelectorAll<HTMLElement>(".events-page__main > .events-card")];
+    expect(cards.map((card) => card.dataset["event"])).toEqual(["christmas-2026", "weekend", "thanksgiving-2026"]);
+    // Over, with presents still to claim: back where any event sits, after the weekend and the ones on.
+    panel.render(list([turkey, { ...christmas, status: "ended" }], { weekend: { on: builders, next: null } }));
+    const after = [...panel.element.querySelectorAll<HTMLElement>(".events-page__main > .events-card")];
+    expect(after.map((card) => card.dataset["event"])).toEqual(["weekend", "thanksgiving-2026", "christmas-2026"]);
+    panel.close();
+  });
+
   it("ticks its time left with the page's other countdowns", () => {
     const { panel } = mounted();
     panel.render(list([], { weekend: { on: builders, next: null } }));

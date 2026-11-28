@@ -6,6 +6,7 @@ import {
   countdownText,
   krallenPenaltyText,
   krallenPrizeText,
+  leadsPage,
   rewardText,
   shortAmount,
   shortDate,
@@ -605,6 +606,9 @@ export class EventsPanel {
     const weekendOn = view.weekend?.on ?? null;
     const weekendNext = weekendOn ? null : (view.weekend?.next ?? null);
     const main = el("div", "events-page__main");
+    // Christmas leads even the weekend event while it is on (owner, 28 Nov 2026: "First, while Christmas is on").
+    const leading = active.filter(leadsPage);
+    for (const event of leading) main.append(this.activeCard(event, view));
     if (weekendOn && view.weekend) {
       const onCheckIn = this.options.onCheckInWeekend;
       main.append(
@@ -616,7 +620,7 @@ export class EventsPanel {
         ),
       );
     }
-    for (const event of active) main.append(this.activeCard(event, view));
+    for (const event of active) if (!leading.includes(event)) main.append(this.activeCard(event, view));
     if (main.childElementCount === 0 && !welcome) main.append(el("p", "events-status", "No event is on right now."));
     if (main.childElementCount > 0) page.append(main);
     if (upcoming.length > 0 || weekendNext) {
