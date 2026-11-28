@@ -10,7 +10,8 @@
  *
  * Eight headings, `directionOffset` -22.5: column 0 faces right, 2 towards the
  * viewer, 4 left, 6 away; columns 0, 1 and 7 are 4, 3 and 5 mirrored. Rows 0-3
- * walk, 4-13 attack (a horns-first lunge, the blow on its frame
+ * walk, starting on a pass with his hooves under him, his stand (owner, 28 Nov
+ * 2026: "his legs are far apart"), 4-13 attack (a horns-first lunge, the blow on its frame
  * {@link KRAMPUS_STRIKE_FRAME}), 14-22 stomp (rears up and slams down on
  * frame 6, tick 48, when his Blizzard Stomp lands, as Korath's quake does).
  * `file` is the Classic look's 1x sheet (Flash's rendered look, painted
@@ -65,40 +66,40 @@ const krampus = (
 /** Krampus's six sheets, `G6_1` to `G6_6`, as `MONSTER_SPRITES` keys champions. */
 export const KRAMPUS_SPRITES: Readonly<Record<string, MonsterSheet>> = {
   G6_1: krampus(1, {
-    frameWidth: 66,
+    frameWidth: 64,
     frameHeight: 62,
-    anchorX: 33,
-    anchorY: 48,
+    anchorX: 32,
+    anchorY: 50,
   }),
   G6_2: krampus(2, {
-    frameWidth: 80,
+    frameWidth: 78,
     frameHeight: 74,
-    anchorX: 40,
-    anchorY: 58,
+    anchorX: 39,
+    anchorY: 60,
   }),
   G6_3: krampus(3, {
-    frameWidth: 94,
-    frameHeight: 88,
-    anchorX: 47,
-    anchorY: 78,
+    frameWidth: 90,
+    frameHeight: 86,
+    anchorX: 45,
+    anchorY: 76,
   }),
   G6_4: krampus(4, {
-    frameWidth: 108,
-    frameHeight: 102,
-    anchorX: 54,
-    anchorY: 90,
+    frameWidth: 102,
+    frameHeight: 98,
+    anchorX: 51,
+    anchorY: 86,
   }),
   G6_5: krampus(5, {
-    frameWidth: 122,
-    frameHeight: 110,
-    anchorX: 61,
-    anchorY: 94,
+    frameWidth: 118,
+    frameHeight: 112,
+    anchorX: 59,
+    anchorY: 98,
   }),
   G6_6: krampus(6, {
-    frameWidth: 138,
-    frameHeight: 122,
-    anchorX: 69,
-    anchorY: 106,
+    frameWidth: 134,
+    frameHeight: 124,
+    anchorX: 67,
+    anchorY: 110,
   }),
 };
 

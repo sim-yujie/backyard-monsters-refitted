@@ -12,7 +12,8 @@ The attack (10 frames) and stomp (9 frames) are each heading's idle pose bent by
 
 Sheet layout (`krampusSprites.ts`): 8 headings, `directionOffset` -22.5, so column 0 faces right (E), 1 SE, 2 S
 (towards the viewer), 3 SW, 4 W, 5 NW, 6 N, 7 NE; columns 2-6 are painted, 0, 1 and 7 are 4, 3 and 5 mirrored about
-the anchor (a goat is left/right symmetric). Rows 0-3 the walk, 4-13 the attack, 14-22 the stomp. The body is scaled
+the anchor (a goat is left/right symmetric). Rows 0-3 the walk (row 0 a pass, his hooves under him: the idle;
+the strides narrowed, `narrow`), 4-13 the attack, 14-22 the stomp. The body is scaled
 so its front-left idle stands BODY_H[level] px tall at 1x (Gorgo L1 35, L3 55, L6 67; Korath L3 54; Drull L6 82),
 its hooves on the anchor, with a soft ground shadow baked in as Korath's and Krallen's repaints have. Both looks share
 one frame size and anchor, so one table row serves both.
@@ -36,7 +37,7 @@ ART = REPO / "art-samples" / "frost-tribe"
 OUT = REPO / "server" / "public" / "assets" / "monsters"
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from krampus_portraits import unlilac  # noqa: E402
-from krampus_motion import ATTACK_FRAMES, STOMP_FRAMES, motion  # noqa: E402
+from krampus_motion import ATTACK_FRAMES, STOMP_FRAMES, motion, narrow  # noqa: E402
 
 LOOK = {1: "kid", 2: "kid", 3: "beast", 4: "beast", 5: "armour", 6: "armour"}
 BODY_H = {1: 34, 2: 42, 3: 54, 4: 62, 5: 72, 6: 82}
@@ -88,6 +89,7 @@ def body(cell):
 
 
 WALK_FRAMES = 4
+STRIDE_NARROW = 0.3   # share of a stride's hoof spread taken back under the body
 PAD = 80
 
 
@@ -105,6 +107,11 @@ def build(style, look):
     """Every cell of one look: [kind rows][painted heading], and the front-left idle's height."""
     # room round each painted cell for the lunge and the rear-up to move into
     walk = [[pad(cell) for cell in row] for row in cells(SOURCES[style](look))]
+    # Owner, 28 Nov 2026 (desk frost-abil2): "standing quite awkwardly ... his legs are far apart". The painted
+    # cycle is stride, pass, stride, pass; the strides are drawn closer under him (STRIDE_NARROW) and the cycle
+    # starts on a pass, so his stand (row 0, the idle) and the attack and stomp moved from it stand square.
+    walk = [[narrow(cell, STRIDE_NARROW) if r % 2 == 0 else cell for cell in row] for r, row in enumerate(walk)]
+    walk = walk[1:] + walk[:1]
     rows = [list(row) for row in walk]
     for kind, count in (("attack", ATTACK_FRAMES), ("stomp", STOMP_FRAMES)):
         for f in range(count):

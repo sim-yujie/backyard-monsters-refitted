@@ -129,3 +129,45 @@ def motion(cell, heading, kind, frame):
             dy += ox * np.sin(phi) + oy * np.cos(phi) - oy
     # the field moves pixels by (dx, dy); sample backwards (fields are smooth and small, one step is enough)
     return warp(cell, (dx, dy))
+
+
+def narrow(cell, share):
+    """The legs drawn `share` closer under the body (owner, 28 Nov 2026, desk frost-abil2: "standing quite
+    awkwardly ... his legs are far apart"). Each hoof (a piece of the bottom band) is shifted sideways towards
+    the hooves' middle by `share` of its distance, the shift fading out up the leg to nothing at the belly, so
+    the hooves keep their painted shape and only the stance narrows."""
+    if share <= 0:
+        return cell
+    al = np.asarray(cell)[..., 3]
+    x0, y0, x1, y1 = bbox(al)
+    bh = y1 - y0
+    h, w = al.shape
+    band = np.zeros_like(al, dtype=bool)
+    top = int(y1 - 0.14 * bh)
+    band[top:y1] = al[top:y1] > 128
+    lab, count = ndi.label(band)
+    if count < 2:
+        return cell
+    pieces = []
+    for n in range(1, count + 1):
+        ys, xs = np.where(lab == n)
+        if xs.size < 6:
+            continue
+        pieces.append((xs.min(), xs.max(), xs.mean(), xs.size))
+    if len(pieces) < 2:
+        return cell
+    weight = np.array([p[3] for p in pieces], dtype=np.float32)
+    mid = float(np.sum([p[2] for p in pieces] * weight) / weight.sum())
+    knots_x, knots_s = [], []
+    for lo, hi, cx, _ in sorted(pieces):
+        s = (mid - cx) * share
+        knots_x += [lo - 0.5, hi + 0.5]
+        knots_s += [s, s]
+    order = np.argsort(knots_x, kind="stable")
+    kx = np.array(knots_x, dtype=np.float32)[order]
+    ks = np.array(knots_s, dtype=np.float32)[order]
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    shift = np.interp(xx.ravel(), kx, ks).reshape(h, w).astype(np.float32)
+    # the leg from the belly (no shift) down to the hooves (the whole shift)
+    up = smooth(yy, y1 - 0.42 * bh, y1 - 0.08 * bh)
+    return warp(cell, (shift * up, np.zeros_like(yy)))
