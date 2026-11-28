@@ -206,11 +206,11 @@ describe("golden replays", () => {
   // look and turns only on a defender that reaches or hits her, as in Flash.
   // An attack started under older rules is replayed with `flashKrallen` off
   // and plays as it was fought: these are both Krallen fixtures' digests
-  // under 8.6's rules before that change, on beta 10's monster numbers (the
-  // stats are not versioned, so they moved with the rebalance).
+  // under 8.6's rules before that change, on beta 10's monster numbers and
+  // main-yard Spurtz reload (neither is versioned, so they moved with them).
   it.each([
-    ["mixed-waves", "aa8fbe2ad0f1a0f0"],
-    ["korath-and-krallen", "23d57a6fed691af5"],
+    ["mixed-waves", "7ecf7d8f88930415"],
+    ["korath-and-krallen", "03a885dffeaf4835"],
   ])("%s replays to its old digest under older rules (flashKrallen off)", (name, digest) => {
     const fixture = read<Fixture>(`${FIXTURE_DIR}${name}.json`);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -222,27 +222,28 @@ describe("golden replays", () => {
   // Whole health (player report, Reii, 25 Nov 2026): Flash keeps a monster's
   // health whole (`SecNum.Set` rounds it). An attack started under older rules
   // is replayed with `wholeHealth` off and plays as it was fought: these are
-  // every fixture's digests under patch 8.6's rules, on beta 10's numbers.
+  // every fixture's digests under patch 8.6's rules, on beta 10's numbers and
+  // main-yard Spurtz reload.
   it.each([
-    ["both-caged-champions", "c07e954543467057"],
+    ["both-caged-champions", "a5a7b7d07ea09e8e"],
     ["bunker-defence", "1293b7515d7c8c1f"],
-    ["burrow-rush", "03d2b9970bbb1349"],
-    ["caged-champion", "549a5b3aa725dfd8"],
-    ["caged-korath", "7993d392693c1db8"],
-    ["champion-and-bunkers", "484d2f4f3edb4111"],
+    ["burrow-rush", "32f16b6d2342dc73"],
+    ["caged-champion", "451784b2d69b828c"],
+    ["caged-korath", "066b3425d3894177"],
+    ["champion-and-bunkers", "f93364b827215b86"],
     ["champion-brain", "1380f0c9edcb5603"],
     ["champion-defensive", "fb4f893d5708a583"],
     ["champion-offensive", "6599382b177c1975"],
     ["champion-power", "603879c541246e9f"],
     ["empty-yard", "0541193f927361a1"],
-    ["fomor-both-sides", "267c586401532bf6"],
-    ["korath-and-krallen", "8f07859395c3ffbd"],
-    ["lab-abilities", "18e1377918d24153"],
-    ["lab-split", "78eab55c3a3ec15a"],
+    ["fomor-both-sides", "2e45468e6aa2d3ec"],
+    ["korath-and-krallen", "3afbd2cc3dd8eeb2"],
+    ["lab-abilities", "72ee79e3305014dd"],
+    ["lab-split", "8c3715d727214039"],
     ["maze", "9b2c7d49adb568e3"],
-    ["mixed-waves", "7a87141367037525"],
+    ["mixed-waves", "31eac71f80cc9cd5"],
     ["outpost-core", "8e506eda7be82a60"],
-    ["pokey-rush", "a21f7ba0d231ecaa"],
+    ["pokey-rush", "4900580db38c0777"],
     ["raid-east", "7219ada75dae3b11"],
   ])("%s replays to its 8.6 digest with wholeHealth off", (name, digest) => {
     const fixture = read<Fixture>(`${FIXTURE_DIR}${name}.json`);

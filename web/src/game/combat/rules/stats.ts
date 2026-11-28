@@ -1013,7 +1013,14 @@ export interface SpurtzHatchRule {
   readonly strength: number;
 }
 
-/** Flash's hatching (`SpurtzCannon.as:226-235`): every yard but a player's main yard. */
+/**
+ * Flash's hatching (`SpurtzCannon.as:226-235`), on every yard: one landing in
+ * two hatches a full-strength Spurtz, with no limit. Beta 10 first capped a
+ * player's main yard at 2 a cannon (desk b10-numbers, 27 Nov 2026); the owner
+ * dropped the cap for a slower reload instead (desk spurtz6, pick B, 28 Nov
+ * 2026, {@link MAIN_YARD_SPURTZ_RELOAD}). A battle may still hatch by another
+ * rule on a main yard with `BattleOptions.spurtzHatch` (tests and balance runs).
+ */
 export const FLASH_SPURTZ_HATCH: SpurtzHatchRule = {
   chance: SPURTZ_HATCH_CHANCE,
   most: Infinity,
@@ -1021,23 +1028,31 @@ export const FLASH_SPURTZ_HATCH: SpurtzHatchRule = {
 };
 
 /**
- * Hatching on a player's main yard (beta 10, owner's pick B for the Brukkarg
- * War prize cannons, desk b10-numbers, 27 Nov 2026): each cannon keeps at
- * most 2 hatched Spurtz on the field at once. Two Black Diamond Spurtz
- * Cannons made a main yard all but unbeatable for a ground army
- * (`agent-handoffs/reports/beta10-numbers.md` §6). The cap frees a D.A.V.E.
- * army (27% -> 86% on a camp yard, 20 seeds), but an Ichi, Crabatron or
- * Project X army stays near 10%: the shells alone hold those at 12-21%, so
- * for them the shells, not the brood, are the wall. Raids on a main yard
- * hatch by it too. This is the one place the owner's pick lives; a battle may
- * override it with `BattleOptions.spurtzHatch`. Tribe, event, Inferno and
- * outpost yards keep {@link FLASH_SPURTZ_HATCH}.
+ * How many times Flash's reload a Spurtz Cannon (136, and 137 the Black
+ * Diamond) takes on a player's main yard (beta 10, owner's pick B, desk
+ * spurtz6, 28 Nov 2026: "keep the original spurtz tower ... just increase the
+ * reload time so it cant continuously fire"). Its `rate` counts this many
+ * times over, for its first load and every reload after, as in the test the
+ * owner chose from (`archive/spurtz-test/reload`, r2). The burst itself is
+ * unchanged, so a level 5 Black Diamond's cycle goes from 340 to 680 fast
+ * ticks and its pause after the 55-shot burst from about 0.8 s to about 5 s.
+ * Its damage and hatching stay Flash's. Raids on a main yard reload by it too.
+ * This is the one place the owner's pick lives; a battle may override it with
+ * `BattleOptions.spurtzReload`. Tribe, event, Inferno and outpost yards keep
+ * Flash's reload.
  */
-export const MAIN_YARD_SPURTZ_HATCH: SpurtzHatchRule = {
-  chance: SPURTZ_HATCH_CHANCE,
-  most: 2,
-  strength: 1,
-};
+export const MAIN_YARD_SPURTZ_RELOAD = 2;
+
+/**
+ * How many times over a tower of `type` counts its `rate` on a yard of
+ * `kind`: `mainYardSpurtzReload` for a Spurtz Cannon on a player's main yard
+ * ({@link MAIN_YARD_SPURTZ_RELOAD}), 1 for every other tower and yard.
+ */
+export const towerRateScale = (
+  type: number,
+  kind: CombatTargetKind,
+  mainYardSpurtzReload: number = MAIN_YARD_SPURTZ_RELOAD,
+): number => (kind === "main" && isSpurtzCannon(type) ? mainYardSpurtzReload : 1);
 export const SPURTZ_ID = "IC1";
 /** How far a hatched Spurtz looks for an attacker (`CreepBase.as:663`). */
 export const SPURTZ_LOOK = 200;

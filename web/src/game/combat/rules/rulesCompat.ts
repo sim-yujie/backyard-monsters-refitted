@@ -106,7 +106,9 @@
  * Beta 10's monster rebalance keeps it empty (owner, desk b10-numbers,
  * 27 Nov 2026): Crabatron, Wormzer, Project X and Fang health, Wormzer's
  * housing, Zafreeti's speed, Ichi's Thorns (7/10/13%) and the main yard's
- * Spurtz brood (at most 2 a cannon) move battles, so no replay stamped with
+ * slower Spurtz Cannon reload (2x between bursts, desk spurtz6 pick B, 28 Nov
+ * 2026, which replaced beta 10's first pick, at most 2 hatched Spurtz a
+ * cannon, before it went live) move battles, so no replay stamped with
  * beta 9's 15bf255b01aafabc plays the same any more; the Defences list says
  * "Recorded before beta 10" instead (`defenceWatch.ts`). Beta 10's wave
  * events (Wild Monster Invasion) add `level`, `rank` and `rage` to a raid

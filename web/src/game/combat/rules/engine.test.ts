@@ -40,7 +40,9 @@ import {
   turnSpurtzBarrel,
   TARGET_GROUP,
   FLASH_SPURTZ_HATCH,
-  MAIN_YARD_SPURTZ_HATCH,
+  MAIN_YARD_SPURTZ_RELOAD,
+  TOWER_REARM_MULTIPLIER,
+  towerRateScale,
 } from "./stats.js";
 import {
   buildEngineYard,
@@ -782,7 +784,11 @@ describe("the Spurtz Cannon's burst and its Spurtz (issue #313)", () => {
    * A level 1 Black Spurtz Cannon (330 damage, range 300, rate 72, 15 shells a
    * burst) and a harvester well away from it, so the battle outlasts it.
    */
-  const spurtzBattle = (monsters: Record<string, number>, health?: Record<string, number>) => {
+  const spurtzBattle = (
+    monsters: Record<string, number>,
+    health?: Record<string, number>,
+    options: Partial<BattleOptions> = {},
+  ) => {
     const yard = yardOf(
       {
         "1": { id: 1, t: 137, l: 1, X: 0, Y: 0 },
@@ -790,7 +796,7 @@ describe("the Spurtz Cannon's burst and its Spurtz (issue #313)", () => {
       },
       health,
     );
-    const battle = createBattle(yard, { seed: 7 });
+    const battle = createBattle(yard, { seed: 7, ...options });
     battle.apply({ kind: "fling", t: 0, x: 150, y: 150, r: 20, monsters });
     return battle;
   };
@@ -866,16 +872,90 @@ describe("the Spurtz Cannon's burst and its Spurtz (issue #313)", () => {
     return most;
   };
 
-  it("keeps at most 2 hatched Spurtz a cannon on a player's main yard, Flash's brood elsewhere (beta 10)", () => {
-    expect(MAIN_YARD_SPURTZ_HATCH).toEqual({ chance: 0.5, most: 2, strength: 1 });
+  it("hatches as Flash's on a player's main yard too, with no limit a cannon (beta 10, desk spurtz6 B)", () => {
     const main = mostAtOnce("main");
-    expect(main).toBeGreaterThan(0);
-    expect(main).toBeLessThanOrEqual(MAIN_YARD_SPURTZ_HATCH.most);
-    // A tribe yard (Brukkarg War's event yards fight as one) hatches as Flash's did.
-    expect(mostAtOnce("tribe")).toBeGreaterThan(MAIN_YARD_SPURTZ_HATCH.most);
-    // The per-battle override reaches the main yard only.
-    expect(mostAtOnce("main", { spurtzHatch: FLASH_SPURTZ_HATCH })).toBe(mostAtOnce("tribe"));
+    // Beta 10's first pick kept at most 2 a cannon on a main yard; the owner dropped it.
+    expect(main).toBeGreaterThan(2);
+    // A tribe yard (Brukkarg War's event yards fight as one) hatches the same,
+    // shell for shell: with Flash's reload it fires the same shells.
+    expect(mostAtOnce("main", { spurtzReload: 1 })).toBe(mostAtOnce("tribe"));
+    // The per-battle override still reaches the main yard only.
+    expect(mostAtOnce("main", { spurtzHatch: { ...FLASH_SPURTZ_HATCH, most: 2 } })).toBeLessThanOrEqual(2);
+    expect(mostAtOnce("tribe", { spurtzHatch: { ...FLASH_SPURTZ_HATCH, most: 2 } })).toBe(mostAtOnce("tribe"));
     expect(mostAtOnce("main", { spurtzHatch: { ...FLASH_SPURTZ_HATCH, chance: 0 } })).toBe(0);
+  });
+
+  /**
+   * The gaps between the first shells of a level 1 Black Spurtz Cannon's
+   * bursts (rate 72, 15 shells a burst) on a yard of `kind`, and the shells in
+   * each burst, over 1,600 ticks: eight Crabatrons stand hitting a Town Hall
+   * beside it, in its range the whole time. Nothing hatches, so nothing but
+   * the shells decides when it fires.
+   */
+  const bursts = (kind: CombatTargetKind, options: Partial<BattleOptions> = {}) => {
+    const yard = buildEngineYard({
+      buildingdata: { "1": { id: 1, t: 137, l: 1, X: 0, Y: 0 }, "2": { id: 2, t: 14, l: 6, X: 200, Y: 200 } },
+      buildinghealthdata: {},
+      resources: { r1: 100000, r2: 0, r3: 0, r4: 0 },
+      kind,
+    });
+    const battle = createBattle(yard, { seed: 7, spurtzHatch: { ...FLASH_SPURTZ_HATCH, chance: 0 }, ...options });
+    battle.apply({ kind: "fling", t: 0, x: 260, y: 260, r: 20, monsters: { C10: 8 } });
+    const shots: number[] = [];
+    for (let step = 0; step < 1600 && !battle.over(); step += 1) {
+      battle.step();
+      for (const event of battle.recentEvents(battle.tick - 1)) {
+        if (event.kind === "shot" && event.lob) shots.push(event.tick);
+      }
+    }
+    const starts: number[] = [];
+    const sizes: number[] = [];
+    shots.forEach((at, index) => {
+      if (index === 0 || at - shots[index - 1]! > 5) {
+        starts.push(at);
+        sizes.push(1);
+      } else {
+        sizes[sizes.length - 1]! += 1;
+      }
+    });
+    // The first gap also holds the cannon's first load, so it is left out.
+    const gaps = starts.slice(1).map((at, index) => at - starts[index]!).slice(1);
+    return { gaps, sizes };
+  };
+  const mean = (values: readonly number[]): number =>
+    values.reduce((sum, value) => sum + value, 0) / values.length;
+
+  it("reloads twice as slow between bursts on a player's main yard, as Flash's elsewhere (beta 10, desk spurtz6 B)", () => {
+    expect(MAIN_YARD_SPURTZ_RELOAD).toBe(2);
+    const rearm = 72 * TOWER_REARM_MULTIPLIER;
+    const tribe = bursts("tribe");
+    const main = bursts("main");
+    // Flash's cycle, burst start to burst start, on a tribe yard (Brukkarg War's event yards fight as one): 144 ticks.
+    expect(tribe.gaps.length).toBeGreaterThanOrEqual(4);
+    for (const gap of tribe.gaps) expect(gap).toBe(rearm);
+    // Twice that on a main yard, give or take the barrel's turn onto a new
+    // target after the longer pause: the pause grows, the burst does not.
+    expect(main.gaps.length).toBeGreaterThanOrEqual(3);
+    expect(Math.abs(mean(main.gaps) - rearm * MAIN_YARD_SPURTZ_RELOAD)).toBeLessThanOrEqual(15);
+    for (const gap of main.gaps) expect(gap).toBeGreaterThan(rearm * 1.5);
+    expect(main.sizes.slice(0, 3)).toEqual([15, 15, 15]);
+    expect(tribe.sizes.slice(0, 3)).toEqual([15, 15, 15]);
+    // The per-battle override reaches the main yard only.
+    expect(Math.abs(mean(bursts("main", { spurtzReload: 1 }).gaps) - rearm)).toBeLessThanOrEqual(15);
+    expect(bursts("tribe", { spurtzReload: 3 }).gaps).toEqual(tribe.gaps);
+  });
+
+  it("slows only a Spurtz Cannon's reload, and only on a player's main yard (beta 10, desk spurtz6 B)", () => {
+    for (const type of [136, 137]) {
+      expect(towerRateScale(type, "main")).toBe(MAIN_YARD_SPURTZ_RELOAD);
+      expect(towerRateScale(type, "main", 3)).toBe(3);
+      for (const kind of ["tribe", "outpost", "inferno", "wild"] as const) {
+        expect(towerRateScale(type, kind)).toBe(1);
+        expect(towerRateScale(type, kind, 3)).toBe(1);
+      }
+    }
+    // Every other tower reloads as Flash's on a main yard too.
+    for (const type of [20, 21, 23, 25, 115, 118]) expect(towerRateScale(type, "main")).toBe(1);
   });
 
   it("hatches weaker Spurtz when the rule's strength is below 1", () => {
@@ -943,8 +1023,9 @@ describe("the Spurtz Cannon's burst and its Spurtz (issue #313)", () => {
 
   it("stops firing the moment it falls (owner, 2026-10-06)", () => {
     // A cannon on a sliver of health, bombed flat on the tick of its fourth
-    // shell, so its fire tick stands at a shot's.
-    const battle = spurtzBattle({ C10: 2 }, { "1": 50 });
+    // shell, so its fire tick stands at a shot's. Flash's reload, so its first
+    // load is over before the 136th tick even on this main yard.
+    const battle = spurtzBattle({ C10: 2 }, { "1": 50 }, { spurtzReload: 1 });
     const before = watch(battle, 136).lobs;
     expect(before).toHaveLength(4);
     expect(before.at(-1)!.tick).toBe(battle.tick);
