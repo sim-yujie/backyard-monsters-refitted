@@ -38,8 +38,9 @@ const em = {} as EntityManager;
 const DAY = 86_400;
 
 describe("the Flash tables", () => {
-  test("each event has 30 waves, 2 bonus waves and a prize per wave", () => {
-    for (const event of WAVE_EVENTS) {
+  test("each invasion has 30 waves, 2 bonus waves and a prize per wave", () => {
+    // The Brukkarg attack events (card `yards`) have their own tables: `yards/yardEvents.test.ts`.
+    for (const event of WAVE_EVENTS.filter((one) => one.card === undefined)) {
       expect(event.waves.length).toBe(32);
       expect(event.prizes.length).toBe(32);
       expect(event.firstBonusWave).toBe(31);
@@ -334,4 +335,31 @@ describe("surrender's cut-off fight (RaidFightInput.stopAt)", () => {
     const past = fightRaid({ ...input, stopAt: whole.ticks + 1000 });
     expect(past.digest).toBe(whole.digest);
   });
+});
+
+describe("Brukkarg War's waves (bruk-port, Flash BrukkargWarEvent.as)", () => {
+  const SANDBOX = JSON.parse(
+    readFileSync(fileURLToPath(new URL("../../../../../web/test/fixtures/baseload-sandbox-yard.json", import.meta.url)), "utf8"),
+  ) as { buildingdata: Parameters<typeof fightRaid>[0]["buildingdata"]; resources: Record<string, number> };
+  const WAR = waveEventByKey("brukwar")!;
+
+  test("every one of the 25 plans and fights to an end; its champions (Gorgo to Krallen, Krallen at the table's level 6) land", () => {
+    const guardians = new Set<number>();
+    for (let wave = 1; wave <= WAR.waves.length; wave++) {
+      const plan = planWave({ event: WAR, wave, quarter: wave % 4 })!;
+      expect(plan.championsSkipped).toBe(0);
+      for (const event of plan.events) if (event.champion) guardians.add(event.champion.t);
+      const fight = fightRaid({
+        buildingdata: SANDBOX.buildingdata,
+        resources: SANDBOX.resources,
+        log: { v: 1 as const, seed: wave, events: plan.events },
+        raidSpawnsUntil: plan.lastSpawnTick,
+      });
+      expect(fight.ticks).toBeGreaterThan(0);
+      expect(fight.ticks).toBeLessThanOrEqual(ticks(RAID_MAX_SECONDS) + 1);
+      expect(Number.isFinite(fight.damage)).toBe(true);
+      expect(fight.creepsFlung).toBeGreaterThan(0);
+    }
+    expect([...guardians].sort()).toEqual([1, 2, 3, 4, 5]);
+  }, 120_000);
 });

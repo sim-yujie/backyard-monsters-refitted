@@ -110,4 +110,10 @@ export interface WaveEventDefinition {
   readonly banner: { readonly modern: string; readonly classic: string };
   /** Who may take part; everyone with the guided start done (Flash gated its pop-ups on that). */
   readonly requires?: { readonly tutorial?: boolean };
+  /**
+   * The Events card it is: absent, the wave card (kind `wave`); `yards`, the
+   * Brukkarg attack events' yard card (kind `yards`, `bruk-port`), which also
+   * carries the wave part when the event has waves (Brukkarg War).
+   */
+  readonly card?: "yards";
 }

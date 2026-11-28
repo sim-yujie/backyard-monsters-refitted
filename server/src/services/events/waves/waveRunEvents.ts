@@ -5,9 +5,11 @@ import { runId, waveRuns, type WaveRun } from "./waveRuns.js";
 const iso = (seconds: number): string => new Date(seconds * 1000).toISOString().replace(".000Z", "Z");
 
 /**
- * Each wave event run as an Events page entry (kind `wave`): its title, words,
- * window and banner. The card's wave counter and "Next wave" come from
- * `GET /bm/events/wave` (`waveFight.ts`), not from a ladder.
+ * Each wave event run as an Events page entry (kind `wave`, or `yards` for
+ * the Brukkarg attack events): its title, words, window and banner. The
+ * card's wave counter and "Next wave" come from `GET /bm/events/wave`
+ * (`waveFight.ts`), not from a ladder; a yard card's yards from
+ * `GET /bm/events/yards`.
  */
 export const waveRunEvents = (list: readonly WaveRun[] = waveRuns()): EventDefinition[] =>
   list.flatMap((run) => {
@@ -18,8 +20,9 @@ export const waveRunEvents = (list: readonly WaveRun[] = waveRuns()): EventDefin
         id: runId(run),
         title: event.title,
         text: event.text,
-        kind: "wave",
-        series: `wave-${event.key}`,
+        // The Brukkarg attack events keep their yard card (kind `yards`).
+        kind: event.card ?? "wave",
+        series: `${event.card ?? "wave"}-${event.key}`,
         startsAt: iso(run.startsAt),
         endsAt: iso(run.endsAt),
         banner: event.banner.modern,

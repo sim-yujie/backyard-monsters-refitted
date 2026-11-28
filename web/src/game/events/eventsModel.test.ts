@@ -149,6 +149,12 @@ describe("sortEvents", () => {
     expect(sortEvents([a, wave]).active.map((one) => one.id)).toEqual(["w", "a"]);
   });
 
+  it("puts a Brukkarg yard event first too: the dashboard started it, and Brukkarg War's waves start from its card", () => {
+    const a = event({ id: "a", endsAt: 5 });
+    const yards = event({ id: "brukwar-1", kind: "yards", endsAt: 9 });
+    expect(sortEvents([a, yards]).active.map((one) => one.id)).toEqual(["brukwar-1", "a"]);
+  });
+
   it("puts Christmas first while it is on, even above a wave event (owner, 28 Nov 2026)", () => {
     const a = event({ id: "a", endsAt: 5 });
     const wave = event({ id: "w", kind: "wave", endsAt: 6 });

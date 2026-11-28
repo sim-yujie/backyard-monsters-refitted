@@ -1,0 +1,311 @@
+/*
+ * The Brukkarg attack events (beta 10, `ui/eventYards/yardEventUi.ts`): the
+ * Events card's yard track and Attack row, the line under an attack's
+ * result, and the prize pop-up. Values from tokens.css, so both looks and
+ * the light theme follow.
+ */
+
+/* The Classic banners are Flash strips (718x89), much wider than the Modern band: shown whole. */
+.events-card__banner--yards.events-card__banner--classic {
+  aspect-ratio: 718 / 89;
+}
+
+/* Brukkarg War: the wave part (wave track, "Start wave N") above the yards. */
+.yard-card-parts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* ── The yard track ─────────────────────────────────────────────────────── */
+
+.yard-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* Five to a row: Brukkarg War's five in one, Creature Carnage's ten in two. */
+.yard-track {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-1);
+  margin: 0;
+  padding: 6px 0 0;
+  list-style: none;
+}
+
+.yard-track__yard {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 34px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--colour-border-subtle);
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text-muted);
+  font-weight: 700;
+  font-size: var(--text-sm);
+}
+
+.yard-track__yard--won {
+  border-color: var(--colour-success);
+  background: color-mix(in srgb, var(--colour-success) 16%, var(--colour-surface-sunken));
+  color: var(--colour-success);
+}
+
+.yard-track__check {
+  font-weight: 900;
+  color: var(--colour-success);
+}
+
+/* The next yard: a tinted fill and a bar on top, not a button border (neon r1). */
+.yard-track__yard--next {
+  background: color-mix(in srgb, var(--colour-accent) 22%, var(--colour-surface-sunken));
+  color: var(--colour-text-strong);
+  box-shadow: inset 0 3px 0 var(--colour-accent);
+}
+
+/* Outside the tile's corner, like the HUD's badges, clear of its words and bar (neon r2). */
+.yard-track__gift {
+  position: absolute;
+  top: -8px;
+  right: -6px;
+  z-index: 1;
+}
+
+/* ── The next yard: one inset box like the Krallen Hunt's tiers ─────────── */
+
+.yard-next {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.yard-next__info {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.yard-next p {
+  margin: 0;
+}
+
+.yard-next__kicker {
+  font-weight: 800;
+  font-size: var(--text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--colour-text-secondary);
+}
+
+.yard-next__damage {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-3);
+  row-gap: 2px;
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+}
+
+/* An icon stays with its words when the line wraps (neon r1). */
+.yard-next__part {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.yard-next__prize,
+.yard-result__prize {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.yard-next__label {
+  flex: 0 0 auto;
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.yard-next__locked {
+  flex: 0 1 40%;
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+  text-align: right;
+}
+
+.yard-next__attack {
+  flex: 0 0 auto;
+  height: auto;
+  min-height: 44px;
+  min-width: 120px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+}
+
+.yard-card__refusal,
+.yard-card__done {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.yard-card__refusal {
+  color: var(--colour-danger);
+}
+
+.yard-card__done {
+  font-weight: 800;
+  color: var(--colour-success);
+}
+
+/* ── A prize: Glimmers, a Spurtz Cannon, the trophy ─────────────────────── */
+
+.yard-prize {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-weight: 800;
+}
+
+.yard-prize__building {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
+/* Flash's buttons are on white: on the Classic cream panel, white drops away. */
+:root[data-skin="flash"] .yard-prize__building,
+:root[data-skin="flash"] .yard-prize-popup__art {
+  mix-blend-mode: multiply;
+}
+
+.yard-prize__name {
+  font-size: var(--text-sm);
+}
+
+/* ── Under an attack's result ───────────────────────────────────────────── */
+
+.yard-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+  text-align: center;
+}
+
+/* Gold, not the green of "Result saved." above it (neon r2). */
+.yard-result--won {
+  border-color: var(--colour-warning);
+}
+
+.yard-result p {
+  margin: 0;
+}
+
+.yard-result__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-weight: 800;
+  font-size: var(--text-md);
+}
+
+.yard-result--won .yard-result__head {
+  color: var(--colour-success);
+}
+
+.yard-result__hint {
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+}
+
+/* ── The prize pop-up ───────────────────────────────────────────────────── */
+
+.yard-prize-popup {
+  width: min(360px, calc(100vw - 2 * var(--space-4)));
+}
+
+.yard-prize-popup__body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  text-align: center;
+}
+
+.yard-prize-popup__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.yard-prize-popup__art {
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+}
+
+.yard-prize-popup__headline {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.yard-prize-popup__words {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.yard-prize-popup__path {
+  white-space: nowrap;
+}
+
+.yard-prize-popup__count {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+}
+
+.yard-prize-popup__buttons {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: center;
+}
+
+.yard-prize-popup__button {
+  height: 44px;
+  min-width: 110px;
+}
+
+/* Phones: Attack under the box's words, the full width (neon r2). */
+@media (max-width: 620px) {
+  .yard-next {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .yard-next__attack {
+    width: 100%;
+  }
+
+  .yard-next__locked {
+    text-align: left;
+  }
+}

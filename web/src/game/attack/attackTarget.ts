@@ -1,6 +1,7 @@
 import type { BaseLoadResponse, ChampionSaveEntry, PlayerCell, Resources } from "@/api/types";
 import type { MonsterLevels, MonsterRanks, Roster } from "@/game/combat/rules/types";
 import type { OffsetCell } from "@/game/HexGrid";
+import type { EventYardTarget } from "@/game/eventYards/eventYardAttack";
 
 /**
  * The one-shot handoff between the screen that chose a target and the screen
@@ -190,6 +191,12 @@ export interface AttackTarget {
    * when nothing was flung. Absent for anything else.
    */
   readonly infernoPlayer?: boolean;
+  /**
+   * A Brukkarg event yard from its Events card (beta 10): fought as a Map
+   * Room 1 tribe, its way out leads home, and its end panel says what the
+   * attack did for the event (`game/eventYards/eventYardAttack.ts`).
+   */
+  readonly eventYard?: EventYardTarget;
 }
 
 /**

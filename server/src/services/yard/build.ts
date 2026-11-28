@@ -1,3 +1,4 @@
+import { spurtzAllowed } from "../../config/SpurtzConfig.js";
 import {
   costOf,
   hallTypeOf,
@@ -199,6 +200,8 @@ export interface BuildSave extends StorageCapSave, SurfaceInfernoSave {
   resources?: JsonObject | null;
   storedata?: JsonObject | null;
   mushrooms?: JsonObject | null;
+  /** Event rewards: a Spurtz reward lets the main yard build Spurtz Cannons (`config/SpurtzConfig.ts`). */
+  rewards?: JsonObject | null;
 }
 
 /** Where the new building goes: its type and footprint origin in yard units. */
@@ -285,7 +288,10 @@ export const buildGates =(save: BuildSave, request: BuildRequest): CostStep => {
   const kind = yardKindOf(save);
   const row = costOf(type, kind);
   const step = row?.costs[0];
-  if (!row || !step || !buildableTypesOf(kind).has(type)) {
+  // Brukkarg War's Spurtz Cannons (beta 10): off the menu, but a main yard
+  // holding the reward may build that many (`config/SpurtzConfig.ts`).
+  const spurtz = kind === "main" ? spurtzAllowed(type, save.rewards) : 0;
+  if (!row || !step || (!buildableTypesOf(kind).has(type) && spurtz <= 0)) {
     throw yardBadRequestErr("That cannot be built here.", { type }, "notBuildable");
   }
 
@@ -296,7 +302,7 @@ export const buildGates =(save: BuildSave, request: BuildRequest): CostStep => {
   const townHall = townHallLevel(buildings, kind);
   const hall = inferno ? surfaceInfernoHall(save) : townHall;
   const hallLabel = inferno ? "Under Hall" : hallName(kind);
-  const allowed = allowedAt(row.quantity, hall);
+  const allowed = spurtz > 0 ? spurtz : allowedAt(row.quantity, hall);
   if (allowed <= 0) {
     const need = nextHallAllowing(row.quantity, Math.max(hall, 0), 0) ?? 1;
     if (inferno) throw underHallErr({ have: hall, need });
@@ -312,7 +318,7 @@ export const buildGates =(save: BuildSave, request: BuildRequest): CostStep => {
   const have = countOfType(buildings, type);
   if (have >= allowed) {
     // The core never leaves level 1, so an outpost has no bigger hall to wait for.
-    const next = kind === "outpost" ? null : nextHallAllowing(row.quantity, hall, allowed);
+    const next = kind === "outpost" || spurtz > 0 ? null : nextHallAllowing(row.quantity, hall, allowed);
     throw yardRefusedErr(
       "limit",
       next === null

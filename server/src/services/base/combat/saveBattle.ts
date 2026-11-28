@@ -24,7 +24,7 @@ import {
  */
 
 /** A yard with no save row, by what it is: an Inferno Descent yard, a Moloch tribe, a Map Room 1 tribe. */
-export type RowlessYard = "descent" | "inferno-tribe" | "mr1-tribe";
+export type RowlessYard = "descent" | "inferno-tribe" | "mr1-tribe" | "event-yard";
 
 /** The base a save is for, as the log lines name it. */
 export interface SavedBase {

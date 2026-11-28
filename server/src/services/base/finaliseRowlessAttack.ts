@@ -8,6 +8,7 @@ import { logger } from "../../utils/logger.js";
 import { landDescentFromCheckpoint } from "../inferno/descentLanding.js";
 import { landInfernoTribeFromCheckpoint } from "../inferno/infernoTribeLanding.js";
 import { landMR1TribeFromCheckpoint } from "../maproom/v1/scaledMR1Tribes.js";
+import { landEventYardFromCheckpoint } from "../events/yards/eventYardLanding.js";
 import { checkpointExpired } from "./attackCheckpoint.js";
 import { isReplayWorkerLoadError } from "./combat/replayRunner.js";
 import {
@@ -75,6 +76,7 @@ const LANDERS: Readonly<Record<RowlessKind, Lander>> = {
   mr1: landMR1TribeFromCheckpoint,
   descent: landDescentFromCheckpoint,
   "inferno-tribe": landInfernoTribeFromCheckpoint,
+  event: landEventYardFromCheckpoint,
 };
 
 const finaliseLocked = async (ref: RowlessRef, trigger: string): Promise<RowlessOutcome> => {

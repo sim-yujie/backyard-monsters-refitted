@@ -42,3 +42,14 @@ export const flashWavePrizes = (): WavePrize[] =>
       wave === 31 ? WAVE_GLIMMERS.bonus1 : wave === 32 ? WAVE_GLIMMERS.bonus2 : totemLevel ? WAVE_GLIMMERS.totemWave : WAVE_GLIMMERS.ordinary;
     return totemLevel ? { glimmers, totemLevel } : { glimmers };
   });
+
+/**
+ * Brukkarg War's waves (`data/brukwarWaves.ts`): PLACEHOLDER, owner to
+ * decide. Flash paid nothing per wave there (its prizes were the Spurtz
+ * Cannons for yards beaten, `game-data/events/yardEvents.ts`), so 0 for now:
+ * the wave card shows no Glimmers. Raise it here to pay Glimmers per wave.
+ */
+export const BRUKWAR_WAVE_GLIMMERS = 0;
+
+/** One prize per Brukkarg War wave: {@link BRUKWAR_WAVE_GLIMMERS} each, no totem. */
+export const brukwarWavePrizes = (waves: number): WavePrize[] => Array.from({ length: waves }, () => ({ glimmers: BRUKWAR_WAVE_GLIMMERS }));
