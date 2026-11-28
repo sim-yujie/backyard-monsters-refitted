@@ -1686,8 +1686,9 @@ describe("bombs", () => {
       const probes: Array<[number, number, boolean]> = [
         [inside, 0, true],
         [outside, 0, false],
-        [0, ring.ry - 2, true],
-        [0, ring.ry + 2, false],
+        // Whole vertical offsets keep it whole too; the blast's height need not be.
+        [0, Math.floor(ring.ry - 1), true],
+        [0, Math.ceil(ring.ry + 1), false],
       ];
       for (const [dx, dy, hit] of probes) {
         const yard = yardOf({ "1": { id: 1, t: 23, l: 1, X: 0, Y: 0 } });

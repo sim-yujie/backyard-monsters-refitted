@@ -113,6 +113,9 @@
  * "Recorded before beta 10" instead (`defenceWatch.ts`). Beta 10's wave
  * events (Wild Monster Invasion) add `level`, `rank` and `rage` to a raid
  * wave (`RaidEvent`); a wave without them spawns as before.
+ * Beta 10's twig and pebble blast (owner, option C, 28 Nov 2026) keeps it
+ * empty: the blast is now a ground circle of the old area (`bombBlast`), so a
+ * battle with a twig or pebble bomb hits other buildings than before.
  *
  * Add the version a change replaces only when that change moves no battle.
  * A change that moves any battle result must empty this list.
