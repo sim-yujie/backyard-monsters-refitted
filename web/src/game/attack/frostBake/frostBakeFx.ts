@@ -1,9 +1,7 @@
 import { Assets, type Container, Rectangle, Sprite, Texture } from "pixi.js";
 import type { Point } from "@/game/yard/YardGrid";
 import { artUrl } from "../../../artUrl";
-import auraAstraSet from "./aura-astra.json";
 import auraMistSet from "./aura-mist.json";
-import auraNeonSet from "./aura-neon.json";
 import krampusNeonSet from "./krampus-neon.json";
 
 /**
@@ -17,24 +15,12 @@ import krampusNeonSet from "./krampus-neon.json";
  *   every player ({@link KRAMPUS_ABILITY_SET}, `krampus-neon.json`, from
  *   `art-samples/frost-tribe/fxbake/neon/round-1/motion-hold.json`: its plan
  *   with neon's own answer on which held marks stay steady).
- * - Frost aura: round 2 of the bake-off (round 1: "Neither: try again"),
- *   astra's and neon's behind the DEV-only switch `?frostFx=astra|neon`
- *   (`aura-astra.json`, `aura-neon.json`, from `fxbake/<model>/round-2/`);
- *   round 3 (owner, 28 Nov 2026: "something similar to Fomor's 'mist', which
- *   is less obvious and distracting but still present") behind
- *   `?frostFx=mist`: Fomor's Healing Mist cell as a faint ice-blue haze
- *   (`aura-mist.json`, from `fxbake/mist/round-3/`); `current`, the default,
- *   draws no aura, as today.
+ * - Frost aura: the mist (owner's pick, 28 Nov 2026, after round 3 of the
+ *   bake-off: "something similar to Fomor's 'mist', which is less obvious
+ *   and distracting but still present"), for every player in both looks
+ *   ({@link KRAMPUS_AURA_SET}, `aura-mist.json`, from `fxbake/mist/round-3/`):
+ *   Fomor's Healing Mist cell as a faint ice-blue haze round each Krampus.
  */
-
-export type FrostFxId = "current" | "astra" | "neon" | "mist";
-
-/** The DEV switch for the aura bake-off; "current" (no aura drawn) unless it names a set. */
-export const frostFxFromUrl = (): FrostFxId => {
-  if (typeof location === "undefined") return "current";
-  const wanted = new URLSearchParams(location.search).get("frostFx");
-  return wanted === "astra" || wanted === "neon" || wanted === "mist" ? wanted : "current";
-};
 
 /* ── The plan's form (the shared brief) ───────────────────────────────────── */
 
@@ -129,14 +115,8 @@ export interface FrostSet {
 /** Ice Shards and Blizzard Stomp for every player: neon's. */
 export const KRAMPUS_ABILITY_SET = krampusNeonSet as unknown as FrostSet;
 
-const AURA_SETS: Record<Exclude<FrostFxId, "current">, FrostSet> = {
-  astra: auraAstraSet as unknown as FrostSet,
-  neon: auraNeonSet as unknown as FrostSet,
-  mist: auraMistSet as unknown as FrostSet,
-};
-
-/** A round-2 or round-3 aura set for the DEV switch, or null for today's (no aura drawn). */
-export const frostAuraSet = (id: FrostFxId): FrostSet | null => (id === "current" ? null : AURA_SETS[id]);
+/** Krampus's frost aura for every player: the mist (peaks 0.50/0.42/0.34). */
+export const KRAMPUS_AURA_SET = auraMistSet as unknown as FrostSet;
 
 const CELL = 192;
 

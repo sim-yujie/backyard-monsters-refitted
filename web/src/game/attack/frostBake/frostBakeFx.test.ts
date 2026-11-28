@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { Assets, Container, type Sprite, Texture } from "pixi.js";
-import { FrostBakeFx, type FrostBakeHost, type FrostSet, frostAuraSet, frostFxFromUrl, KRAMPUS_ABILITY_SET, sizeOf } from "./frostBakeFx";
+import { FrostBakeFx, type FrostBakeHost, type FrostSet, KRAMPUS_ABILITY_SET, KRAMPUS_AURA_SET, sizeOf } from "./frostBakeFx";
 
 /** Every cell name a plan uses (pieces and flipbooks). */
 const cellsOf = (node: unknown, found = new Set<string>()): Set<string> => {
@@ -24,11 +24,6 @@ const checkAtlas = (set: FrostSet): void => {
 };
 
 describe("Krampus's frost ability sets", () => {
-  it("draws no aura unless the dev switch names a round-2 set", () => {
-    expect(frostFxFromUrl()).toBe("current");
-    expect(frostAuraSet("current")).toBeNull();
-  });
-
   it("reads reach sizes as the circle's diameter", () => {
     expect(sizeOf("reach", 400)).toBe(400);
     expect(sizeOf("reach*0.5", 400)).toBe(200);
@@ -51,16 +46,8 @@ describe("Krampus's frost ability sets", () => {
     expect(hold("snow_flurry_cluster")).toBeLessThan(1);
   });
 
-  it.each(["astra", "neon"] as const)("%s round-2 aura: only the aura, every cell in its atlas", (id) => {
-    const set = frostAuraSet(id)!;
-    expect(set.model).toBe(id);
-    expect(set.round).toBe("round-2");
-    expect(Object.keys(set.plan)).toEqual(["frostAura"]);
-    checkAtlas(set);
-  });
-
-  it("mist round-3 aura: Fomor's mist, faint and ice-blue, under everything", () => {
-    const set = frostAuraSet("mist")!;
+  it("draws the mist round-3 aura for everyone: Fomor's mist, faint and ice-blue, under everything", () => {
+    const set = KRAMPUS_AURA_SET;
     expect(set.model).toBe("mist");
     expect(set.round).toBe("round-3");
     expect(Object.keys(set.plan)).toEqual(["frostAura"]);
@@ -72,12 +59,18 @@ describe("Krampus's frost ability sets", () => {
       expect(piece.layer).toBe("ground");
       expect(piece.peak ?? 1).toBeLessThanOrEqual(0.5);
     }
+    // The owner's pick: three rings at 0.50, 0.42 and 0.34.
+    expect(held.map((one) => one.peak)).toEqual([0.5, 0.42, 0.34]);
   });
 
   it("draws every held piece at no more than its peak, ring or not", async () => {
     const load = vi.spyOn(Assets, "load").mockResolvedValue(Texture.WHITE as never);
-    for (const id of ["mist", "neon"] as const) {
-      const set = frostAuraSet(id)!;
+    // The mist is rings only; a plain held piece rides along so both paths stay checked.
+    const mist = KRAMPUS_AURA_SET;
+    const { ring: _ring, count: _count, radial_speed: _speed, ...one } = mist.plan.frostAura!.held![0]!;
+    const plain = { ...one, peak: 0.6 };
+    const withPlain: FrostSet = { ...mist, plan: { frostAura: { held: [...mist.plan.frostAura!.held!, plain] } } };
+    for (const set of [mist, withPlain]) {
       const layer = new Container();
       const host: FrostBakeHost = {
         air: () => layer,

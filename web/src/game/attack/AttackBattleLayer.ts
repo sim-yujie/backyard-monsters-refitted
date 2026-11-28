@@ -1,6 +1,6 @@
 import { creepSkin } from "./monsterSkins";
 import { FrostAreaFx, auraEllipse } from "./frostAuraFx";
-import { FrostBakeFx, type FrostBakeHost, frostAuraSet, frostFxFromUrl, KRAMPUS_ABILITY_SET } from "./frostBake/frostBakeFx";
+import { FrostBakeFx, type FrostBakeHost, KRAMPUS_ABILITY_SET, KRAMPUS_AURA_SET } from "./frostBake/frostBakeFx";
 import { KRAMPUS_ID, QUAKE_STRIKE_FRAME, krampusAuraRadius } from "@/game/combat/rules/champions";
 import {
   ColorMatrixFilter,
@@ -959,7 +959,7 @@ export class AttackBattleLayer {
   private readonly fx: CreepFx;
   /** Krampus's Ice Shards and Blizzard Stomp, neon's design ({@link FrostBakeFx}). */
   private frostBake: FrostBakeFx | null = null;
-  /** DEV only (`?frostFx=astra|neon`): the krampus-fx bake-off's round-2 Frost aura ({@link FrostBakeFx}). */
+  /** Krampus's Frost aura, the mist (owner's pick, 28 Nov 2026; {@link FrostBakeFx}). */
   private frostAura: FrostBakeFx | null = null;
   /** Loot orbs and loot numbers (`ParticleLoot`, `ParticleText`). */
   private readonly lootFx: LootFx;
@@ -1106,8 +1106,7 @@ export class AttackBattleLayer {
       low: this.effectsLow || this.juice === "reduced",
     };
     this.frostBake = new FrostBakeFx(KRAMPUS_ABILITY_SET, frostHost);
-    const auraSet = import.meta.env.DEV ? frostAuraSet(frostFxFromUrl()) : null;
-    if (auraSet) this.frostAura = new FrostBakeFx(auraSet, frostHost);
+    this.frostAura = new FrostBakeFx(KRAMPUS_AURA_SET, frostHost);
 
     // The building side (issues #64, #66, #67). The towers draw into the same
     // `fire` graphics the tracers used; the building bars go under the splats,
@@ -1263,7 +1262,8 @@ export class AttackBattleLayer {
     this.siegeFx.update(siege, shown);
     this.lootFx.update(shown);
     this.showBombNumbers(shown);
-    // Krampus's aura draws nothing (owner, 28 Nov 2026: "invisible like fomor");
+    // Krampus's aura is a faint mist round him (frostAura below; owner, 28 Nov 2026:
+    // "similar to Fomor's 'mist'"), with no mark on the towers it blinds;
     // a tower his blow froze wears the ice cube and an icy tint till it thaws.
     const frozen = battle.frozenTowers?.() ?? [];
     this.towerStatus.sync(battle.weakenedTowers(), battle.chilledTowers?.() ?? [], frozen);
