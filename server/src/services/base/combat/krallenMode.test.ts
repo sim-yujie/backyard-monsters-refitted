@@ -182,6 +182,12 @@ describe("an attack started under older rules replays exactly as it was fought",
     expect(input.wholeHealth).toBe(true);
   });
 
+  test("an attack started on beta 9 as it went live, landed after patch 9.1, keeps both too", () => {
+    const input = inputOf(sent, sessionOf("15bf255b01aafabc"));
+    expect(input.flashKrallen).toBe(true);
+    expect(input.wholeHealth).toBe(true);
+  });
+
   test(
     "an old attack's Krallen in Hybrid, with no weights, still fights by the rules before",
     () => {

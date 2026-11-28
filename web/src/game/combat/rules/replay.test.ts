@@ -206,9 +206,10 @@ describe("golden replays", () => {
   // look and turns only on a defender that reaches or hits her, as in Flash.
   // An attack started under older rules is replayed with `flashKrallen` off
   // and plays as it was fought: these are both Krallen fixtures' digests
-  // under 8.6's rules before that change.
+  // under 8.6's rules before that change (mixed-waves moved with patch 9.1's
+  // ground-circle pebble blast, which is not versioned).
   it.each([
-    ["mixed-waves", "ace764b2df7d60a0"],
+    ["mixed-waves", "613d14a54e3264a7"],
     ["korath-and-krallen", "ba2e64367ed6247c"],
   ])("%s replays to its old digest under older rules (flashKrallen off)", (name, digest) => {
     const fixture = read<Fixture>(`${FIXTURE_DIR}${name}.json`);
@@ -221,7 +222,8 @@ describe("golden replays", () => {
   // Whole health (player report, Reii, 25 Nov 2026): Flash keeps a monster's
   // health whole (`SecNum.Set` rounds it). An attack started under older rules
   // is replayed with `wholeHealth` off and plays as it was fought: these are
-  // every fixture's digests under patch 8.6's rules.
+  // every fixture's digests under patch 8.6's rules (mixed-waves moved with
+  // patch 9.1's ground-circle pebble blast).
   it.each([
     ["both-caged-champions", "c07e954543467057"],
     ["bunker-defence", "2de3cd0499385cea"],
@@ -239,7 +241,7 @@ describe("golden replays", () => {
     ["lab-abilities", "51688836711f72f8"],
     ["lab-split", "b5eda6f428b9952a"],
     ["maze", "fa958d6ef25e02d4"],
-    ["mixed-waves", "d4e63b47f6788fd5"],
+    ["mixed-waves", "d6f153d8924ee18e"],
     ["outpost-core", "6713db87c1fb3e35"],
     ["pokey-rush", "08c500fd34fe817f"],
     ["raid-east", "5bad54817e80c9c3"],
