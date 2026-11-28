@@ -34,7 +34,11 @@ const reducedMotion = (): boolean =>
 /** Whether the map snows now (the season aside): not on Low, not with reduced motion, not switched off. */
 export const mapSnowAllowed = (): boolean => quality() !== "low" && !reducedMotion() && !switchedOff();
 
-/** The flake picture: the yard's soft white dot, 16 px, drawn once. */
+/**
+ * The flake picture, 16 px, drawn once: the yard's soft white dot with a
+ * faint cool shade round it, so a flake still shows over the map's white snow
+ * (the map is mostly snow; the yard's is mid-grey).
+ */
 const flakePicture = (): HTMLCanvasElement | null => {
   const canvas = document.createElement("canvas");
   canvas.width = 16;
@@ -43,8 +47,9 @@ const flakePicture = (): HTMLCanvasElement | null => {
   if (!context) return null;
   const glow = context.createRadialGradient(8, 8, 0, 8, 8, 8);
   glow.addColorStop(0, "rgba(255,255,255,1)");
-  glow.addColorStop(0.45, "rgba(255,255,255,0.85)");
-  glow.addColorStop(1, "rgba(255,255,255,0)");
+  glow.addColorStop(0.4, "rgba(255,255,255,0.9)");
+  glow.addColorStop(0.62, "rgba(70,92,120,0.38)");
+  glow.addColorStop(1, "rgba(70,92,120,0)");
   context.fillStyle = glow;
   context.fillRect(0, 0, 16, 16);
   return canvas;
