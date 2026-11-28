@@ -1280,6 +1280,32 @@ export const fetchMaintenancePanel = (): Promise<Envelope<MaintenancePanelView>>
 export const changeMaintenance = (change: MaintenanceChange): Promise<Envelope<MaintenancePanelView>> =>
   adminPost(`${ADMIN}/maintenance`, change as unknown as JsonBody);
 
+/* ── Wave events (`server/src/controllers/admin/waveEvents.ts`) ── */
+
+/** One wave event run, unix seconds; a stopped run ends when it was stopped. */
+export interface WaveRunView {
+  event: string;
+  startsAt: number;
+  endsAt: number;
+}
+
+export interface WaveEventsPanelView {
+  now: number;
+  /** The wave event on now (only one at a time), or null. */
+  running: WaveRunView | null;
+  /** Every wave event the server has, with its last run. */
+  events: { key: string; title: string; days: number; waves: number; last: WaveRunView | null }[];
+  updatedAt: string | null;
+  updatedBy: number | null;
+}
+
+export const fetchWaveEvents = (): Promise<Envelope<WaveEventsPanelView>> => adminGet(`${ADMIN}/wave-events`);
+
+/** Starts `event` from now, or stops the one on now. 409 `alreadyRunning` / `notRunning`. */
+export const changeWaveEvents = (
+  change: { action: "start"; event: string; days?: number } | { action: "stop" },
+): Promise<Envelope<WaveEventsPanelView>> => adminPost(`${ADMIN}/wave-events`, change);
+
 /* ── Monster Madness (`server/src/controllers/admin/monsterMadness.ts`) ── */
 
 /** One run, unix seconds; a stopped run ends when it was stopped. */

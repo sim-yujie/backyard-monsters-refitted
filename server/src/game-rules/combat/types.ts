@@ -592,6 +592,23 @@ export interface RaidEvent {
    */
   readonly strength?: number;
   /**
+   * The raiders' level, in place of the defender's academy level; absent, the
+   * academy's. A wave event's own (Wild Monster Invasion, `SPECIALEVENT.as`
+   * `WAVES[n].level`: 1 to 6, the stat tables clamp it).
+   */
+  readonly level?: number;
+  /**
+   * The raiders' Monster Lab rank, 0 to 3, in place of Moloch's fixed ranks;
+   * absent, those. A wave event's `powerup` (`MonsterBase.powerUpLevel`).
+   */
+  readonly rank?: number;
+  /**
+   * Seconds each raider lands enraged: Flash's `Enrage(2, 0)` for that long
+   * (`WMATTACK.as:764-766`): twice as fast, swinging twice as often, no
+   * armour. Absent or 0, none. A wave event's `rage`.
+   */
+  readonly rage?: number;
+  /**
    * A wild champion that lands with the wave (beta 10, owner 27 Nov 2026,
    * `docs/design/wild-raids.md` "Beta 10 threat"): its type (1 Gorgo, 2
    * Drull, 3 Fomor, 4 Korath), level (1 to 6) and power level (`pl`, 0 to 3,

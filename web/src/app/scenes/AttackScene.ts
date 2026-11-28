@@ -602,6 +602,7 @@ export class AttackScene implements Scene {
       dock,
       dockTabs,
       hudSlot,
+      hudLayer: context.overlay.content,
       modal: context.overlay.modal,
       guide: context.overlay.guide,
       battleLayer: this.battleLayer,
@@ -787,7 +788,9 @@ export class AttackScene implements Scene {
         ? this.raidRun
           ? isMolochRaid(this.raidRun.raid)
             ? MOLOCH_RAID_TITLE
-            : `${tribeTitle(this.raidRun.raid.tribe)} raid`
+            : this.raidRun.wave
+              ? this.raidRun.wave.title
+              : `${tribeTitle(this.raidRun.raid.tribe)} raid`
           : "Wild monster raid"
         : isDefenceWatch(this.watchRun)
           ? `Defence replay: ${this.watchRun.defence.attacker.name}`
@@ -1219,6 +1222,11 @@ export class AttackScene implements Scene {
       status.textContent =
         `Your yard · ${this.buildingCount} buildings · ${state.buildingsDestroyed} destroyed · ` +
         (state.phase === "ended" ? "over" : `${state.creepsAlive} attacking`);
+      return;
+    }
+    // A wave event's wave: its status pill says it all (neon's direction A).
+    if (this.raiding && this.raidRun?.wave) {
+      status.hidden = true;
       return;
     }
     if (this.raiding) {

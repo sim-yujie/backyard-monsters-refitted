@@ -275,9 +275,13 @@ export const grantedKorathText = (granted: readonly GrantedReward[]): string | n
  * The events to list: the ones on now first, then the ones over with a reward
  * still to claim, then what is coming up soonest first.
  */
+/** 0 for a wave event, which the page puts first among the events on. */
+const waveFirst = (event: EventView): number => (event.kind === "wave" ? 0 : 1);
+
 export const sortEvents = (events: readonly EventView[]): { active: EventView[]; upcoming: EventView[] } => ({
   active: [
-    ...events.filter((event) => event.status === "active").sort((a, b) => a.endsAt - b.endsAt),
+    // A wave event first (owner, 27 Nov 2026: its waves start from its card, so it leads the page).
+    ...events.filter((event) => event.status === "active").sort((a, b) => waveFirst(a) - waveFirst(b) || a.endsAt - b.endsAt),
     ...events.filter((event) => event.status === "ended").sort((a, b) => a.endsAt - b.endsAt),
   ],
   upcoming: events.filter((event) => event.status === "upcoming").sort((a, b) => a.startsAt - b.startsAt),
